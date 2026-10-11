@@ -158,7 +158,7 @@ final class CoverPush {
     }
 
     private static void finishArtworkQualityWatch(Context ctx, int gen, String key) {
-        if (ctx == null || gen != Main.sPushGen || !Main.sCoverMode
+        if (ctx == null || gen != Main.sPushGen || !artworkRefreshActive()
                 || !Main.sameTrack(key, Main.sTrackKey)
                 || sSoftArtGen != gen || sUnsoftenedArt == null) return;
         Main.worker().removeCallbacks(sSoftArtFallback);
@@ -1481,10 +1481,14 @@ final class CoverPush {
 
     private static volatile int sMissingArtworkGen = -1;
 
+    private static boolean artworkRefreshActive() {
+        return Main.sCoverMode || CanvasHostBridge.needsArtworkRefresh();
+    }
+
     private static final Runnable sQualityRefresh = new Runnable() {
         @Override
         public void run() {
-            if (Main.sCoverMode && sMissingArtworkGen == Main.sPushGen) {
+            if (artworkRefreshActive() && sMissingArtworkGen == Main.sPushGen) {
                 tryPushArt(Main.sAppCtx, ART_TRIES - 1, true, Main.sPushGen);
                 return;
             }
@@ -1525,7 +1529,7 @@ final class CoverPush {
     private static void upgradeArtwork(Context ctx, int gen, String key, boolean fresh) {
         if (ctx == null
                 || gen != Main.sPushGen
-                || !Main.sCoverMode
+                || !artworkRefreshActive()
                 || !Main.sameTrack(key, Main.sTrackKey)
                 || !Main.sameTrack(key, sArtKey)) {
             return;
@@ -1587,7 +1591,7 @@ final class CoverPush {
             @Override
             public void run() {
                 if (gen != Main.sPushGen
-                        || !Main.sCoverMode
+                        || !artworkRefreshActive()
                         || sSoftArtGen != gen
                         || !Main.sameTrack(key, Main.sTrackKey)
                         || !shouldSoftenArtwork(Main.artworkTrackPackage(key), sArtW, sArtH)) {

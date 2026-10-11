@@ -9854,6 +9854,7 @@ public class Main extends XposedModule {
                         if (sCoverWanted) attachCover();
                         onMediaUpdate();
                         CoverPush.watchMetadataArtwork();
+                        if (CanvasHostBridge.needsArtworkRefresh()) CoverPush.refreshArtworkQuality();
                     }
 
                     @Override

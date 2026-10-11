@@ -52,8 +52,12 @@ final class CanvasHostBridge {
         return Main.screenOnCached() && backdropAllowed && (active() || nativeClockScene());
     }
     static void backdropRetained() {
+        // Keeping the outgoing bitmap does not mean artwork for the new track was loaded.
         backdropHeld = true;
-        backdropTrack = Main.canvasBackdropKey();
+    }
+    static boolean needsArtworkRefresh() {
+        return fallbackBackdrop && backdropAllowed && Main.screenOnCached()
+                && !MiniPlayerRuntime.canvasPlayerInPill();
     }
     static boolean backgroundOnly() {
         return active() || nativeClockScene() || fallbackBackdrop;
@@ -153,7 +157,7 @@ final class CanvasHostBridge {
                 if (Main.prepareCanvasBackdrop()) {
                     backdropRetained();
                     backdropTrack = backdropIdentity;
-                    CoverPush.pushArtAsync(true, false);
+                    CoverPush.pushArtAsync(true, true);
                 }
             } else if (backdropHeld && !keepPaletteBackdrop()
                     && (!backdropAllowed || !Main.screenOnCached()
