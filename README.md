@@ -1,3 +1,5 @@
+<p align="center"><strong>English</strong> · <a href="README.zh-CN.md">简体中文</a></p>
+
 <div align="center">
   <img src="docs/images/app-icon.png" alt="HyperMusicCover-Enhanced app icon" width="128" height="128" />
   <h1>HyperMusicCover-Enhanced</h1>
@@ -122,7 +124,7 @@ The styling foundation is adapted from [HyperLyrics-Enhanced](https://github.com
 2. Download the APK from [GitHub Releases](https://github.com/Lewewe/HyperMusicCover-Enhanced/releases).
 3. Install it, enable the module in LSPosed and use the relevant recommended scopes. Restart the affected processes or reboot.
 4. Open the app to configure cover art, lyrics, player styling and other features.
-5. For Spotify Canvas, open **Extensions → HyperCanvas → Download**, complete APK installation, approve its Spotify and SystemUI scopes in LSPosed, restart those processes and enable the extension. Its [release page](https://github.com/Lewewe/HyperCanvas/releases) remains available for manual installation.
+5. For Spotify Canvas, open **Extensions → HyperCanvas → Download**, install HyperCanvas 0.1.1-beta or newer, then use **Request hook permissions** below its entry. Enable it in LSPosed and approve Spotify/SystemUI, then tap **Restart hooks to finish setup**. Settings unlock only after the restarted SystemUI confirms activation; enable Canvas there. Its [release page](https://github.com/Lewewe/HyperCanvas/releases) remains available for manual installation.
 
 The app package is `com.yzc26623.HyperMusicCoverEnhanced`. If migrating from an older module with a different package name, back up your settings and disable its scopes before enabling this one.
 
