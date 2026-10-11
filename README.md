@@ -20,17 +20,34 @@
 
 An independently maintained LSPosed fork of [HyperMusicCover](https://github.com/zyl6932/HyperMusicCover), focused on HyperOS 4. It builds on the original lock screen music experience with smoother artwork transitions, richer lyric tools and closer integration with notifications, AOD and HyperOS materials.
 
+## Preparing for 1.0.0
+
+The next major release brings a complete media-player styling panel, real audio-reactive visualizers, Spotify Canvas through HyperCanvas, built-in extension management and a wallpaper background mode.
+
+**New since 0.3.5:**
+
+- Customize player artwork, materials, colors and background motion, with animated circular-cover transitions.
+- Follow real playback audio on the Super Island and optional player visualizers, including zero-volume capture, Bluetooth timing controls and low-frame-rate AOD rendering.
+- Use Spotify Canvas with coordinated cover/lyrics controls, a three-video cache and a choice of TextureView or experimental OpenGL ES rendering.
+- Download, update and remove HyperCanvas from the new extension list, with installation and Spotify-hook status at a glance.
+- Keep your wallpaper behind big artwork and lyrics with adjustable dimming.
+- Enjoy the new app icon and About appearance, plus fixes for artwork corners, stale backgrounds and Canvas/AOD transitions.
+
+See the [complete 1.0.0 preparation notes](docs/releases/1.0.0.md) for the full change list and compatibility details. This describes the source being prepared for 1.0.0, not an already published APK. NextLyrics and the existing lyric features remain available from 0.3.5.
+
 ## What’s inside
 
 ### HyperCanvas · optional extension
 
-Use Spotify Canvas as a moving lock screen background through the separate [HyperCanvas](https://github.com/Lewewe/HyperCanvas) APK, managed from the **Extensions** tab.
+Use Spotify Canvas as a moving lock screen background through the separate [HyperCanvas](https://github.com/Lewewe/HyperCanvas) APK, downloadable and managed from the **Extensions** tab.
 
 - Tracks with Canvas can use an expanded media player over the video; tracks without Canvas retain the artwork background.
 - Opening big cover art or lyrics blurs and dims Canvas, with smooth transitions and a dedicated lyrics toggle on the player.
-- Pause video with playback, freeze and blur it in Canvas mode on AOD, and pause/blur it on the password screen.
+- Pause video with playback, freeze and blur it on AOD, and pause/blur it on the password screen. Video and frozen frames stay outside the native AOD scaling to avoid stretching and wake-up zoom flashes.
 - Adjust dimming and blur, choose whether Canvas remains visible in pill mode, and retain the previous cover/lyrics/player state.
 - Keep a bounded cache of three videos, cleared when the extension is disabled.
+- Choose the default TextureView renderer or experimental OpenGL ES rendering with GPU blur and a TextureView fallback.
+- Download/update from GitHub Releases, view installation and hook status, and remove the extension with root from its settings. The extension list uses the installed extension’s own icon.
 
 **HyperCanvas only works with HyperMusicCover-Enhanced.** It needs its own LSPosed scopes for Spotify and SystemUI. See the [extension README](https://github.com/Lewewe/HyperCanvas#readme) for setup and compatibility.
 
@@ -66,7 +83,9 @@ Lyrics, translations and word timing depend on the selected provider and the tra
 Customize the lock screen/notification player and expanded Hyper Island player.
 
 - Background themes and materials, including animated styles and artwork-based colors.
-- Default, circular and rotating circular artwork styles.
+- Default, circular, rotating circular or hidden artwork; optional hiding of source and output-device icons.
+- Cover collage, blurred-cover, radial/linear gradient and soft-cover backgrounds, with system/light/dark themes, blur strength and motion controls.
+- Separate appearance settings for the notification/lock-screen player and expanded island player, with **Audio visualization** and appearance tabs.
 - Smooth corner/shape transitions between big cover art and circular player artwork, and restored native rounding when returning to Default.
 - Preserve native themes, corners and AOD layout when customization is disabled.
 
@@ -101,7 +120,7 @@ The styling foundation is adapted from [HyperLyrics-Enhanced](https://github.com
 2. Download the APK from [GitHub Releases](https://github.com/Lewewe/HyperMusicCover-Enhanced/releases).
 3. Install it, enable the module in LSPosed and use the relevant recommended scopes. Restart the affected processes or reboot.
 4. Open the app to configure cover art, lyrics, player styling and other features.
-5. For Spotify Canvas, install [HyperCanvas](https://github.com/Lewewe/HyperCanvas) separately and enable it in **Extensions**.
+5. For Spotify Canvas on the 1.0.0 source, open **Extensions → HyperCanvas → Download**, complete APK installation, approve its Spotify and SystemUI scopes in LSPosed, restart those processes and enable the extension. Its [release page](https://github.com/Lewewe/HyperCanvas/releases) remains available for manual installation.
 
 The app package is `com.yzc26623.HyperMusicCoverEnhanced`. If migrating from an older module with a different package name, back up your settings and disable its scopes before enabling this one.
 
@@ -140,7 +159,7 @@ git submodule update --init --recursive
 ## Credits
 
 - [Lewewe](https://github.com/Lewewe) — Enhanced fork development and maintenance.
-- [puhboo](https://github.com/puhboo) — major lyric contributions: extended search, translation, parsing and word timing, caching, and lyric effects.
+- [puhboo](https://github.com/puhboo) — major lyric contributions: extended search, translation, parsing and word timing, caching, and lyric effects; HyperCanvas renderer contributions, including opaque TextureView and the OpenGL ES foundation.
 - [zyl6932](https://github.com/zyl6932/HyperMusicCover) — original HyperMusicCover project.
 - [juren233 / HyperLyrics-Enhanced](https://github.com/juren233/HyperLyrics-Enhanced) — media player customization foundation.
 - [miuix](https://github.com/compose-miuix-ui/miuix) and the other projects credited in the app — UI, rendering, lyric data and supporting libraries.
