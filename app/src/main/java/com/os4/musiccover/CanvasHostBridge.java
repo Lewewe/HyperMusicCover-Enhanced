@@ -20,6 +20,7 @@ final class CanvasHostBridge {
     private static boolean backdropAllowed = true;
     private static boolean showInPill;
     private static boolean frozenInAod;
+    private static boolean statusCanvas;
     static void suspendForBackdrop() {
         if (!Main.sHidePlayerBackground || !canvasReady && !fallbackBackdrop && !frozenInAod
                 && !backdropHeld && !clockOwned && !autoCollapsed) return;
@@ -31,6 +32,7 @@ final class CanvasHostBridge {
             LockHold.give(LockHold.Owner.CANVAS, Main.screenOnCached());
         }
         Main.refreshCanvasControls();
+        refreshStatusColors();
     }
     static boolean keepsClockInAod() {
         return !MiniPlayerRuntime.canvasPlayerInPill()
@@ -82,8 +84,15 @@ final class CanvasHostBridge {
         if (keep) LockHold.take(LockHold.Owner.CANVAS, Main.screenOnCached(), "canvas");
         else LockHold.give(LockHold.Owner.CANVAS, Main.screenOnCached());
     }
+    private static void refreshStatusColors() {
+        boolean visible = ownsVideoBackdrop();
+        if (statusCanvas == visible) return;
+        statusCanvas = visible;
+        StatusBarArtwork.refresh();
+    }
     static void sceneChanged() {
         syncClock();
+        refreshStatusColors();
         if (!canvasReady || sceneContext == null) return;
         boolean next = Main.coverModeOn() && (!LockLyrics.wantsCompactArtwork() || LockLyrics.wantsWindow());
         boolean visible = showInPill || !MiniPlayerRuntime.canvasPlayerInPill();

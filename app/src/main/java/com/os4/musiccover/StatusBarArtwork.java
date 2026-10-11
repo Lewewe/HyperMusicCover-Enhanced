@@ -55,16 +55,18 @@ final class StatusBarArtwork {
 
     private static boolean ownsColors() {
         MiniPlayerScene scene = MiniPlayerScene.INSTANCE;
+        boolean canvas = CanvasHostBridge.ownsVideoBackdrop();
         return StatusBarContrast.ownsColors(
-                Main.sCoverMode && !CoverBackdrop.nativeWallpaperScene(), Main.keyguardLocked(),
+                canvas || Main.sCoverMode && !CoverBackdrop.nativeWallpaperScene(), Main.keyguardLocked(),
                 scene.getBlocksMiniPlayer() || scene.getControlCenterIsActive()
                         || scene.getKeyguardGoingAway(),
-                scene.getAodActive(), Main.sHidePlayerBackground ? 0d : sLuminance);
+                scene.getAodActive(), canvas || Main.sHidePlayerBackground ? 0d : sLuminance);
     }
 
-    /** Wallpaper-backed artwork and lyrics use white icons over their dimmed backdrop. */
+    /** Canvas and wallpaper-backed artwork use white icons over their dimmed backdrop. */
     private static boolean darkIcons() {
-        return !Main.sHidePlayerBackground && StatusBarContrast.darkIcons(sLuminance);
+        return !CanvasHostBridge.ownsVideoBackdrop() && !Main.sHidePlayerBackground
+                && StatusBarContrast.darkIcons(sLuminance);
     }
 
     /** Called on the existing composition worker, once per new composed artwork. */
