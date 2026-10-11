@@ -265,6 +265,9 @@ object MediaCardRuntime {
         private var activeColors: Pair<Int, Int>? = null
         private val hidden = WeakHashMap<View, Int>()
         private val textColors = WeakHashMap<TextView, ColorStateList>()
+        private val scrollingText = listOf("titleText", "artistText").mapNotNull {
+            (field(holder, it) as? TextView)?.let(::MediaTextMarquee)
+        }
         private val imageColors = WeakHashMap<ImageView, ColorStateList?>()
         private var seekColors: Array<ColorStateList?>? = null
         private var nativePaused = false
@@ -582,8 +585,15 @@ object MediaCardRuntime {
             album.isAttachedToWindow && visible(background),
             !sleeping && Main.screenOnCached())
 
+        private fun updateScrollingText() {
+            val enabled = on(scope, "scrollText")
+            val awake = !sleeping && Main.screenOnCached()
+            scrollingText.forEach { it.update(enabled, awake && visible(it.view) && it.view.alpha > .01f) }
+        }
+
         fun motion() {
             if (disposed) return
+            updateScrollingText()
             val visible = visible(album) && !sleeping && Main.screenOnCached()
             if (setting(scope, "cover") == 2 && playing() && visible) {
                 if (rotation == null) rotation = ObjectAnimator.ofFloat(album, View.ROTATION, album.rotation, album.rotation + 360f).apply {
@@ -602,7 +612,7 @@ object MediaCardRuntime {
             }
         }
 
-        private fun stopMotion() { rotation?.pause(); overlay?.takeIf { overlayMode in 1..2 }?.let { runCatching { flowApi?.pause(it) } }; lastMotion = false; (overlay as? MediaFlowBackgroundView)?.update(tone = tone(), playing = false) }
+        private fun stopMotion() { scrollingText.forEach { it.update(on(scope, "scrollText"), false) }; rotation?.pause(); overlay?.takeIf { overlayMode in 1..2 }?.let { runCatching { flowApi?.pause(it) } }; lastMotion = false; (overlay as? MediaFlowBackgroundView)?.update(tone = tone(), playing = false) }
         private fun stopRotation() { if (rotation != null) { rotation?.cancel(); rotation = null; album.rotation = originalRotation } }
 
         private fun foreground(primary: Int, secondary: Int) {
@@ -686,6 +696,7 @@ object MediaCardRuntime {
             (field(holder, "seamlessIcon") as? ImageView)?.let { MediaOutputVisualizer.detach(it) }
             islandTheme.restore()
             disposed = true
+            scrollingText.forEach { it.restore() }
             stopRotation(); removeOverlay(); restoreColors()
             hidden.forEach { (view, visibility) -> view.visibility = visibility }; hidden.clear()
             imageVisibility?.let { albumView.visibility = it }; imageVisibility = null

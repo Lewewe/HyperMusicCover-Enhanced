@@ -340,6 +340,8 @@
     <string name="media_style_circle">圆形</string>
     <string name="media_style_rotating">旋转圆形</string>
     <string name="media_style_hidden">隐藏</string>
+    <string name="media_scroll_text">滚动歌曲信息</string>
+    <string name="media_scroll_text_summary">自动滚动显示过长的歌曲名和歌手名，息屏显示时暂停滚动。</string>
     <string name="media_hide_source">隐藏封面来源图标</string>
     <string name="media_hide_device">隐藏音频输出切换按钮</string>
     <string name="media_background_style">播放器背景</string>

@@ -5,7 +5,7 @@ import org.json.JSONObject
 /** Two independent card profiles; zero-valued appearance choices retain the native style. */
 object MediaCardConfig {
     val scopes = listOf("notification", "island")
-    val defaults = linkedMapOf("cover" to 0, "hideSource" to 0, "hideDevice" to 0,
+    val defaults = linkedMapOf("cover" to 0, "scrollText" to 0, "hideSource" to 0, "hideDevice" to 0,
         "background" to 0, "theme" to 0, "flow" to 0, "pauseRestore" to 1,
         "animate" to 1, "blur" to 8, "invert" to 1, "tone" to 1, "visualizer" to 0, "outputWave" to 0, "lockOutputWave" to 0, "hideWaveDevice" to 0, "btSync" to 1, "btOffset" to 0)
 

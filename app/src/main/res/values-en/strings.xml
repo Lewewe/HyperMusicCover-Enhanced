@@ -332,6 +332,8 @@
     <string name="media_style_circle">Circular</string>
     <string name="media_style_rotating">Rotating circle</string>
     <string name="media_style_hidden">Hidden</string>
+    <string name="media_scroll_text">Scrolling song information</string>
+    <string name="media_scroll_text_summary">Scroll long song titles and artist names. Scrolling pauses on the always-on display.</string>
     <string name="media_hide_source">Hide cover source icon</string>
     <string name="media_hide_device">Hide output device button</string>
     <string name="media_background_style">Player background</string>

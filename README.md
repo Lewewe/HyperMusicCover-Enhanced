@@ -27,6 +27,7 @@ The next major release brings a complete media-player styling panel, real audio-
 **New since 0.3.5:**
 
 - Customize player artwork, materials, colors and background motion, with animated circular-cover transitions.
+- Read long song titles and artist names with optional scrolling text, controlled separately for notification/lock-screen and expanded island players.
 - Follow real playback audio on the Super Island and optional player visualizers, including zero-volume capture, Bluetooth timing controls and low-frame-rate AOD rendering.
 - Use Spotify Canvas with coordinated cover/lyrics controls, a three-video cache and a choice of TextureView or experimental OpenGL ES rendering.
 - Download, update and remove HyperCanvas from the new extension list, with installation and Spotify-hook status at a glance.
@@ -86,6 +87,7 @@ Customize the lock screen/notification player and expanded Hyper Island player.
 - Default, circular, rotating circular or hidden artwork; optional hiding of source and output-device icons.
 - Cover collage, blurred-cover, radial/linear gradient and soft-cover backgrounds, with system/light/dark themes, blur strength and motion controls.
 - Separate appearance settings for the notification/lock-screen player and expanded island player, with **Audio visualization** and appearance tabs.
+- A dedicated **Scrolling song information** section in **Appearance**, with independent switches for both player profiles. Long titles and artist names scroll while visible; short text stays still, and scrolling pauses on AOD. The feature is off by default and changes apply immediately.
 - Smooth corner/shape transitions between big cover art and circular player artwork, and restored native rounding when returning to Default.
 - Preserve native themes, corners and AOD layout when customization is disabled.
 

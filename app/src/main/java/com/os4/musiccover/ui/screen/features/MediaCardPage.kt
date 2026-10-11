@@ -78,6 +78,15 @@ internal fun MediaCardPageView(isBlurEnabled: Boolean, refreshKey: Int, onBack: 
                 }
             }
         } else {
+            item { SmallTitle(stringResource(R.string.media_scroll_text)) }
+            item {
+                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    MediaSwitch("notification", "scrollText", R.string.media_scope_notification,
+                        values, module.alive, push, R.string.media_scroll_text_summary)
+                    MediaSwitch("island", "scrollText", R.string.media_scope_island,
+                        values, module.alive, push, R.string.media_scroll_text_summary)
+                }
+            }
             for (scope in MediaCardConfig.scopes) {
                 item { SmallTitle(stringResource(if (scope == "notification") R.string.media_scope_notification else R.string.media_scope_island)) }
                 item {
