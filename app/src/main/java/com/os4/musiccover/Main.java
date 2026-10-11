@@ -7218,7 +7218,8 @@ public class Main extends XposedModule {
     /** The full-screen AOD may show a faint static colour wash even with the square hidden. */
     static boolean coverCardBackdropInAod() {
         View c = sContainer;
-        return sCoverMode && effectiveCoverStyle().mode == CoverCardStyle.CARD && !sScreenOn
+        return sCoverMode && !CanvasHostBridge.ownsVideoBackdrop()
+                && effectiveCoverStyle().mode == CoverCardStyle.CARD && !sScreenOn
                 && ClockCollapse.phase() == ClockCollapse.Phase.AOD
                 && ClockCollapse.aodFullScreen() && keyguardShowing()
                 && c != null && c.isShown();

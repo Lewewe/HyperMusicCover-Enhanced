@@ -37,6 +37,11 @@ final class CanvasHostBridge {
                 && (canvasReady || frozenInAod || fallbackBackdrop);
     }
     static boolean hasBackgroundScene() { return canvasReady || fallbackBackdrop; }
+    /** The extension already supplies its own live or frozen video backdrop. */
+    static boolean ownsVideoBackdrop() {
+        return (canvasReady || frozenInAod)
+                && (showInPill || !MiniPlayerRuntime.canvasPlayerInPill());
+    }
     static void userSelectedScene() { autoCollapsed = false; }
     static boolean keepPaletteBackdrop() {
         if (MiniPlayerRuntime.canvasPlayerInPill())

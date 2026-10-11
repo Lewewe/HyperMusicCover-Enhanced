@@ -401,4 +401,8 @@
     <string name="media_appearance_tab">外观</string>
     <string name="cover_wallpaper_dim">壁纸暗度</string>
     <string name="cover_wallpaper_dim_summary">显示悬浮封面或歌词时使壁纸变暗，提高可读性。</string>
+    <string name="hypercanvas_renderer">视频渲染器</string>
+    <string name="hypercanvas_renderer_summary">切换后立即生效。OpenGL ES 为实验功能，初始化失败时会自动回退到 TextureView。</string>
+    <string name="hypercanvas_renderer_texture">TextureView（默认）</string>
+    <string name="hypercanvas_renderer_gles">OpenGL ES（实验性）</string>
 </resources>

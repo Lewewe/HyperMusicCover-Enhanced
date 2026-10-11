@@ -1021,8 +1021,8 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
         }
         boolean backdrop = Main.coverCardBackdropInAod() && current != null
                 && current.aodBackdrop != null;
-        // Wallpaper mode owns its dim layer, including AOD, and must not add an artwork wash.
-        if (Main.sHidePlayerBackground) wash.hideNow();
+        // Wallpaper mode and Canvas own their AOD backdrop; never overlay an artwork wash.
+        if (Main.sHidePlayerBackground || CanvasHostBridge.ownsVideoBackdrop()) wash.hideNow();
         else wash.show(backdrop);
         int visibility = opacity > 0f || target > 0f ? VISIBLE : GONE;
         if (getVisibility() != visibility) setVisibility(visibility);

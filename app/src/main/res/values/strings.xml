@@ -393,4 +393,8 @@
     <string name="media_appearance_tab">Appearance</string>
     <string name="cover_wallpaper_dim">Wallpaper dimming</string>
     <string name="cover_wallpaper_dim_summary">Darken the wallpaper while the floating cover or lyrics are displayed.</string>
+    <string name="hypercanvas_renderer">Video renderer</string>
+    <string name="hypercanvas_renderer_summary">Switches immediately. OpenGL ES is experimental and falls back to TextureView if initialization fails.</string>
+    <string name="hypercanvas_renderer_texture">TextureView (default)</string>
+    <string name="hypercanvas_renderer_gles">OpenGL ES (experimental)</string>
 </resources>

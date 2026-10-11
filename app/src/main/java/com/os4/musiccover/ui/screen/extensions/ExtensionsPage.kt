@@ -19,6 +19,7 @@ import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.preference.SwitchPreference
+import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
 
 @Composable
 internal fun ExtensionsPageView(isBlurEnabled: Boolean, isCurrent: Boolean, extraBottomPadding: Dp) {
@@ -63,6 +64,13 @@ internal fun ExtensionsPageView(isBlurEnabled: Boolean, isCurrent: Boolean, extr
                     checked = enabled, enabled = installed && !blocked, onCheckedChange = { push("enabled", if (it) 1 else 0) })
                 Text(stringResource(status), modifier = Modifier.padding(16.dp))
                 if (installed && enabled) {
+                    WindowDropdownPreference(
+                        title = stringResource(R.string.hypercanvas_renderer),
+                        summary = stringResource(R.string.hypercanvas_renderer_summary),
+                        items = listOf(stringResource(R.string.hypercanvas_renderer_texture),
+                            stringResource(R.string.hypercanvas_renderer_gles)),
+                        selectedIndex = state.getInt("renderer", 0).coerceIn(0, 1),
+                        onSelectedIndexChange = { push("renderer", it) })
                     SwitchPreference(title = stringResource(R.string.hypercanvas_show_in_pill),
                         summary = stringResource(R.string.hypercanvas_show_in_pill_summary),
                         checked = state.getBoolean("showInPill"),
