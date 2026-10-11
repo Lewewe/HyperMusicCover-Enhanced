@@ -20,9 +20,9 @@
 
 An independently maintained LSPosed fork of [HyperMusicCover](https://github.com/zyl6932/HyperMusicCover), focused on HyperOS 4. It builds on the original lock screen music experience with smoother artwork transitions, richer lyric tools and closer integration with notifications, AOD and HyperOS materials.
 
-## Preparing for 1.0.0
+## 1.0.0 — our largest update yet
 
-The next major release brings a complete media-player styling panel, real audio-reactive visualizers, Spotify Canvas through HyperCanvas, built-in extension management and a wallpaper background mode.
+Our largest update so far brings a complete media-player styling panel, real audio-reactive visualizers, Spotify Canvas through HyperCanvas, built-in extension management and a wallpaper background mode.
 
 **New since 0.3.5:**
 
@@ -34,7 +34,7 @@ The next major release brings a complete media-player styling panel, real audio-
 - Keep your wallpaper behind big artwork and lyrics with adjustable dimming.
 - Enjoy the new app icon and About appearance, plus fixes for artwork corners, stale backgrounds and Canvas/AOD transitions.
 
-See the [complete 1.0.0 preparation notes](docs/releases/1.0.0.md) for the full change list and compatibility details. This describes the source being prepared for 1.0.0, not an already published APK. NextLyrics and the existing lyric features remain available from 0.3.5.
+Download [v1.0.0](https://github.com/Lewewe/HyperMusicCover-Enhanced/releases/tag/v1.0.0) and read the [complete release notes](docs/releases/1.0.0.md) for the full change list and compatibility details. NextLyrics and the existing lyric features remain available from 0.3.5.
 
 ## What’s inside
 
@@ -122,7 +122,7 @@ The styling foundation is adapted from [HyperLyrics-Enhanced](https://github.com
 2. Download the APK from [GitHub Releases](https://github.com/Lewewe/HyperMusicCover-Enhanced/releases).
 3. Install it, enable the module in LSPosed and use the relevant recommended scopes. Restart the affected processes or reboot.
 4. Open the app to configure cover art, lyrics, player styling and other features.
-5. For Spotify Canvas on the 1.0.0 source, open **Extensions → HyperCanvas → Download**, complete APK installation, approve its Spotify and SystemUI scopes in LSPosed, restart those processes and enable the extension. Its [release page](https://github.com/Lewewe/HyperCanvas/releases) remains available for manual installation.
+5. For Spotify Canvas, open **Extensions → HyperCanvas → Download**, complete APK installation, approve its Spotify and SystemUI scopes in LSPosed, restart those processes and enable the extension. Its [release page](https://github.com/Lewewe/HyperCanvas/releases) remains available for manual installation.
 
 The app package is `com.yzc26623.HyperMusicCoverEnhanced`. If migrating from an older module with a different package name, back up your settings and disable its scopes before enabling this one.
 
