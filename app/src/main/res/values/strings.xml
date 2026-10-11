@@ -397,4 +397,24 @@
     <string name="hypercanvas_renderer_summary">Switches immediately. OpenGL ES is experimental and falls back to TextureView if initialization fails.</string>
     <string name="hypercanvas_renderer_texture">TextureView (default)</string>
     <string name="hypercanvas_renderer_gles">OpenGL ES (experimental)</string>
+    <string name="hypercanvas_download">Download HyperCanvas</string>
+    <string name="hypercanvas_download_summary">Get the latest beta APK from GitHub and open the installer.</string>
+    <string name="hypercanvas_fetching">Checking GitHub releases…</string>
+    <string name="hypercanvas_downloading">Downloading HyperCanvas…</string>
+    <string name="hypercanvas_install_ready">APK verified. Complete installation in the installer.</string>
+    <string name="hypercanvas_update">Update HyperCanvas</string>
+    <string name="hypercanvas_up_to_date">The latest version is installed.</string>
+    <string name="hypercanvas_already_downloaded">This version has already been downloaded.</string>
+    <string name="hypercanvas_uninstall">Uninstall HyperCanvas</string>
+    <string name="hypercanvas_uninstall_summary">Remove the extension using root, then restart Spotify and SystemUI.</string>
+    <string name="hypercanvas_removed">HyperCanvas removed. Scopes restarted.</string>
+    <string name="hypercanvas_remove_failed">Could not remove HyperCanvas. Check root access.</string>
+    <string name="hypercanvas_hook_connected">Spotify hook · Connected</string>
+    <string name="hypercanvas_hook_disconnected">Spotify hook · Disconnected</string>
+    <string name="hypercanvas_removed_restart_failed">HyperCanvas removed. Please restart Spotify and SystemUI manually.</string>
+    <string name="hypercanvas_list_summary">Spotify Canvas backgrounds for your lock screen · Beta</string>
+    <string name="extension_installed">Installed</string>
+    <string name="extension_update">Update</string>
+    <string name="extension_downloaded">Downloaded</string>
+    <string name="extension_download">Download</string>
 </resources>

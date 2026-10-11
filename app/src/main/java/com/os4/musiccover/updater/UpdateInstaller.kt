@@ -105,7 +105,7 @@ object UpdateInstaller {
     private var cancelled = false
 
     /** [apkUrl] is the release asset's own URL; the hosts to try it through are worked out here. */
-    fun start(context: Context, apkUrl: String, fileName: String) {
+    fun start(context: Context, apkUrl: String, fileName: String, expectedPackage: String = context.packageName) {
         if (inFlight) return
         inFlight = true
         lastOutcome = null
@@ -115,14 +115,21 @@ object UpdateInstaller {
         scope.launch {
             val outcome = try {
                 val file = download(app, apkUrl, fileName)
-                if (!UpdateApi.isOurs(app, file)) {
+                if (!UpdateApi.isOurs(app, file, expectedPackage)) {
                     file.delete()
                     InstallOutcome.NotOurs
-                } else if (handOff(app, file)) {
-                    InstallOutcome.HandedOff
                 } else {
-                    saveToDownloads(app, file)?.let { InstallOutcome.SavedToDownloads(it) }
-                        ?: InstallOutcome.NoInstaller
+                    if (expectedPackage == HyperCanvasRelease.PACKAGE) {
+                        val version = app.packageManager.getPackageArchiveInfo(file.absolutePath, 0)?.versionName
+                        app.getSharedPreferences("extension_downloads", 0).edit()
+                            .putString(expectedPackage, version).apply()
+                    }
+                    if (handOff(app, file)) {
+                        InstallOutcome.HandedOff
+                    } else {
+                        saveToDownloads(app, file)?.let { InstallOutcome.SavedToDownloads(it) }
+                            ?: InstallOutcome.NoInstaller
+                    }
                 }
             } catch (t: Throwable) {
                 if (cancelled) {

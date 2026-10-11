@@ -405,4 +405,24 @@
     <string name="hypercanvas_renderer_summary">切换后立即生效。OpenGL ES 为实验功能，初始化失败时会自动回退到 TextureView。</string>
     <string name="hypercanvas_renderer_texture">TextureView（默认）</string>
     <string name="hypercanvas_renderer_gles">OpenGL ES（实验性）</string>
+    <string name="hypercanvas_download">下载 HyperCanvas</string>
+    <string name="hypercanvas_download_summary">从 GitHub 下载最新测试版 APK 并打开安装程序。</string>
+    <string name="hypercanvas_fetching">正在检查 GitHub 发布版本…</string>
+    <string name="hypercanvas_downloading">正在下载 HyperCanvas…</string>
+    <string name="hypercanvas_install_ready">APK 已验证，请在安装程序中完成安装。</string>
+    <string name="hypercanvas_update">更新 HyperCanvas</string>
+    <string name="hypercanvas_up_to_date">已安装最新版本。</string>
+    <string name="hypercanvas_already_downloaded">此版本已下载。</string>
+    <string name="hypercanvas_uninstall">卸载 HyperCanvas</string>
+    <string name="hypercanvas_uninstall_summary">使用 root 卸载扩展，然后重启 Spotify 和系统界面。</string>
+    <string name="hypercanvas_removed">HyperCanvas 已卸载，作用域已重启。</string>
+    <string name="hypercanvas_remove_failed">无法卸载 HyperCanvas，请检查 root 权限。</string>
+    <string name="hypercanvas_hook_connected">Spotify Hook · 已连接</string>
+    <string name="hypercanvas_hook_disconnected">Spotify Hook · 未连接</string>
+    <string name="hypercanvas_removed_restart_failed">HyperCanvas 已卸载，请手动重启 Spotify 和系统界面。</string>
+    <string name="hypercanvas_list_summary">Spotify 锁屏动态背景 · 测试版</string>
+    <string name="extension_installed">已安装</string>
+    <string name="extension_update">更新</string>
+    <string name="extension_downloaded">已下载</string>
+    <string name="extension_download">下载</string>
 </resources>

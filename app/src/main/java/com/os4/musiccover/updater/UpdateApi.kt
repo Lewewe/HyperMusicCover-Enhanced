@@ -174,19 +174,19 @@ object UpdateApi {
      * check patched out - CorePatch and its kin - goes through. Refusing here would take that
      * decision away from the people who have made it possible.
      */
-    fun isOurs(context: Context, file: File): Boolean {
-        val signer = signerOf(context, file) ?: return false
+    fun isOurs(context: Context, file: File, expectedPackage: String = context.packageName): Boolean {
+        val signer = signerOf(context, file, expectedPackage) ?: return false
         return signer == RELEASE_CERT_SHA256 || signer == ownSigner(context)
     }
 
     /** SHA-256 of the certificate [file] is signed with, lowercase hex, or null if unreadable. */
-    private fun signerOf(context: Context, file: File): String? = try {
+    private fun signerOf(context: Context, file: File, expectedPackage: String): String? = try {
         context.packageManager
             .getPackageArchiveInfo(
                 file.absolutePath,
                 PackageManager.PackageInfoFlags.of(PackageManager.GET_SIGNING_CERTIFICATES.toLong()),
             )
-            ?.takeIf { it.packageName == context.packageName }
+            ?.takeIf { it.packageName == expectedPackage }
             ?.signingInfo?.apkContentsSigners?.firstOrNull()
             ?.toByteArray()?.let(::sha256Hex)
     } catch (_: Exception) {
