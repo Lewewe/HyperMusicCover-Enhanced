@@ -8070,10 +8070,13 @@ public class Main extends XposedModule {
                     || ((ClockCollapse.phase() == ClockCollapse.Phase.AOD || !screenOnCached())
                         && LockLyrics.wantsAttached());
         }
-        float exc = stepLyricArt((sMcArtInLyrics || LockLyrics.compactWithoutLyrics())
-                && sLyricUp);
+        boolean fullScreenLyrics = onKeyguard && !sCardForced && sCoverMode
+                && !coverMorphCardMode() && !CanvasHostBridge.active()
+                && LockLyrics.sEnabled && LockLyrics.hasLyrics();
+        float exc = stepLyricArt(!fullScreenLyrics
+                && (sMcArtInLyrics || LockLyrics.compactWithoutLyrics()) && sLyricUp);
         // Slide both text lines into the thumbnail's freed space as the artwork leaves.
-        float hideP = sMcHideArt ? p * (1f - exc) : 0f;
+        float hideP = fullScreenLyrics ? p : sMcHideArt ? p * (1f - exc) : 0f;
         View art = sCardArt;
         if (art != null) {
             // INVISIBLE at the far end, not GONE: the constraints around it are the card's
@@ -8109,12 +8112,12 @@ public class Main extends XposedModule {
         }
         if (!onKeyguard) LyricsButton.release();
         boolean lyricsButton = onKeyguard && !sCardForced && sCoverMode
-                && coverMorphCardMode() && !LockLyrics.wantsCompactArtwork()
+                && (fullScreenLyrics || !LockLyrics.wantsCompactArtwork())
                 && LockLyrics.sEnabled && LockLyrics.hasDisplayContent()
                 && coverMorphEligible() && sCardShowing && card.isShown();
         boolean canvasLyrics = CanvasHostBridge.active() && onKeyguard && !sCardForced
                 && LockLyrics.sEnabled && LockLyrics.hasLyrics() && sCardShowing && card.isShown();
-        float lyricsInset = LyricsButton.update(card, lyricsButton || canvasLyrics, canvasLyrics);
+        float lyricsInset = LyricsButton.update(card, lyricsButton || canvasLyrics, canvasLyrics, fullScreenLyrics);
         alignCardTextLeft(card, (TextView) sCardTitle, hideP, lyricsInset);
         alignCardTextLeft(card, (TextView) sCardArtist, hideP, lyricsInset);
         LyricsButton.place(card, (TextView) sCardTitle, (TextView) sCardArtist, sCardArt);
@@ -10520,7 +10523,7 @@ public class Main extends XposedModule {
     }
 
     static void openLyricsFromButton() {
-        if (!sCoverMode || LockLyrics.wantsCompactArtwork()
+        if (!sCoverMode || coverMorphCardMode() && LockLyrics.wantsCompactArtwork()
                 || !LockLyrics.sEnabled || !LockLyrics.hasDisplayContent()) return;
         onTwoFingerTap();
         applyMediaCard();

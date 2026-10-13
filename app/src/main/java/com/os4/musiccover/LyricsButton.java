@@ -25,7 +25,7 @@ final class LyricsButton {
 
     private LyricsButton() {}
 
-    static float update(View card, boolean show, boolean controls) {
+    static float update(View card, boolean show, boolean controls, boolean fullScreen) {
         if (!(card instanceof ViewGroup)) return 0f;
         if (host != card) release();
         canvasControls = controls;
@@ -48,7 +48,7 @@ final class LyricsButton {
             host.addView(button, new ViewGroup.LayoutParams(size, size));
         }
         if (button == null) return 0f;
-        notesDrawable.setFilled(canvasControls && LockLyrics.wantsWindow());
+        notesDrawable.setFilled((canvasControls || fullScreen) && LockLyrics.wantsWindow());
         if (requested != show) {
             requested = show;
             button.setClickable(show);
@@ -74,11 +74,11 @@ final class LyricsButton {
             });
             animator.start();
         }
-        if (canvasControls) {
+        if (canvasControls || fullScreen) {
             boolean hide = LockLyrics.wantsWindow();
             boolean chinese = "zh".equals(card.getResources().getConfiguration().getLocales().get(0).getLanguage());
             button.setContentDescription(chinese ? (hide ? "隐藏歌词" : "显示歌词") : (hide ? "Hide lyrics" : "Show lyrics"));
-            return 0f;
+            if (canvasControls) return 0f;
         }
         return (SIZE_DP + GAP_DP) * card.getResources().getDisplayMetrics().density * progress;
     }
