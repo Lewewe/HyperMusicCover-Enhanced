@@ -106,6 +106,7 @@ final class StatusBarArtwork {
 
     /** Coalesced event updates; no frame callback or idle polling. */
     static void refresh() {
+        ClockBackdropContrast.refresh();
         Main.main().removeCallbacks(UPDATE);
         Main.main().post(UPDATE);
     }

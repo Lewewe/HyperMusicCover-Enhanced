@@ -94,6 +94,8 @@ final class CoverPush {
         if ("com.netease.cloudmusic".equals(packageName) && width == height && width >= 360) {
             return false;
         }
+        // KuGou publishes its complete session cover at 360px, with no artwork URI.
+        if (ArtworkFetchPolicy.finalKugouSessionArtwork(packageName, width, height)) return false;
         return shouldSoftenArtwork(width, height);
     }
 

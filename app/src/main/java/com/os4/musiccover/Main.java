@@ -1764,8 +1764,8 @@ public class Main extends XposedModule {
             // updateGlassValue frame - it reaches a glyph through one of these setters, and
             // none of them has to know anything about the palette.
             //
-            // The lightness is not touched here, and setBrightness - which carries the material's
-            // own dark/light flag and used to be hooked alongside these - deliberately is not.
+            // Hue follows artwork; the native palette builder owns material contrast.
+            ClockBackdropContrast.install(timeView.getClassLoader());
             Xp.hookAll(timeView, "setGlassColor", chain -> {
                 View self = (View) chain.getThisObject();
                 if (!glassStyleFor(self)) return chain.proceed();
@@ -1780,21 +1780,14 @@ public class Main extends XposedModule {
                 args[0] = legible(self, (Integer) args[0]);
                 return chain.proceed(args);
             });
-            // The glass's dark/light switch (glassData[6]), which two OEM routes decide from two
-            // different pictures - issue #23. The palette pass (setClockPalette -> AllInOneBase.
-            // updateClockGlassBrightness) is computed from what the lock screen shows, the cover
-            // included. The colour-extraction animation (AllInOneBaseAnimation.
-            // doColorExtractionAnimation, glass effect 5) calls the same thing on its own, and
-            // reads the ORIGINAL wallpaper, which in cover mode is not on screen: on a light
-            // wallpaper it says "dark" and the clock over the cover turns near black. It fires on
-            // a wake, and sometimes just after an entry. So in cover mode the switch follows the
-            // palette the OEM computed for the cover; out of it, whatever the OEM says.
+            // The material brightness must agree with the native light-clock palette.
+            // Late wallpaper extraction callbacks must not darken a music backdrop.
             Xp.hookAll(timeView, "setBrightness", chain -> {
                 Object[] args = chain.getArgs().toArray();
-                if (!sCoverMode) {
+                if (!ClockBackdropContrast.ownsContrast()) {
                     if (sScreenOn && args[0] instanceof Boolean) sBrightOutside = (Boolean) args[0];
-                } else if (sScreenOn && sBrightCover != null && glassStyleFor((View) chain.getThisObject())) {
-                    args[0] = sBrightCover;
+                } else if (glassStyleFor((View) chain.getThisObject())) {
+                    args[0] = false;
                 }
                 return chain.proceed(args);
             });
@@ -2213,6 +2206,8 @@ public class Main extends XposedModule {
                 try {
                     if ("info".equals(op)) {
                         dumpInfo();
+                    } else if ("clockcontrast".equals(op)) {
+                        setResultData(ClockBackdropContrast.describe());
                     } else if ("statusicons".equals(op)) {
                         setResultData(StatusBarArtwork.describe());
                     } else if ("anim".equals(op)) {
@@ -2353,6 +2348,28 @@ public class Main extends XposedModule {
                         }
                     } else if ("mediabtn".equals(op)) {
                         setResultData(dumpClickables());
+                    } else if ("artinfo".equals(op)) {
+                        MediaController controller = pickController(c);
+                        MediaMetadata metadata = controller == null ? null : controller.getMetadata();
+                        StringBuilder info = new StringBuilder(controller == null ? "no session" : controller.getPackageName());
+                        if (metadata != null) {
+                            for (String field : new String[]{MediaMetadata.METADATA_KEY_ALBUM_ART,
+                                    MediaMetadata.METADATA_KEY_ART, MediaMetadata.METADATA_KEY_DISPLAY_ICON}) {
+                                Bitmap bitmap = metadata.getBitmap(field);
+                                if (bitmap != null) info.append(" ").append(field).append("=")
+                                        .append(bitmap.getWidth()).append("x").append(bitmap.getHeight());
+                            }
+                            for (String field : new String[]{MediaMetadata.METADATA_KEY_ALBUM_ART_URI,
+                                    MediaMetadata.METADATA_KEY_ART_URI, MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI}) {
+                                String value = metadata.getString(field);
+                                if (value != null) {
+                                    android.net.Uri uri = android.net.Uri.parse(value);
+                                    info.append(" ").append(field).append("=").append(uri.getScheme())
+                                            .append("://").append(uri.getHost());
+                                }
+                            }
+                        }
+                        setResultData(info.toString());
                     } else if ("queue".equals(op)) {
                         setResultData(dumpQueues(i.getIntExtra("count", 2)));
                     } else if ("queue3".equals(op)) {

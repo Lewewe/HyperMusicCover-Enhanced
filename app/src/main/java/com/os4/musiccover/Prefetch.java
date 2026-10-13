@@ -192,6 +192,9 @@ final class Prefetch {
         });
     }
 
+    // Accessed under CACHE alongside the image and pending-read maps.
+    private static final ArtworkFetchPolicy FETCH_POLICY = new ArtworkFetchPolicy();
+
     private static final java.util.Map<String, String> CURRENT_READS = new java.util.HashMap<>();
 
     static boolean currentArtworkPending(String key) {
@@ -231,6 +234,7 @@ final class Prefetch {
                     String track = pkg + "|" + metadata.getString(MediaMetadata.METADATA_KEY_TITLE);
                     boolean requested;
                     synchronized (CACHE) {
+                        if (FETCH_POLICY.coolingDown(value, SystemClock.uptimeMillis())) continue;
                         requested = !CURRENT_READS.containsKey(value);
                         CURRENT_READS.put(value, track);
                     }
@@ -642,11 +646,16 @@ final class Prefetch {
         synchronized (CACHE) {
             Bitmap have = CACHE.get(key);
             if (have != null && !have.isRecycled()) return;
+            if (FETCH_POLICY.coolingDown(key, SystemClock.uptimeMillis())) return;
         }
         long t0 = SystemClock.uptimeMillis();
         Bitmap b = load(it.icon);
-        if (b == null) return;
+        if (b == null) {
+            synchronized (CACHE) { FETCH_POLICY.failed(key, SystemClock.uptimeMillis()); }
+            return;
+        }
         synchronized (CACHE) {
+            FETCH_POLICY.succeeded(key);
             CACHE.put(key, b);
         }
         Xp.log(TAG + "fetched \"" + it.title + "\" " + b.getWidth() + "x" + b.getHeight()
@@ -674,7 +683,7 @@ final class Prefetch {
         try {
             if ("http".equals(scheme) || "https".equals(scheme)) {
                 java.net.HttpURLConnection conn =
-                        (java.net.HttpURLConnection) new java.net.URL(uri.toString())
+                        (java.net.HttpURLConnection) new java.net.URL(ArtworkFetchPolicy.networkUrl(uri.toString()))
                                 .openConnection();
                 try {
                     conn.setConnectTimeout(3000);
