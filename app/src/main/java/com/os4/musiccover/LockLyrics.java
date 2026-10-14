@@ -124,6 +124,7 @@ final class LockLyrics {
     private static volatile int sTranslateRevision;
     /** Optional motion/effect level for lyric rendering; see AliveLyricsEffects constants. */
     static volatile int sAliveFx = AliveLyricsEffects.OFF;
+    static volatile int sDepthBlur = LyricDepthBlur.DEFAULT;
     static volatile boolean sProviderQq = true;
     static volatile boolean sProviderNetease = true;
     static volatile boolean sProviderKuwo = true;
@@ -329,6 +330,17 @@ final class LockLyrics {
         sStyle = next;
         LyricView view = sView;
         if (view != null) view.kick();
+        return true;
+    }
+
+    static boolean setDepthBlur(int percent) {
+        int next = LyricDepthBlur.clamp(percent);
+        if (next == sDepthBlur) return false;
+        sDepthBlur = next;
+        LyricView view = sView;
+        if (view != null) view.kick();
+        // Redraw the frozen lyric frame without refreshing the wallpaper dim or clock scene.
+        if (sStill) drawStill();
         return true;
     }
 

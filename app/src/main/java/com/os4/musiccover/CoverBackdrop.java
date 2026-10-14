@@ -10,6 +10,25 @@ final class CoverBackdrop {
     private static float dimTarget = Float.NaN;
     private static boolean nativeWallpaper;
 
+    /** Small live snapshot for diagnosing dim visibility without dumping the view tree. */
+    static String describe() {
+        android.view.View view = dimLayer;
+        String state = "hidden=" + hidden() + " cover=" + Main.coverModeOn()
+                + " locked=" + Main.keyguardLocked() + " dim=" + Main.sWallpaperDim
+                + " target=" + dimTarget + " compact=" + LockLyrics.wantsCompactArtwork()
+                + " lyrics=" + LockLyrics.hasLyrics() + " window=" + LockLyrics.wantsWindow();
+        if (view == null) return state + " layer=none";
+        state += " alpha=" + view.getAlpha() + " shown=" + view.isShown()
+                + " size=" + view.getWidth() + "x" + view.getHeight();
+        for (Object current = view; current instanceof android.view.View;
+                current = ((android.view.View) current).getParent()) {
+            android.view.View v = (android.view.View) current;
+            state += " [" + v.getClass().getSimpleName() + " a=" + v.getAlpha()
+                    + " vis=" + v.getVisibility() + "]";
+        }
+        return state;
+    }
+
     static boolean hidden() {
         return Main.sHidePlayerBackground;
     }
@@ -51,6 +70,13 @@ final class CoverBackdrop {
         }
     }
 
+    /** Lifecycle/scene transitions own visibility, not a condition inside the cached drawing. */
+    static void refreshVisibility() {
+        if (dimLayer == null) return;
+        int visibility = Main.keyguardLocked() ? android.view.View.VISIBLE : android.view.View.INVISIBLE;
+        if (dimLayer.getVisibility() != visibility) dimLayer.setVisibility(visibility);
+    }
+
     private static void updateDim() {
         if (dimLayer == null && !Main.sHidePlayerBackground) return;
         android.view.ViewGroup layer = CoverPush.coverLayer();
@@ -71,12 +97,9 @@ final class CoverBackdrop {
         if (dimLayer == null || dimLayer.getParent() != parent) {
             if (dimLayer != null && dimLayer.getParent() instanceof android.view.ViewGroup)
                 ((android.view.ViewGroup) dimLayer.getParent()).removeView(dimLayer);
-            dimLayer = new android.view.View(parent.getContext()) {
-                @Override public void draw(android.graphics.Canvas canvas) {
-                    // The outer host also survives unlock; never dim the unlocked shade.
-                    if (Main.keyguardLocked()) super.draw(canvas);
-                }
-            };
+            // Keep the display list independent of lock state. A conditional draw can cache
+            // an empty background while unlocked and retain it when lyrics no longer blur.
+            dimLayer = new android.view.View(parent.getContext());
             dimLayer.setTag("HMCWallpaperDim");
             dimLayer.setBackgroundColor(android.graphics.Color.BLACK);
             dimLayer.setClickable(false);
@@ -89,6 +112,7 @@ final class CoverBackdrop {
             parent.addView(dimLayer, index, new android.view.ViewGroup.LayoutParams(-1, -1));
             dimTarget = Float.NaN;
         }
+        refreshVisibility();
         boolean dimScene = Main.coverModeOn() && (!LockLyrics.wantsCompactArtwork()
                 || LockLyrics.hasLyrics() && LockLyrics.wantsWindow());
         float alpha = Main.sHidePlayerBackground && dimScene ? Main.sWallpaperDim / 100f : 0f;

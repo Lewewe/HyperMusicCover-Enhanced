@@ -12,6 +12,19 @@ The Canvas renderer reuses its TextPaint, LinearGradient and Matrix; the gradien
 only when its cover/brightness/alpha inputs change. No Lottie dependency, full-line offscreen layer or new
 animation loop is added. The existing karaoke frames drive the effect.
 
+## Inactive lyrics blur
+
+Lyrics settings → Lyric Effects includes **Inactive lyrics blur**, adjustable from 0–200%.
+100% preserves the original distance-based softness; the slider marks this default and provides
+haptic feedback when returning to it. 0% removes depth blur, while 200% doubles the original
+radii. Singing lines, retained rapid groups and currently visible simultaneous vocals retain
+the renderer's existing focus rules. Eye-candy still hides future lines under its own policy.
+
+Changes apply live and are saved/exported with settings. Only the inactive-line blur textures
+are invalidated; lyric layouts, scroll positions and timing are retained. Stale worker results
+are discarded, and no blur textures are generated at 0%. Page-entry, password-screen and
+individual-word effects remain independent.
+
 ## Plain karaoke and Alive modes
 
 Alive Lyrics Off preserves the stable Enhanced fork's original renderer. Syllables rise according

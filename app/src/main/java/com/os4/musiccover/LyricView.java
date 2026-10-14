@@ -301,7 +301,8 @@ final class LyricView extends View {
     private final float liftPx, glowPx;
     /** Room around a line for its glow and lift, and around a blurred node for the blur. */
     private int wordPad;
-    private final int blurPad;
+    private int blurPad;
+    private int builtDepthBlur = LyricDepthBlur.DEFAULT;
     private float sidePx;
     /** The typography and width currently represented by the layouts and blur cache. */
     private LyricStyle layoutStyle;
@@ -337,7 +338,7 @@ final class LyricView extends View {
     /** Pictures asked of the blur thread and not back yet, as line * 8 + distance. */
     private final java.util.HashSet<Integer> blurPending = new java.util.HashSet<>();
     /** Bumped by every rebuild, so a picture made for the previous layout is thrown away. */
-    private int buildGen;
+    private volatile int buildGen;
     /** The lines and width a layout is on its way for, or -1 with none in the air. */
     private int wantVersion = -1, wantWidth = -1;
     /** The translation and romanisation switches the layout in the air is for (LockLyrics.below()). */
@@ -601,6 +602,10 @@ final class LyricView extends View {
                 changed = true;
                 why |= 1;
             }
+        }
+        if (builtDepthBlur != LockLyrics.sDepthBlur) {
+            updateDepthBlur();
+            changed = true;
         }
         // Leaving, the band is frozen where it was: following the clock as it grows would drag
         // the fading lines up through it.
@@ -950,10 +955,25 @@ final class LyricView extends View {
         return Math.min(l.start, Math.max(early, prevEnd));
     }
 
+    /** Invalidate only softness textures; retain scroll, timings and active duet/group state. */
+    private void updateDepthBlur() {
+        int previous = builtDepthBlur;
+        builtDepthBlur = LockLyrics.sDepthBlur;
+        buildGen++;
+        blurPending.clear();
+        blurBmp = new Bitmap[lines.size()][BLUR_MAX_ROWS];
+        blurPad = (int) Math.ceil((BLUR_NEXT_DP + BLUR_DP_PER_ROW * BLUR_MAX_ROWS)
+                * density * 2f * Math.max(1f, builtDepthBlur / 100f));
+        for (int i = 0; i < blur.length; i++) {
+            blur[i] = previous == 0 ? 0f : blur[i] * builtDepthBlur / previous;
+        }
+        prewarmBlur();
+    }
+
     private float blurFor(int rows) {
         // The neighbours only just soft, so the next line still reads; then clearly out of focus.
         if (rows <= 0) return 0f;
-        return (BLUR_NEXT_DP + BLUR_DP_PER_ROW * (Math.min(BLUR_MAX_ROWS, rows) - 1)) * density;
+        return LyricDepthBlur.radiusDp(rows, builtDepthBlur) * density;
     }
 
     /** How many rows from the focus a line counts as - lines above count one further. */
@@ -2543,6 +2563,7 @@ final class LyricView extends View {
      * Once made they stay, so after the first few lines this asks for one new line a change.
      */
     private void prewarmBlur() {
+        if (builtDepthBlur == 0) return;
         int n = lines.size();
         for (int i = Math.max(0, focus - 4); i <= Math.min(n - 1, focus + 10); i++) {
             int d = Math.min(rowsFromFocus(i), BLUR_MAX_ROWS);
@@ -2554,7 +2575,8 @@ final class LyricView extends View {
     }
 
     private void requestBlur(final int i, final int rows) {
-        if (rows < 1 || rows > BLUR_MAX_ROWS || i < 0 || i >= blurBmp.length) return;
+        if (builtDepthBlur == 0 || rows < 1 || rows > BLUR_MAX_ROWS
+                || i < 0 || i >= blurBmp.length) return;
         if (blurBmp[i][rows - 1] != null) return;
         if (!blurPending.add(i * 8 + rows)) return;
         // Everything the other thread needs, taken here: the paints are this view's and change on
@@ -2578,13 +2600,19 @@ final class LyricView extends View {
         blurHandler().post(new Runnable() {
             @Override
             public void run() {
+                // Slider changes can supersede queued work before the worker starts it.
+                if (gen != buildGen) return;
                 final Bitmap b = makeBlurred(l, width, fullW, fullH, pad, radius, p, tp, rp, op, bp,
                         transGap, onlineTransGap, bgGap, down, alignOn);
                 post(new Runnable() {
                     @Override
                     public void run() {
+                        if (gen != buildGen || i >= blurBmp.length) {
+                            if (b != null) b.recycle();
+                            return;
+                        }
                         blurPending.remove(i * 8 + rows);
-                        if (b == null || gen != buildGen || i >= blurBmp.length) return;
+                        if (b == null) return;
                         blurBmp[i][rows - 1] = b;
                         // While the loop runs its next frame draws it anyway.
                         if (!looping) invalidate();

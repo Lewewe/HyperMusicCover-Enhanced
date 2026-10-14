@@ -12,8 +12,18 @@ internal object HyperCanvasRelease {
         context.packageManager.getPackageInfo(PACKAGE, 0).versionName
     } catch (_: android.content.pm.PackageManager.NameNotFoundException) { null }
 
-    fun downloadedVersion(context: android.content.Context): String? =
-        context.getSharedPreferences("extension_downloads", 0).getString(PACKAGE, null)
+    fun downloadedVersion(context: android.content.Context): String? {
+        val preferences = context.getSharedPreferences("extension_downloads", 0)
+        val version = preferences.getString(PACKAGE, null) ?: return null
+        val name = preferences.getString("${PACKAGE}.file", null) ?: "HyperCanvas-$version.apk"
+        val file = java.io.File(java.io.File(context.cacheDir, "updates"), name)
+        if (file.isFile && file.length() > 0L) return version
+        // Download history must not outlive the cached APK it describes.
+        if (!UpdateInstaller.inFlight) {
+            preferences.edit().remove(PACKAGE).remove("${PACKAGE}.file").apply()
+        }
+        return null
+    }
 
     suspend fun latest(): Release = withContext(Dispatchers.IO) {
         val connection = HttpCall("https://api.github.com/repos/Lewewe/HyperCanvas/releases?per_page=20", 15_000)

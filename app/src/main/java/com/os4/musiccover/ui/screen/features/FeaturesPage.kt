@@ -1,5 +1,7 @@
 package com.os4.musiccover.ui.screen.features
 
+import org.json.JSONObject
+import com.os4.musiccover.MiniPlayerConfig
 import android.content.Intent
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -366,6 +368,20 @@ private fun CoverGroup(
             onSelectedIndexChange = {
                 onChange(module.copy(coverStyle = it))
                 ModuleBridge.setCoverStyle(context, "mode", it.toFloat())
+            },
+        )
+        val miniConfig = JSONObject(module.miniConfig)
+        SwitchPreference(
+            title = stringResource(R.string.mini_media_collapsed),
+            summary = stringResource(R.string.mini_media_collapsed_summary),
+            checked = miniConfig.optBoolean(MiniPlayerConfig.MEDIA_COLLAPSED_DEFAULT),
+            enabled = enabled && miniConfig.optBoolean(MiniPlayerConfig.ENABLED),
+            onCheckedChange = { collapsed ->
+                val next = MiniPlayerConfig.normalizedJson(
+                    JSONObject(module.miniConfig)
+                        .put(MiniPlayerConfig.MEDIA_COLLAPSED_DEFAULT, collapsed).toString())
+                onChange(module.copy(miniConfig = next))
+                ModuleBridge.setMiniConfig(context, next)
             },
         )
         SwitchPreference(
@@ -942,6 +958,18 @@ private fun LyricEffectsControls(
                 onSelectedIndexChange = {
                     onChange(module.copy(lyricsAliveFx = it))
                     ModuleBridge.setLyricsAliveFx(context, it)
+                },
+            )
+            ValueSlider(
+                title = stringResource(R.string.lyrics_depth_blur),
+                summary = stringResource(R.string.lyrics_depth_blur_summary),
+                value = module.lyricsDepthBlur.toFloat(), valueRange = 0f..200f,
+                enabled = enabled, detent = 100f,
+                label = { "${it.toInt()}%" },
+                onValueChange = {
+                    val percent = it.toInt()
+                    onChange(module.copy(lyricsDepthBlur = percent))
+                    ModuleBridge.setLyricsDepthBlur(context, percent)
                 },
             )
             SwitchPreference(

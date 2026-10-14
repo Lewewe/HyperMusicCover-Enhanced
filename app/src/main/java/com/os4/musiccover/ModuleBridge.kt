@@ -150,6 +150,7 @@ object ModuleBridge {
         val lyricTranslateTarget: String = "en",
         /** Alive lyric effects: 0 off, 1 subtle, 2 dramatic, 3 eye-candy. */
         val lyricsAliveFx: Int = 0,
+        val lyricsDepthBlur: Int = 100,
         val spicyLyricsEnabled: Boolean = true,
         val providerQq: Boolean = true,
         val providerNetease: Boolean = true,
@@ -570,6 +571,9 @@ object ModuleBridge {
     fun setLyricsAlign(context: Context, mode: Int) =
         send(context, "lyricalign") { putExtra("v", mode) }
 
+    fun setLyricsDepthBlur(context: Context, percent: Int) =
+        send(context, "lyricdepthblur") { putExtra("v", percent.coerceIn(0, 200)) }
+
     fun setLyricsAliveFx(context: Context, mode: Int) =
         send(context, "lyricalive") { putExtra("v", mode) }
 
@@ -928,6 +932,7 @@ object ModuleBridge {
             lyricTranslateSource = b.getString("lyrictrsource") ?: "auto",
             lyricTranslateTarget = b.getString("lyrictrtarget") ?: "en",
             lyricsAliveFx = b.getInt("lyricalive", 0),
+            lyricsDepthBlur = b.getInt("lyricdepthblur", 100).coerceIn(0, 200),
             spicyLyricsEnabled = b.getBoolean("spicylyrics", true),
             providerQq = b.getBoolean("providerqq", true),
             providerNetease = b.getBoolean("providernetease", true),

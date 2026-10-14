@@ -9,6 +9,7 @@ import kotlin.math.roundToInt
 /** Portable settings for the HyperChanger lockscreen mini player. */
 object MiniPlayerConfig {
     const val ENABLED = "enabled"
+    const val MEDIA_COLLAPSED_DEFAULT = "mediaCollapsedDefault"
     const val WIDTH = "widthDp"
     const val HEIGHT_RADIUS = "heightRadiusDp"
     const val ART_RADIUS = "artRadiusDp"
@@ -51,6 +52,7 @@ object MiniPlayerConfig {
 
     private val defaults = linkedMapOf<String, Any>(
         ENABLED to false,
+        MEDIA_COLLAPSED_DEFAULT to false,
         WIDTH to 221f,
         HEIGHT_RADIUS to 27f,
         ART_RADIUS to 12f,
@@ -63,6 +65,12 @@ object MiniPlayerConfig {
         BACKGROUND_BLUR_RADIUS to 30f,
         BACKGROUND_BLUR_BRIGHTNESS to 80f,
     )
+
+    /** Automatic entry requires an island to return to; explicit scene restoration bypasses it. */
+    @JvmStatic fun mediaCollapsedByDefault(raw: String?): Boolean {
+        val config = JSONObject(normalizedJson(raw))
+        return config.getBoolean(ENABLED) && config.getBoolean(MEDIA_COLLAPSED_DEFAULT)
+    }
 
     @JvmStatic fun defaultJson(): String = normalizedJson(null)
 
@@ -88,7 +96,7 @@ object MiniPlayerConfig {
         val input = runCatching { JSONObject(raw.orEmpty()) }.getOrDefault(JSONObject())
         val out = JSONObject()
         defaults.forEach { (key, fallback) ->
-            out.put(key, if (key == ENABLED || key == ADAPTIVE_WIDTH || key == BACKGROUND_BLUR || key == STATUS_AT_DATE || key == COMPACT_NOTIFICATIONS) {
+            out.put(key, if (key == ENABLED || key == MEDIA_COLLAPSED_DEFAULT || key == ADAPTIVE_WIDTH || key == BACKGROUND_BLUR || key == STATUS_AT_DATE || key == COMPACT_NOTIFICATIONS) {
                 runCatching { input.getBoolean(key) }.getOrDefault(fallback)
             } else if (key == NOTIFICATION_SIZE) {
                 notificationSize(input.optDouble(key, 80.0))

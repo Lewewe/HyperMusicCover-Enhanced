@@ -1963,6 +1963,7 @@ public class Main extends XposedModule {
                     + "\nlyrictrsource=" + LockLyrics.sTranslateSourceLang
                     + "\nlyrictrtarget=" + LockLyrics.sTranslateTargetLang
                     + "\nlyricalive=" + LockLyrics.sAliveFx
+                    + "\nlyricdepthblur=" + LockLyrics.sDepthBlur
                     + "\nspicylyrics=" + (LockLyrics.sSpicyLyricsEnabled ? 1 : 0)
                     + "\nproviderqq=" + (LockLyrics.sProviderQq ? 1 : 0)
                     + "\nprovidernetease=" + (LockLyrics.sProviderNetease ? 1 : 0)
@@ -2109,6 +2110,7 @@ public class Main extends XposedModule {
                         else if ("lyrictrtarget".equals(k)) LockLyrics.sTranslateTargetLang =
                                 v.isEmpty() ? "en" : v;
                         else if ("lyricalive".equals(k)) LockLyrics.setAliveFx(Integer.parseInt(v));
+                        else if ("lyricdepthblur".equals(k)) LockLyrics.setDepthBlur(Integer.parseInt(v));
                         else if ("spicylyrics".equals(k)) LockLyrics.sSpicyLyricsEnabled = "1".equals(v);
                         else if ("providerqq".equals(k)) LockLyrics.sProviderQq = "1".equals(v);
                         else if ("providernetease".equals(k)) LockLyrics.sProviderNetease = "1".equals(v);
@@ -2572,6 +2574,11 @@ public class Main extends XposedModule {
                         if (LockLyrics.setAlign(i.getIntExtra("v", LockLyrics.sAlign))) {
                             Xp.log(TAG + "lyrics alignment: " + LockLyrics.sAlign);
                             LockLyrics.refresh();
+                            saveStateSoon();
+                        }
+                    } else if ("lyricdepthblur".equals(op)) {
+                        // Text softness does not change scene, artwork size or backdrop ownership.
+                        if (LockLyrics.setDepthBlur(i.getIntExtra("v", LockLyrics.sDepthBlur))) {
                             saveStateSoon();
                         }
                     } else if ("lyricalive".equals(op)) {
@@ -3086,6 +3093,7 @@ public class Main extends XposedModule {
                         out.putString("lyrictrsource", LockLyrics.sTranslateSourceLang);
                         out.putString("lyrictrtarget", LockLyrics.sTranslateTargetLang);
                         out.putInt("lyricalive", LockLyrics.sAliveFx);
+                        out.putInt("lyricdepthblur", LockLyrics.sDepthBlur);
                         out.putBoolean("spicylyrics", LockLyrics.sSpicyLyricsEnabled);
                         out.putBoolean("providerqq", LockLyrics.sProviderQq);
                         out.putBoolean("providernetease", LockLyrics.sProviderNetease);
@@ -3150,6 +3158,8 @@ public class Main extends XposedModule {
                         // where a build from before it could only be sent to and hoped for.
                         out.putBoolean("acks", true);
                         setResultExtras(out);
+                    } else if ("backdropstate".equals(op)) {
+                        setResultData(CoverBackdrop.describe());
                     } else if ("diag".equals(op)) {
                         String report = clockReport();
                         android.os.Bundle rb = new android.os.Bundle();
@@ -3335,6 +3345,7 @@ public class Main extends XposedModule {
                     // is gone; whatever was going to cancel it cannot arrive now.
                     cancelPendingTap("screen off");
                 }
+                CoverBackdrop.refreshVisibility();
                 if (Intent.ACTION_USER_PRESENT.equals(a)) {
                     CoverMorphLayer.cancel();
                     CoverCardLayer.hideNow();
@@ -7108,6 +7119,7 @@ public class Main extends XposedModule {
     /** The wake reached the clock before the SCREEN_ON broadcast did. */
     static void noteAwake() {
         CanvasHostBridge.waking();
+        CoverBackdrop.refreshVisibility();
         if (sScreenOn) return;
         sScreenOn = true;
         restoreAwakeArtwork();
@@ -9263,7 +9275,7 @@ public class Main extends XposedModule {
         sTrackKey = "";
         Xp.log(TAG + why + ": expanding into cover mode");
         MotionTrace.start("toggle-in");
-        onMediaUpdate();
+        onMediaUpdate(true);
     }
 
     private static void guardCard(final View card) {
@@ -10084,6 +10096,11 @@ public class Main extends XposedModule {
      * card on the lockscreen, and still music mode.
      */
     private static void onMediaUpdate() {
+        onMediaUpdate(false);
+    }
+
+    /** Explicit pill taps and scene restoration must bypass the automatic entry preference. */
+    private static void onMediaUpdate(boolean explicitEntry) {
         MiniPlayerRuntime.refresh();
         if (!sAuto || !sCardShowing) return;
         // The user tapped the cover away and the card is still up. The one case where "there is
@@ -10150,7 +10167,8 @@ public class Main extends XposedModule {
             return;
         }
         if (sCoverMode) CoverPush.pushArtAsync(true, true);
-        else setCoverEnabled(true, true);
+        else if (explicitEntry || !MiniPlayerRuntime.mediaCollapsedByDefault(sAppCtx))
+            setCoverEnabled(true, true);
     }
 
     /**

@@ -57,6 +57,11 @@ object MiniPlayerRuntime {
 
     @JvmStatic fun configJson(context: Context): String = MiniPlayerConfig.fromPreferences(prefs(context))
 
+    /** Only automatic cover entry changes; manual entry and existing scenes stay intact. */
+    @JvmStatic fun mediaCollapsedByDefault(context: Context?): Boolean =
+        context != null && MiniPlayerConfig.mediaCollapsedByDefault(
+            prefs(context).getString("config", null))
+
     /** Whether lasting status belongs beside the date instead of beneath the pill. */
     @JvmStatic fun statusAtDate(context: Context): Boolean = JSONObject(configJson(context)).let {
         it.optBoolean(MiniPlayerConfig.ENABLED) && it.optBoolean(MiniPlayerConfig.STATUS_AT_DATE)
