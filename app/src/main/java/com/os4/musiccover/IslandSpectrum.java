@@ -2,11 +2,13 @@ package com.os4.musiccover;
 
 /** Five real FFT bands, with a slowly decaying gain reference and an actual silence floor. */
 final class IslandSpectrum {
-    private static final float[] EDGES = {30f, 150f, 500f, 1600f, 5000f, 20000f};
+    // The internal 16 kHz capture ends at 8 kHz. Start the final band at 4 kHz so it
+    // includes useful treble there; higher-rate Visualizer capture still includes upper highs.
+    private static final float[] EDGES = {30f, 150f, 500f, 1600f, 4000f, 20000f};
     private static final float DISPLAY_GAIN = .85f;
-    // A gentle fixed spectral tilt prevents bass from dominating the tiny display.
-    // One shared gain reference still preserves differences between the bands.
-    private static final float[] BAND_GAIN = {.8f, .9f, 1f, 1.1f, 1.15f};
+    // Keep bass/mids near neutral and give the two upper bands a restrained visibility lift.
+    // A shared gain reference preserves the mix and never normalizes absent bands upward.
+    private static final float[] BAND_GAIN = {.9f, .95f, 1f, 1.2f, 1.3f};
     private static final double PEAK_RELEASE_NS = 5_000_000_000d;
     private final float[] energy = new float[5];
     private final float[] levels = new float[5];

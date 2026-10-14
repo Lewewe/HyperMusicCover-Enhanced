@@ -48,7 +48,7 @@ public class IslandSpectrumTest {
         spectrum.copyTo(levels);
         assertArrayEquals(new float[5], levels, 0f);
     }
-    @Test public void equalPowerReceivesOnlyGentleFixedSpectralTilt() {
+    @Test public void equalPowerReceivesLimitedUpperBandCompensation() {
         IslandSpectrum spectrum = new IslandSpectrum();
         byte[] fft = new byte[1024];
         for (int hz : new int[] {100, 300, 1000, 3000, 10000}) {
@@ -104,6 +104,62 @@ public class IslandSpectrumTest {
         spectrum.copyTo(levels);
         assertTrue(levels[4] > 0f);
         assertTrue(levels[4] < levels[0] * .2f);
+    }
+
+    @Test public void bassHeavyMixLeavesAudibleMidsAndHighsVisible() {
+        IslandSpectrum spectrum = new IslandSpectrum();
+        byte[] fft = new byte[1024];
+        fft[4] = 100;   // Bass at about 94 Hz.
+        fft[42] = 70;   // Mid at about 984 Hz.
+        fft[426] = 45;  // Treble at about 10 kHz.
+        spectrum.sample(fft, 48000000, 0L);
+        float[] levels = new float[5];
+        spectrum.copyTo(levels);
+        // Keep the real mix ordering while leaving quieter instruments visible.
+        assertTrue(levels[0] > levels[2]);
+        assertTrue(levels[2] > levels[4]);
+        assertTrue(levels[2] > levels[0] * .6f);
+        assertTrue(levels[4] > levels[0] * .45f);
+        assertEquals(0f, levels[1], 0f);
+        assertEquals(0f, levels[3], 0f);
+    }
+
+    @Test public void genuinelyDominantBassStillRemainsDominant() {
+        IslandSpectrum spectrum = new IslandSpectrum();
+        byte[] fft = new byte[1024];
+        fft[4] = 100;
+        fft[42] = 20;
+        fft[426] = 10;
+        spectrum.sample(fft, 48000000, 0L);
+        float[] levels = new float[5];
+        spectrum.copyTo(levels);
+        assertTrue(levels[0] > levels[2] * 2f);
+        assertTrue(levels[0] > levels[4] * 3f);
+    }
+
+    @Test public void internalCaptureShowsLowerTrebleInTheFifthBar() {
+        for (int hz : new int[] {4000, 4500, 6000, 7500}) {
+            IslandSpectrum spectrum = new IslandSpectrum();
+            byte[] fft = new byte[PcmSpectrum.SIZE];
+            int bin = Math.round(hz * fft.length / 16000f);
+            fft[bin * 2] = 60;
+            spectrum.sample(fft, 16000000, 0L);
+            float[] levels = new float[5];
+            spectrum.copyTo(levels);
+            assertTrue(levels[4] > .5f);
+            for (int band = 0; band < 4; band++) assertEquals(0f, levels[band], 0f);
+        }
+    }
+
+    @Test public void upperMidRemainsSeparateFromTheTrebleBar() {
+        IslandSpectrum spectrum = new IslandSpectrum();
+        byte[] fft = new byte[PcmSpectrum.SIZE];
+        fft[2 * 96] = 60; // 3 kHz at the internal capture rate.
+        spectrum.sample(fft, 16000000, 0L);
+        float[] levels = new float[5];
+        spectrum.copyTo(levels);
+        assertTrue(levels[3] > 0f);
+        assertEquals(0f, levels[4], 0f);
     }
 
     @Test public void trebleAboveFourteenKilohertzIsNotDiscarded() {
