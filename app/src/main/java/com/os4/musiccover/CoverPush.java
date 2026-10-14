@@ -661,14 +661,18 @@ final class CoverPush {
                 // fade below, so the wake dissolves from the video into the cover.
                 boolean asleep = Main.sCoverMode && !Main.screenOnCached();
                 boolean onKeyguard = Main.sCoverMode && Main.onKeyguardNow() && !asleep;
-                int want = onKeyguard ? View.VISIBLE : View.INVISIBLE;
+                // Use wallpaper background: the user's own live wallpaper is the backdrop, so
+                // this full-screen (frosted) artwork stays down on the lock screen too. Without
+                // this the guard put it back on the next frame after anything hid it.
+                boolean backdropHidden = CoverBackdrop.hidden();
+                int want = onKeyguard && !backdropHidden ? View.VISIBLE : View.INVISIBLE;
                 if (cover.getVisibility() != want) cover.setVisibility(want);
                 if (asleep && cover.getAlpha() > 0f) {
                     cover.animate().cancel();
                     cover.setAlpha(0f);
                     if (sCoverFadeWaitMs <= 0) sCoverFadeWaitMs = coverFadeMs();
                 }
-                if (onKeyguard) {
+                if (onKeyguard && !backdropHidden) {
                     // The one place the cover's fade can start from. This runs on the frame the
                     // cover is really being drawn in, which is the frame the fade is for - the
                     // push that armed it happens whenever the broadcast does. See
@@ -689,6 +693,12 @@ final class CoverPush {
                 // shade is drawing is what put a stray frame of the wallpaper into the first
                 // pull-down - setVideoSurfacesHidden() has the measurement.
                 if (!onKeyguard) return true;
+                if (backdropHidden) {
+                    // Nothing of ours covers the video, so its player stays on screen. The
+                    // cut-out subject is the depth logic's, which keeps it off the lyrics.
+                    showVideoBackground();
+                    return true;
+                }
                 hideVideoSurfaces();
                 return true;
             } finally { android.os.Trace.endSection(); } }
@@ -974,6 +984,12 @@ final class CoverPush {
 
     private static float alphaOf(View v) {
         return v == null ? -1f : v.getAlpha();
+    }
+
+    /** The live wallpaper's video, given back while its own wallpaper is the backdrop. */
+    private static void showVideoBackground() {
+        View bg = Main.sVideoBg;
+        if (bg != null && bg.getVisibility() != View.VISIBLE) bg.setVisibility(View.VISIBLE);
     }
 
     /**
