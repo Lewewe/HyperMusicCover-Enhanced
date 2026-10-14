@@ -151,6 +151,9 @@ object ModuleBridge {
         /** Alive lyric effects: 0 off, 1 subtle, 2 dramatic, 3 eye-candy. */
         val lyricsAliveFx: Int = 0,
         val lyricsDepthBlur: Int = 100,
+        val islandIphoneGestures: Boolean = false,
+        val islandIphoneTop: Boolean = false,
+        val islandIphoneRadius: Int = IslandGesturePolicy.DEFAULT_RADIUS_DP,
         val spicyLyricsEnabled: Boolean = true,
         val providerQq: Boolean = true,
         val providerNetease: Boolean = true,
@@ -571,6 +574,15 @@ object ModuleBridge {
     fun setLyricsAlign(context: Context, mode: Int) =
         send(context, "lyricalign") { putExtra("v", mode) }
 
+    fun setIslandIphoneGestures(context: Context, on: Boolean) =
+        send(context, "islandiphonegestures") { putExtra("on", on) }
+
+    fun setIslandIphoneTop(context: Context, on: Boolean) =
+        send(context, "islandiphonetop") { putExtra("on", on) }
+
+    fun setIslandIphoneRadius(context: Context, dp: Int) =
+        send(context, "islandiphoneradius") { putExtra("v", IslandGesturePolicy.radius(dp)) }
+
     fun setLyricsDepthBlur(context: Context, percent: Int) =
         send(context, "lyricdepthblur") { putExtra("v", percent.coerceIn(0, 200)) }
 
@@ -933,6 +945,10 @@ object ModuleBridge {
             lyricTranslateTarget = b.getString("lyrictrtarget") ?: "en",
             lyricsAliveFx = b.getInt("lyricalive", 0),
             lyricsDepthBlur = b.getInt("lyricdepthblur", 100).coerceIn(0, 200),
+            islandIphoneGestures = b.getBoolean("islandiphonegestures", false),
+            islandIphoneTop = b.getBoolean("islandiphonetop", false),
+            islandIphoneRadius = IslandGesturePolicy.radius(
+                b.getInt("islandiphoneradius", IslandGesturePolicy.DEFAULT_RADIUS_DP)),
             spicyLyricsEnabled = b.getBoolean("spicylyrics", true),
             providerQq = b.getBoolean("providerqq", true),
             providerNetease = b.getBoolean("providernetease", true),

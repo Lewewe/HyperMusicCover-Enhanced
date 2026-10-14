@@ -40,6 +40,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.os4.musiccover.ui.component.PagerNavigationSpringSpec
 import com.os4.musiccover.ui.component.liquid.IosLiquidGlassNavigationBar
+import com.os4.musiccover.ui.screen.experiments.ExperimentsPageView
+import com.os4.musiccover.ui.screen.experiments.ExperimentsUnlock
+import androidx.compose.runtime.collectAsState
 import com.os4.musiccover.ui.screen.about.AboutPageContent
 import com.os4.musiccover.updater.UpdateCheck
 import com.os4.musiccover.ui.screen.features.FeaturesPageView
@@ -70,6 +73,7 @@ import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.icon.extended.Tune
+import top.yukonga.miuix.kmp.icon.extended.VerticalSplit
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -241,7 +245,10 @@ private fun MainScreen(
     onBlurEnabledChange: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
-    val pagerState = rememberPagerState(pageCount = { 5 })
+    // The A/B tab only exists once unlocked from About (ExperimentsUnlock).
+    val abUnlocked by remember { ExperimentsUnlock.state(context) }.collectAsState()
+    val pageCount = if (abUnlocked == true) 6 else 5
+    val pagerState = rememberPagerState(pageCount = { pageCount })
     var selectedIndex by remember { mutableIntStateOf(0) }
     var isNavigating by remember { mutableStateOf(false) }
     var navJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
@@ -252,8 +259,10 @@ private fun MainScreen(
         stringResource(R.string.tab_extensions),
         stringResource(R.string.tab_settings),
         stringResource(R.string.tab_about),
-    )
-    val icons = listOf(MiuixIcons.Home, MiuixIcons.Tune, MiuixIcons.GridView, MiuixIcons.Settings, MiuixIcons.Info)
+        stringResource(R.string.tab_experiments),
+    ).take(pageCount)
+    val icons = listOf(MiuixIcons.Home, MiuixIcons.Tune, MiuixIcons.GridView, MiuixIcons.Settings,
+        MiuixIcons.Info, MiuixIcons.VerticalSplit).take(pageCount)
 
     /**
      * One flag per page rather than one counter shared by all pages.
@@ -392,6 +401,12 @@ private fun MainScreen(
                         },
                         isBlurEnabled = isBlurEnabled,
                         isCurrent = isAboutCurrent,
+                        extraBottomPadding = navBarHeight,
+                    )
+                    5 -> ExperimentsPageView(
+                        isBlurEnabled = isBlurEnabled,
+                        isCurrent = pagerState.currentPage == 5,
+                        resumeKey = resumeKey,
                         extraBottomPadding = navBarHeight,
                     )
                 }

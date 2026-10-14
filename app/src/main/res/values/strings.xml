@@ -432,4 +432,18 @@
     <string name="mini_media_collapsed_summary">With the lock screen island enabled, start with the music pill. Tap or swipe up to open it. Your selected cover or lyrics scene stays unchanged.</string>
     <string name="lyrics_depth_blur">Inactive lyrics blur</string>
     <string name="lyrics_depth_blur_summary">Adjust blur on past and upcoming lyrics. 100% keeps the original effect, 0% removes blur. Singing lines stay clear.</string>
+    <string name="tab_experiments">A/B</string>
+    <string name="experiments_iphone">iPhone-ify</string>
+    <string name="island_iphone_gestures">iPhone-style island gestures</string>
+    <string name="island_iphone_gestures_summary">Hold to expand Super Island, tap to open its app. Turn off to restore HyperOS gestures.</string>
+    <string name="island_iphone_top">Expanded island at the camera</string>
+    <string name="island_iphone_top_summary">Open the expanded Super Island from the camera, over the status bar, as on iPhone. Portrait phones only.</string>
+    <string name="island_iphone_radius">Expanded island corners</string>
+    <string name="island_iphone_radius_summary">Rounder corners follow the screen edge. Text under the camera moves down; text in a corner moves in. The mark matches the Xiaomi 17 Pro screen corners, as on iPhone.</string>
+    <string name="ab_tab_unlocked">A/B tab enabled</string>
+    <string name="ab_tab_already">A/B tab is already enabled</string>
+    <plurals name="ab_tab_taps_left">
+        <item quantity="one">%d more tap to enable the A/B tab</item>
+        <item quantity="other">%d more taps to enable the A/B tab</item>
+    </plurals>
 </resources>

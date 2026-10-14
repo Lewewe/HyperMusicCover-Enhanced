@@ -939,6 +939,7 @@ public class Main extends XposedModule {
         // this never fires and the attempt below is the one that lands.
         if ("miui.systemui.plugin".equals(pkg)) {
             HyperTweaks.plugin(param.getDefaultClassLoader());
+            IslandIphoneGestures.install(param.getDefaultClassLoader());
             return;
         }
         // Apple's lyric never reaches the session on its own, so it is fetched and published
@@ -969,6 +970,7 @@ public class Main extends XposedModule {
         MiniPlayerRuntime.install(cl);
         MediaCardRuntime.install(cl);
         IslandAudioVisualizer.install(cl);
+        IslandIphoneGestures.install(cl);
         PaletteThrottle.INSTANCE.install(cl);
         // Draw lasting lock screen status beside the date, clear of the pill.
         DateStatus.INSTANCE.install(cl);
@@ -1964,6 +1966,9 @@ public class Main extends XposedModule {
                     + "\nlyrictrtarget=" + LockLyrics.sTranslateTargetLang
                     + "\nlyricalive=" + LockLyrics.sAliveFx
                     + "\nlyricdepthblur=" + LockLyrics.sDepthBlur
+                    + "\nislandiphonegestures=" + (IslandIphoneGestures.enabled() ? 1 : 0)
+                    + "\nislandiphonetop=" + (IslandIphoneGestures.topEnabled() ? 1 : 0)
+                    + "\nislandiphoneradius=" + IslandIphoneGestures.radiusDp()
                     + "\nspicylyrics=" + (LockLyrics.sSpicyLyricsEnabled ? 1 : 0)
                     + "\nproviderqq=" + (LockLyrics.sProviderQq ? 1 : 0)
                     + "\nprovidernetease=" + (LockLyrics.sProviderNetease ? 1 : 0)
@@ -2111,6 +2116,9 @@ public class Main extends XposedModule {
                                 v.isEmpty() ? "en" : v;
                         else if ("lyricalive".equals(k)) LockLyrics.setAliveFx(Integer.parseInt(v));
                         else if ("lyricdepthblur".equals(k)) LockLyrics.setDepthBlur(Integer.parseInt(v));
+                        else if ("islandiphonegestures".equals(k)) IslandIphoneGestures.configure("1".equals(v));
+                        else if ("islandiphonetop".equals(k)) IslandIphoneGestures.configureTop("1".equals(v));
+                        else if ("islandiphoneradius".equals(k)) IslandIphoneGestures.configureRadius(Integer.parseInt(v));
                         else if ("spicylyrics".equals(k)) LockLyrics.sSpicyLyricsEnabled = "1".equals(v);
                         else if ("providerqq".equals(k)) LockLyrics.sProviderQq = "1".equals(v);
                         else if ("providernetease".equals(k)) LockLyrics.sProviderNetease = "1".equals(v);
@@ -2576,6 +2584,16 @@ public class Main extends XposedModule {
                             LockLyrics.refresh();
                             saveStateSoon();
                         }
+                    } else if ("islandiphonegestures".equals(op)) {
+                        IslandIphoneGestures.configure(i.getBooleanExtra("on", false));
+                        saveStateSoon();
+                    } else if ("islandiphonetop".equals(op)) {
+                        IslandIphoneGestures.configureTop(i.getBooleanExtra("on", false));
+                        saveStateSoon();
+                    } else if ("islandiphoneradius".equals(op)) {
+                        IslandIphoneGestures.configureRadius(
+                                i.getIntExtra("v", IslandIphoneGestures.radiusDp()));
+                        saveStateSoon();
                     } else if ("lyricdepthblur".equals(op)) {
                         // Text softness does not change scene, artwork size or backdrop ownership.
                         if (LockLyrics.setDepthBlur(i.getIntExtra("v", LockLyrics.sDepthBlur))) {
@@ -3094,6 +3112,9 @@ public class Main extends XposedModule {
                         out.putString("lyrictrtarget", LockLyrics.sTranslateTargetLang);
                         out.putInt("lyricalive", LockLyrics.sAliveFx);
                         out.putInt("lyricdepthblur", LockLyrics.sDepthBlur);
+                        out.putBoolean("islandiphonegestures", IslandIphoneGestures.enabled());
+                        out.putBoolean("islandiphonetop", IslandIphoneGestures.topEnabled());
+                        out.putInt("islandiphoneradius", IslandIphoneGestures.radiusDp());
                         out.putBoolean("spicylyrics", LockLyrics.sSpicyLyricsEnabled);
                         out.putBoolean("providerqq", LockLyrics.sProviderQq);
                         out.putBoolean("providernetease", LockLyrics.sProviderNetease);

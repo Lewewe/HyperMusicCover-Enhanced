@@ -440,4 +440,17 @@
     <string name="mini_media_collapsed_summary">启用锁屏岛时，开始播放先显示音乐胶囊，点击或上滑后再展开，保留已选择的封面或歌词状态。</string>
     <string name="lyrics_depth_blur">非当前歌词模糊</string>
     <string name="lyrics_depth_blur_summary">调整已唱过和即将唱到的歌词模糊，100% 为原始效果，0% 关闭模糊，正在演唱的歌词保持清晰。</string>
+    <string name="tab_experiments">A/B</string>
+    <string name="experiments_iphone">iPhone-ify</string>
+    <string name="island_iphone_gestures">灵动岛手势实验</string>
+    <string name="island_iphone_gestures_summary">长按展开灵动岛，轻点打开对应应用。关闭后恢复 HyperOS 原有操作。</string>
+    <string name="island_iphone_top">展开的灵动岛贴近摄像头</string>
+    <string name="island_iphone_top_summary">像 iPhone 一样从摄像头处展开超级岛，覆盖状态栏。仅限竖屏手机。</string>
+    <string name="island_iphone_radius">展开灵动岛圆角</string>
+    <string name="island_iphone_radius_summary">圆角与屏幕边缘对齐。摄像头下方的文字会下移，角落里的文字会内收。标记处与小米 17 Pro 屏幕圆角同心，与 iPhone 一致。</string>
+    <string name="ab_tab_unlocked">已启用 A/B 标签页</string>
+    <string name="ab_tab_already">A/B 标签页已启用</string>
+    <plurals name="ab_tab_taps_left">
+        <item quantity="other">再点击 %d 次即可启用 A/B 标签页</item>
+    </plurals>
 </resources>

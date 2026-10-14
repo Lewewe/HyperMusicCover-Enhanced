@@ -37,6 +37,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import com.os4.musiccover.ui.screen.experiments.ExperimentsUnlock
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +47,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
@@ -94,6 +98,34 @@ fun AboutPageContent(
     // Owns the check, the install and the four dialogs; see UpdateUi.kt. It has to sit above the
     // Scaffold because the dialogs open their own windows and cannot be nested in the page body.
     val update = rememberUpdateController(isCurrent)
+    val context = LocalContext.current
+    // Seven quick taps on the app icon reveal the internal A/B tab; from the third tap a single
+    // toast counts down, replaced rather than stacked.
+    var iconTaps by remember { mutableIntStateOf(0) }
+    var lastIconTap by remember { mutableLongStateOf(0L) }
+    val resources = LocalResources.current
+    val tapToast = remember { arrayOfNulls<android.widget.Toast>(1) }
+    val onIconTap: () -> Unit = {
+        val now = android.os.SystemClock.uptimeMillis()
+        iconTaps = if (now - lastIconTap <= ExperimentsUnlock.TAP_WINDOW_MS) iconTaps + 1 else 1
+        lastIconTap = now
+        if (iconTaps >= ExperimentsUnlock.SHOW_FROM) {
+            val already = ExperimentsUnlock.state(context).value == true
+            val left = ExperimentsUnlock.TAPS - iconTaps
+            val text = when {
+                already -> resources.getString(R.string.ab_tab_already)
+                left > 0 -> resources.getQuantityString(R.plurals.ab_tab_taps_left, left, left)
+                else -> {
+                    ExperimentsUnlock.unlock(context)
+                    resources.getString(R.string.ab_tab_unlocked)
+                }
+            }
+            if (already || left <= 0) iconTaps = 0
+            tapToast[0]?.cancel()
+            tapToast[0] = android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_SHORT)
+                .also { it.show() }
+        }
+    }
     val topAppBarScrollBehavior = MiuixScrollBehavior()
     val lazyListState = rememberLazyListState()
 
@@ -154,6 +186,7 @@ fun AboutPageContent(
                 isBlurEnabled = isBlurEnabled,
                 isCurrent = isCurrent,
                 update = update,
+                onIconTap = onIconTap,
             )
         }
     }
@@ -172,6 +205,7 @@ private fun AboutContent(
     isBlurEnabled: Boolean,
     isCurrent: () -> Boolean,
     update: UpdateController,
+    onIconTap: () -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
     // `rememberBlurBackdrop` answers "can this device blur", not "did the user ask for it": on
@@ -435,7 +469,12 @@ private fun AboutContent(
                         scaleX = 1 - (iconProgress * 0.05f)
                         scaleY = 1 - (iconProgress * 0.05f)
                     }
-                    .squircleClip(cornerRadius = 28.dp),
+                    .squircleClip(cornerRadius = 28.dp)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onIconTap,
+                    ),
             ) {
                 Image(
                     modifier = Modifier.size(100.dp),

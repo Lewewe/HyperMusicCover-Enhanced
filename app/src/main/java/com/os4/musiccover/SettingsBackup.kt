@@ -37,6 +37,9 @@ object SettingsBackup {
     private const val KEY_LYRICS_TRANSLATE_TARGET = "lyricsTranslateTarget"
     private const val KEY_LYRICS_ALIVE_FX = "lyricsAliveEffects"
     private const val KEY_LYRICS_DEPTH_BLUR = "lyricsDepthBlur"
+    private const val KEY_ISLAND_IPHONE_GESTURES = "islandIphoneGestures"
+    private const val KEY_ISLAND_IPHONE_TOP = "islandIphoneTop"
+    private const val KEY_ISLAND_IPHONE_RADIUS = "islandIphoneRadius"
     private const val KEY_LYRICS_ROMA = "lyricsRomanisation"
     private const val KEY_LYRICS_GROUPS = "lyricsGentleFlow"
     private const val KEY_LYRICS_SEARCH = "lyricsSearchMode"
@@ -106,6 +109,9 @@ object SettingsBackup {
             json.put(KEY_LYRICS_TRANSLATE_TARGET, module.lyricTranslateTarget)
             json.put(KEY_LYRICS_ALIVE_FX, module.lyricsAliveFx)
             json.put(KEY_LYRICS_DEPTH_BLUR, module.lyricsDepthBlur)
+            json.put(KEY_ISLAND_IPHONE_GESTURES, module.islandIphoneGestures)
+            json.put(KEY_ISLAND_IPHONE_TOP, module.islandIphoneTop)
+            json.put(KEY_ISLAND_IPHONE_RADIUS, module.islandIphoneRadius)
             json.put(KEY_LYRICS_ROMA, module.lyricsRoma)
             json.put(KEY_LYRICS_GROUPS, module.lyricsGroups)
             json.put(KEY_LYRICS_SEARCH, module.lyricsSearchMode)
@@ -209,6 +215,15 @@ object SettingsBackup {
             }
             if (obj.has(KEY_LYRICS_ALIGN)) {
                 ModuleBridge.setLyricsAlign(context, obj.getInt(KEY_LYRICS_ALIGN))
+            }
+            if (obj.has(KEY_ISLAND_IPHONE_GESTURES)) {
+                ModuleBridge.setIslandIphoneGestures(context, obj.getBoolean(KEY_ISLAND_IPHONE_GESTURES))
+            }
+            if (obj.has(KEY_ISLAND_IPHONE_TOP)) {
+                ModuleBridge.setIslandIphoneTop(context, obj.getBoolean(KEY_ISLAND_IPHONE_TOP))
+            }
+            if (obj.has(KEY_ISLAND_IPHONE_RADIUS)) {
+                ModuleBridge.setIslandIphoneRadius(context, obj.getInt(KEY_ISLAND_IPHONE_RADIUS))
             }
             if (obj.has(KEY_LYRICS_DEPTH_BLUR)) {
                 ModuleBridge.setLyricsDepthBlur(context, obj.getInt(KEY_LYRICS_DEPTH_BLUR))
