@@ -4730,6 +4730,9 @@ public class Main extends XposedModule {
     private static RectF sGlyphCache;
     private static long sGlyphAt;
     private static final long GLYPH_TTL_MS = 120L;
+    /** When glyphBox() last re-collected digit views for an off-centre box. */
+    private static long sGlyphRecollectAt;
+    private static final long GLYPH_RECOLLECT_MS = 500L;
 
     /** Drops the remembered box. Called from every place the layout is known to have changed. */
     private static void forgetGlyphBox() {
@@ -4818,7 +4821,19 @@ public class Main extends XposedModule {
         }
         if (any == null) { sGlyphCache = box; sGlyphAt = now; return new RectF(box); }
         float screenW = any.getResources().getDisplayMetrics().widthPixels;
-        if (Math.abs(box.centerX() - screenW / 2f) >= screenW * 0.05f) return null;
+        if (Math.abs(box.centerX() - screenW / 2f) >= screenW * 0.05f) {
+            // The remembered digit lists are only dropped when a view IN them stops drawing, so
+            // a digit that became visible after they were collected is never seen: all_in_one's
+            // tall style moves its minute into the background tree on entry, the list there
+            // still holds the hour alone, and the clock stayed at full size over the cover.
+            // Collect once more before calling it half a clock, at most twice a second.
+            if (!sTimeViews.isEmpty() && now - sGlyphRecollectAt >= GLYPH_RECOLLECT_MS) {
+                sGlyphRecollectAt = now;
+                sTimeViews.clear();
+                return glyphBox(fresh);
+            }
+            return null;
+        }
         sGlyphCache = box;
         sGlyphAt = now;
         return new RectF(box);

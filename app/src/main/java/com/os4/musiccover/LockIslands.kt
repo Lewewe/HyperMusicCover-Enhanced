@@ -796,6 +796,12 @@ internal object LockIslands {
     private val readCache = HashMap<String, Pair<Long, Note>>()
 
     /**
+     * Each focus notification's last picture of its own (not the row's), by key: an update read
+     * before its pictures draw keeps the one it had instead of the row's app icon.
+     */
+    private val lastPicture = HashMap<String, Pair<Drawable, String>>()
+
+    /**
      * The ordinary notifications this run left in the stack, by key: their entries, to see at
      * the run's end whether the lock screen shows them at all (dropUnshown).
      */
@@ -1179,7 +1185,10 @@ internal object LockIslands {
         readCache[sbn.key]?.let { (at, note) -> if (at == stamp) return note }
         return readFresh(sbn, n, redacted, createdAt(entry, sbn), entry)?.also {
             if (readCache.size > 200) readCache.clear()
-            readCache[sbn.key] = stamp to it
+            // A focus note with only the row's picture, or none, is read again next run: its own
+            // pictures, or the row's template, may not have drawn yet (a new or rebuilt row, as
+            // after SystemUI restarts). Kept, its app icon stood in until the next update.
+            readCache[sbn.key] = (if (it.focus && !it.redacted && weakPicture(it.iconFrom)) Long.MIN_VALUE else stamp) to it
         }
     }
 
@@ -1235,7 +1244,15 @@ internal object LockIslands {
         // Shown in full, a focus notification's row is its template, not its title and text:
         // the island shows what the row does, so the landing is one and the same.
         val template = if (focus && !redacted) focusTemplate(n) ?: rowTemplate(entry) else null
-        val picture = template?.let { focusPicture(n, sbn, entry, it.pics + islandPics(island)) }
+        var picture = template?.let { focusPicture(n, sbn, entry, it.pics + islandPics(island)) }
+        if (focus && !redacted) {
+            if (picture?.icon != null && !weakPicture(picture.from)) {
+                if (lastPicture.size > 200) lastPicture.clear()
+                lastPicture[sbn.key] = picture.icon!! to picture.from
+            } else lastPicture[sbn.key]?.let { (d, from) ->
+                picture = Picture(d, picture?.anim, picture?.live, "$from/kept")
+            }
+        }
         val icon = picture?.icon ?: iconOf(sbn, shown ?: n, redacted)
         val iconFrom = picture?.from ?: lastIconFrom
         val round = roundIcon(icon)
@@ -1403,7 +1420,8 @@ internal object LockIslands {
             val content = html(str(o, "content"))
             val timer = timerOf(o)
             if (title.isEmpty() && content.isEmpty() && timer == null) return null
-            return Template(title, content, timer, ticker(o) + named(o, "picFunction"))
+            val card = o.optJSONObject("picInfo")?.let { named(it, "picDark", "pic") }.orEmpty()
+            return Template(title, content, timer, ticker(o) + named(o, "picFunction") + card)
         }
         val v2 = root.optJSONObject("param_v2") ?: return flat(root)
         val area = FOCUS_AREA_A.firstOrNull { v2.optJSONObject(it) != null } ?: return flat(v2) ?: flat(root)
@@ -1428,8 +1446,12 @@ internal object LockIslands {
             "chatInfo" -> named(info, "picProfileDark", "picProfile")
             else -> named(info, "picFunction")
         }.filter { it.name.isNotEmpty() }
+        // The card's own picture module beside the first area (Template.getPicInfo): a base card
+        // with progress bars carries its picture only here. Without it the row's first image was
+        // taken instead - the app's small icon until the card had once been opened.
+        val card = v2.optJSONObject("picInfo")?.let { named(it, "picDark", "pic") }.orEmpty()
         Template(html(str(info, "title")),
-            html(str(info, "content").ifEmpty { str(info, "subContent") }), timer, pics + ticker(v2))
+            html(str(info, "content").ifEmpty { str(info, "subContent") }), timer, pics + card + ticker(v2))
     }.getOrNull()
 
     /**
@@ -1763,6 +1785,11 @@ internal object LockIslands {
         rowAppIcon(sbn, ctx)?.let { lastIconFrom = "row-app"; return it }
         lastIconFrom = "app"
         return runCatching { ctx.packageManager.getApplicationIcon(sbn.packageName) }.getOrNull()
+    }
+
+    /** A picture that is only the row's, or its app's icon: not one the notification named. */
+    private fun weakPicture(from: String?): Boolean = from?.removeSuffix("/round").let {
+        it == null || it == "app" || it == "row-app" || it == "row" || it.endsWith("+row")
     }
 
     /** Where the last [iconOf] found its picture, for `op mini`. */
