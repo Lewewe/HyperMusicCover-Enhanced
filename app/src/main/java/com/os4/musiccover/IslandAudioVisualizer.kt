@@ -122,7 +122,7 @@ object IslandAudioVisualizer {
         if (!enabled) {
             main.removeCallbacks(watch); watching = false
             stopCapture()
-            views.values.toList().forEach { it.restore() }
+            views.values.toList().forEach { it.restore(); it.syncTint() }
         } else { retryAt = 0L; refresh(); scheduleWatch() }
     }
 
@@ -253,13 +253,38 @@ object IslandAudioVisualizer {
     private class WaveState(image: ImageView, holder: Any, val slot: String) {
         val image = WeakReference(image)
         var holder = WeakReference(holder)
-        val bars = AudioWaveDrawable()
+        // Opaque: a translucent custom colour is applied by the view layer (syncTint).
+        val bars = AudioWaveDrawable(opaque = true)
         private val visibleBounds = android.graphics.Rect()
         var original: Drawable? = null
         var replaced = false
         var wasAnimating = false
 
+        // The native wave the island falls back to (lottieViewStatic, and lottieView while it
+        // animates open or shut) draws HyperOS's gradient whatever the setting: a still of it
+        // showed after collapsing. A single bar colour is laid over the whole view through its
+        // layer paint - LottieDrawable ignores setColorFilter, so the ImageView's filter cannot
+        // do it. The gradient mode gives the view its own layer back.
+        private var tinted: Int? = null
+        private var nativeLayer = View.LAYER_TYPE_NONE
+
+        fun syncTint() {
+            val v = image.get() ?: return
+            val want = if (enabled) AudioWaveDrawable.solidColor() else null
+            if (want == tinted) return
+            if (tinted == null) nativeLayer = v.layerType
+            tinted = want
+            if (want == null) v.setLayerType(nativeLayer, null)
+            // Opaque in the filter, the colour's own alpha on the layer: once, for both drawables.
+            else v.setLayerType(View.LAYER_TYPE_HARDWARE, android.graphics.Paint().apply {
+                colorFilter = android.graphics.PorterDuffColorFilter(want or 0xFF000000.toInt(),
+                    android.graphics.PorterDuff.Mode.SRC_IN)
+                alpha = want ushr 24
+            })
+        }
+
         fun syncNativeColors() {
+            syncTint()
             val owner = holder.get() ?: return
             val top = field(owner, "gradientTopColor") as? Int ?: return
             val bottom = field(owner, "gradientBottomColor") as? Int ?: return
@@ -308,7 +333,7 @@ object IslandAudioVisualizer {
     }
 
     /** Draws every wave again, for a colour setting changed while nothing moves. */
-    internal fun redraw() = views.values.forEach { it.bars.invalidateSelf() }
+    internal fun redraw() = views.values.forEach { it.syncTint(); it.bars.invalidateSelf() }
 
     internal fun nativeColors(): Pair<Int, Int>? {
         for (state in views.values) {

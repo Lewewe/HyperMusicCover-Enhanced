@@ -11,7 +11,8 @@ import android.graphics.Shader
 import android.graphics.drawable.Drawable
 
 /** Shared geometry and artwork gradient for all live music waves. */
-internal class AudioWaveDrawable(private val contentScale: Float = 1f, private val horizontalOffsetFraction: Float = 0f) : Drawable() {
+internal class AudioWaveDrawable(private val contentScale: Float = 1f, private val horizontalOffsetFraction: Float = 0f,
+                                  private val opaque: Boolean = false) : Drawable() {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val values = FloatArray(5)
     private val drawMatrix = Matrix()
@@ -34,6 +35,7 @@ internal class AudioWaveDrawable(private val contentScale: Float = 1f, private v
         if (styleSeen == styleGeneration) return
         styleSeen = styleGeneration
         val (a, b) = MediaCardConfig.waveColors(mode, custom, nativeTop, nativeBottom)
+            .let { if (opaque) (it.first or 0xFF000000.toInt()) to (it.second or 0xFF000000.toInt()) else it }
         if (top == a && bottom == b) return
         top = a; bottom = b; shaderHeight = -1f
     }
@@ -86,6 +88,10 @@ internal class AudioWaveDrawable(private val contentScale: Float = 1f, private v
         @Volatile private var mode = MediaCardConfig.WAVE_GRADIENT
         @Volatile private var custom = MediaCardConfig.WAVE_CUSTOM_DEFAULT
         @Volatile private var styleGeneration = 0
+
+        /** The single colour the bars are drawn in, or null for the artwork gradient. */
+        fun solidColor(): Int? = if (mode == MediaCardConfig.WAVE_GRADIENT) null
+            else MediaCardConfig.waveColors(mode, custom, 0, 0).first
 
         /** The bar colour setting, for every wave; each picks it up on its next draw. */
         fun style(mode: Int, custom: Int) {
