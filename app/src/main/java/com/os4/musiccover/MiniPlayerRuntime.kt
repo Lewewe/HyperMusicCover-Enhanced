@@ -1582,6 +1582,16 @@ object MiniPlayerRuntime {
     @JvmStatic fun stackContentTop(): Float =
         live().firstNotNullOfOrNull { it.stackContentTop().takeUnless(Float::isNaN) } ?: Float.NaN
 
+    /**
+     * Whether any notification row on the lock screen can be seen: false only when the stack was
+     * measured and every row in it is hidden (the media card behind its pill, folded rows, rows
+     * let into islands). Unknown - the mini player is off, nothing measured - is true.
+     */
+    @JvmStatic fun anyRowShowing(): Boolean {
+        val runtime = live().firstOrNull { !it.stackContentTop().isNaN() } ?: return true
+        return runtime.contentRows
+    }
+
     /** Which row the last stackContentTop came from, and how many hidden rows it passed over, for `op mini`. */
     @JvmStatic fun stackContentSource(): String = live().firstOrNull()?.contentTopFrom ?: "-"
 
@@ -4909,6 +4919,9 @@ private class MiniPlayerController(
 
     private var contentTopAt = 0L
     private var contentTop = Float.NaN
+    /** Whether the last stackContentTop found a row that shows, rather than only hidden ones. */
+    internal var contentRows = true
+        private set
 
     /**
      * See the static stackContentTop: every row and card in the stack, at the stack's own target -
@@ -4930,6 +4943,11 @@ private class MiniPlayerController(
             var top = Float.POSITIVE_INFINITY
             var from: View? = null
             var skipped = 0
+            // A row that can be seen, for NotifPresence. The media card counts for the clock's
+            // room (it is where the music would open) but is not seen while the pill holds the
+            // music: counted as seen, the faces were told there was a notification and the
+            // rhombus face stood 74px higher lit than in the doze, dropping on every AOD.
+            var shown = false
             val stackY = IntArray(2).also(stack::getLocationOnScreen)[1]
             // Every child weighed, for `op mini`: name:target-on-screen/translation and why skipped.
             val recordDiagnostic = now - contentDiagnosticAt >= 100L
@@ -4966,6 +4984,7 @@ private class MiniPlayerController(
                     val at = from0 + (t - from0) * share
                     seen?.let { it.append(' ').append(shortName(c)).append(':').append((stackY + at).toInt()).append('S') }
                     if (at < top) { top = at; from = c }
+                    shown = true
                     continue
                 }
                 val home = leaving.any { isInside(it, c) }
@@ -4993,6 +5012,7 @@ private class MiniPlayerController(
                 if (folded) seen?.append('F')
                 if (home || c in hiddenRows && !coming || c.visibility != View.VISIBLE ||
                     c.alpha <= 0.01f && !coming || folded) { skipped++; continue }
+                if (!(name.contains("MediaHeader") && pillShowsMusic && morph == null)) shown = true
                 if (t < top) { top = t; from = c }
             }
             if (seen != null) {
@@ -5000,6 +5020,7 @@ private class MiniPlayerController(
                 contentTopFrom = (from?.let(::shortName) ?: "-") + " skip=$skipped" +
                 (if (exchange != null) " X" else "") + (if (morph != null) " M" else "") + " [" + seen.toString().trim() + "]"
             }
+            contentRows = shown
             when {
                 from != null -> stackY + top
                 skipped > 0 -> (stackY + stack.height).toFloat()
