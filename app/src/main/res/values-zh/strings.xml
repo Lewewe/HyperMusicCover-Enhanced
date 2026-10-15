@@ -373,6 +373,14 @@
     <string name="media_wave_lock_screen">锁屏播放器音频波形</string>
     <string name="media_wave_notification">通知面板播放器音频波形</string>
     <string name="media_wave_island">超级岛展开播放器音频波形</string>
+    <string name="media_wave_color">波形颜色</string>
+    <string name="media_wave_color_default">默认（封面渐变）</string>
+    <string name="media_wave_color_white">白色</string>
+    <string name="media_wave_color_dark">深灰色</string>
+    <string name="media_wave_color_custom">自定义</string>
+    <string name="media_wave_color_pick">自定义波形颜色</string>
+    <string name="media_wave_color_save">保存</string>
+    <string name="media_wave_color_cancel">取消</string>
     <string name="media_output_wave_summary">将输出设备按钮替换为实时音乐波形，关闭后恢复原按钮。</string>
     <string name="media_wave_hide_device">隐藏音频设备图标</string>
     <string name="media_wave_hide_device_summary">使用耳机或其他输出设备时，让超级岛继续显示音乐波形，关闭后立即恢复系统图标。</string>

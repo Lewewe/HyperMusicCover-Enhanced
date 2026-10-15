@@ -1,6 +1,19 @@
 package com.os4.musiccover.ui.screen.features
 
 import androidx.compose.foundation.border
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.HsvColorPicker
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.theme.LocalDismissState
+import top.yukonga.miuix.kmp.window.WindowDialog
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Row
@@ -45,10 +58,12 @@ internal fun MediaCardPageView(isBlurEnabled: Boolean, refreshKey: Int, onBack: 
     val lost by ModuleBridge.lost.collectAsState()
     LaunchedEffect(refreshKey, lost) { module = ModuleBridge.queryAlive(context) }
     val values = remember(module.mediaCardConfig) { MediaCardConfig.parse(module.mediaCardConfig) }
-    val push: (String, Int) -> Unit = { key, value ->
-        module = module.copy(mediaCardConfig = MediaCardConfig.encode(values + (key to value)))
-        ModuleBridge.setMediaCardStyle(context, key, value)
+    // Several keys in one state update: one at a time, each would start from the same stale map.
+    val pushAll: (List<Pair<String, Int>>) -> Unit = { changes ->
+        module = module.copy(mediaCardConfig = MediaCardConfig.encode(values + changes))
+        changes.forEach { (key, value) -> ModuleBridge.setMediaCardStyle(context, key, value) }
     }
+    val push: (String, Int) -> Unit = { key, value -> pushAll(listOf(key to value)) }
     PageScaffold(title = stringResource(R.string.media_customization_title), isBlurEnabled = isBlurEnabled, onBack = onBack,
         pinned = {
             TabRow(tabs = listOf(stringResource(R.string.media_visualization_tab), stringResource(R.string.media_appearance_tab)),
@@ -62,6 +77,7 @@ internal fun MediaCardPageView(isBlurEnabled: Boolean, refreshKey: Int, onBack: 
                 Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
                     VisualizerBetaSwitch(values.getValue("island.visualizer") != 0, module.alive) { push("island.visualizer", if (it) 1 else 0) }
                     if (values.getValue("island.visualizer") != 0) {
+                        WaveColorChoice(values, module.alive, pushAll)
                         MediaSwitch("island", "btSync", R.string.media_wave_bt_sync, values, module.alive, push, R.string.media_wave_bt_sync_summary)
                         if (values.getValue("island.btSync") != 0) {
                             ValueSlider(title = stringResource(R.string.media_wave_bt_adjustment),
@@ -169,3 +185,49 @@ private fun VisualizerBetaSwitch(checked: Boolean, enabled: Boolean, onCheckedCh
         Switch(checked = checked, enabled = enabled, onCheckedChange = onCheckedChange)
     }
 }
+
+/** The bars' colour: the artwork gradient, white, black, or a colour picked in a dialog. */
+@Composable
+private fun WaveColorChoice(values: Map<String, Int>, enabled: Boolean, push: (List<Pair<String, Int>>) -> Unit) {
+    var picking by remember { mutableStateOf(false) }
+    val mode = values.getValue("island.waveColor")
+    val custom = values.getValue("island.waveCustom")
+    WindowDropdownPreference(title = stringResource(R.string.media_wave_color),
+        items = listOf(R.string.media_wave_color_default, R.string.media_wave_color_white,
+            R.string.media_wave_color_dark, R.string.media_wave_color_custom).map { stringResource(it) },
+        selectedIndex = mode, enabled = enabled,
+        onSelectedIndexChange = {
+            // Custom is kept only once a colour is saved; until then the old choice stands.
+            if (it == MediaCardConfig.WAVE_CUSTOM) picking = true else push(listOf("island.waveColor" to it))
+        })
+    if (mode == MediaCardConfig.WAVE_CUSTOM) {
+        ArrowPreference(title = stringResource(R.string.media_wave_color_pick),
+            summary = "#%08X".format(custom), enabled = enabled,
+            endActions = {
+                Box(Modifier.padding(end = 8.dp).size(22.dp).clip(CircleShape).background(Color(custom))
+                    .border(1.dp, MiuixTheme.colorScheme.dividerLine, CircleShape))
+            },
+            onClick = { picking = true })
+    }
+    if (picking) {
+        var color by remember { mutableStateOf(Color(custom)) }
+        WindowDialog(show = true, title = stringResource(R.string.media_wave_color_pick),
+            onDismissRequest = { picking = false }) {
+            val dismiss = LocalDismissState.current
+            Column(Modifier.fillMaxWidth()) {
+                HsvColorPicker(color = color, onColorChanged = { color = it })
+                TextButton(text = stringResource(R.string.media_wave_color_save),
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                    colors = ButtonDefaults.textButtonColorsPrimary(),
+                    onClick = {
+                        push(listOf("island.waveCustom" to color.toArgb(),
+                            "island.waveColor" to MediaCardConfig.WAVE_CUSTOM))
+                        dismiss?.invoke()
+                    })
+                TextButton(text = stringResource(R.string.media_wave_color_cancel),
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp), onClick = { dismiss?.invoke() })
+            }
+        }
+    }
+}
+

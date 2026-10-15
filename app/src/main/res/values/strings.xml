@@ -365,6 +365,14 @@
     <string name="media_wave_lock_screen">Lock screen visualizer</string>
     <string name="media_wave_notification">Notification panel visualizer</string>
     <string name="media_wave_island">Expanded Super Island visualizer</string>
+    <string name="media_wave_color">Bar color</string>
+    <string name="media_wave_color_default">Default (artwork gradient)</string>
+    <string name="media_wave_color_white">White</string>
+    <string name="media_wave_color_dark">Dark gray</string>
+    <string name="media_wave_color_custom">Custom</string>
+    <string name="media_wave_color_pick">Custom bar color</string>
+    <string name="media_wave_color_save">Save</string>
+    <string name="media_wave_color_cancel">Cancel</string>
     <string name="media_output_wave_summary">Replace the output device button with a live music wave. Turning this off restores the button.</string>
     <string name="media_wave_hide_device">Hide audio device icon</string>
     <string name="media_wave_hide_device_summary">Keep the Super Island music wave visible when using headphones or other audio devices. Turning this off restores the native icon immediately.</string>

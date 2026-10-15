@@ -194,6 +194,9 @@ internal object MediaOutputVisualizer {
 
     private fun displayable(state: Output) = if (awake) state.visible() else aod && state.visibleOnAod()
 
+    /** Draws every wave again, for a colour setting changed while nothing moves. */
+    fun redraw() = states.values.forEach { it.redraw() }
+
     @JvmStatic fun describe(): String = "outputWave enabled=$enabled awake=$awake aod=$aod fps=${if (aod) 5 else 30} views=${states.size} visible=${states.values.count { displayable(it) }} replaced=${states.values.count { it.replaced }} aodOverlays=${states.values.count { it.hasAodOverlay() }} capturing=${lease != null} samples=$samples"
 
     private class Output(icon: ImageView, button: View, album: ImageView, private val lockScreenCapable: Boolean) {
@@ -202,6 +205,7 @@ internal object MediaOutputVisualizer {
         private val album = WeakReference(album)
         val bars = AudioWaveDrawable(.72f, if (lockScreenCapable) .125f else 0f)
         private val aodBars = AudioWaveDrawable(.72f)
+        fun redraw() { bars.invalidateSelf(); aodBars.invalidateSelf() }
         private val aodBlank = ColorDrawable(Color.TRANSPARENT)
         private var aodHost: WeakReference<ViewGroup>? = null
         private var aodButtonAlpha: Float? = null

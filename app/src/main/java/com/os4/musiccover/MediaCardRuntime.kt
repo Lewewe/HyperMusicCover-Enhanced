@@ -65,15 +65,17 @@ object MediaCardRuntime {
         IslandAudioVisualizer.configure(on("island", "visualizer"), on("island", "hideWaveDevice"))
         MediaOutputVisualizer.configure(outputWavesOn())
         AudioWaveSync.configure(on("island", "btSync"), setting("island", "btOffset"))
+        applyWaveStyle()
         revision++
-        hasOverrides = values.any { (key, value) -> !key.endsWith(".visualizer") && !key.endsWith("outputWave") && !key.endsWith("lockOutputWave") && !key.endsWith("hideWaveDevice") && !key.endsWith(".btSync") && !key.endsWith(".btOffset") && value != MediaCardConfig.defaults[key.substringAfter('.')] }
+        hasOverrides = values.any { (key, value) -> !waveKey(key) && value != MediaCardConfig.defaults[key.substringAfter('.')] }
         refresh()
     }
 
     @JvmStatic fun set(key: String?, value: Int) {
         if (key == null || key !in values) return
         values = values + (key to MediaCardConfig.limit(key.substringAfter('.'), value))
-        if (key.endsWith(".visualizer") || key.endsWith("outputWave") || key.endsWith("lockOutputWave") || key.endsWith("hideWaveDevice") || key.endsWith(".btSync") || key.endsWith(".btOffset")) {
+        if (waveKey(key)) {
+            applyWaveStyle()
             IslandAudioVisualizer.configure(on("island", "visualizer"), on("island", "hideWaveDevice"))
             MediaOutputVisualizer.configure(outputWavesOn())
             AudioWaveSync.configure(on("island", "btSync"), setting("island", "btOffset"))
@@ -81,11 +83,21 @@ object MediaCardRuntime {
             return
         }
         revision++
-        hasOverrides = values.any { (key, value) -> !key.endsWith(".visualizer") && !key.endsWith("outputWave") && !key.endsWith("lockOutputWave") && !key.endsWith("hideWaveDevice") && !key.endsWith(".btSync") && !key.endsWith(".btOffset") && value != MediaCardConfig.defaults[key.substringAfter('.')] }
+        hasOverrides = values.any { (key, value) -> !waveKey(key) && value != MediaCardConfig.defaults[key.substringAfter('.')] }
         refresh()
     }
 
     private fun setting(scope: String, name: String) = values.getValue("$scope.$name")
+
+    /** The visualizer's own settings: none of them is a card appearance override. */
+    private fun waveKey(key: String): Boolean = key.endsWith(".visualizer") || key.endsWith("outputWave") ||
+        key.endsWith("lockOutputWave") || key.endsWith("hideWaveDevice") || key.endsWith(".btSync") ||
+        key.endsWith(".btOffset") || key.endsWith(".waveColor") || key.endsWith(".waveCustom")
+
+    private fun applyWaveStyle() {
+        AudioWaveDrawable.style(setting("island", "waveColor"), setting("island", "waveCustom"))
+        main.post { IslandAudioVisualizer.redraw(); MediaOutputVisualizer.redraw() }
+    }
     private fun outputWavesOn(): Boolean = on("island", "visualizer") &&
         (on("notification", "outputWave") || on("notification", "lockOutputWave") || on("island", "outputWave"))
 

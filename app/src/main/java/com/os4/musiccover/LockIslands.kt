@@ -1782,6 +1782,12 @@ internal object LockIslands {
         n.getLargeIcon()?.takeIf { !redacted || n !== sbn.notification }?.let { icon ->
             runCatching { icon.loadDrawable(ctx) }.getOrNull()?.let { lastIconFrom = "large"; return it }
         }
+        // HyperIsland posts from SystemUI's own process, so the row's app icon is SystemUI's (a
+        // grey grid on HyperOS). The app it posts for is named in its extras.
+        sourcePackage(sbn)?.let { pkg ->
+            runCatching { ctx.packageManager.getApplicationIcon(pkg) }.getOrNull()
+                ?.let { lastIconFrom = "source"; return it }
+        }
         rowAppIcon(sbn, ctx)?.let { lastIconFrom = "row-app"; return it }
         lastIconFrom = "app"
         return runCatching { ctx.packageManager.getApplicationIcon(sbn.packageName) }.getOrNull()
@@ -1789,8 +1795,13 @@ internal object LockIslands {
 
     /** A picture that is only the row's, or its app's icon: not one the notification named. */
     private fun weakPicture(from: String?): Boolean = from?.removeSuffix("/round").let {
-        it == null || it == "app" || it == "row-app" || it == "row" || it.endsWith("+row")
+        it == null || it == "app" || it == "row-app" || it == "source" || it == "row" || it.endsWith("+row")
     }
+
+    /** The app a SystemUI-posted proxy (HyperIsland's dispatcher) stands for, else null. */
+    private fun sourcePackage(sbn: StatusBarNotification): String? =
+        sbn.notification.extras.getString("hyperisland_source_pkg")
+            ?.takeIf { it.isNotEmpty() && it != sbn.packageName }
 
     /** Where the last [iconOf] found its picture, for `op mini`. */
     private var lastIconFrom = "app"

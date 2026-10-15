@@ -307,6 +307,9 @@ object IslandAudioVisualizer {
         }
     }
 
+    /** Draws every wave again, for a colour setting changed while nothing moves. */
+    internal fun redraw() = views.values.forEach { it.bars.invalidateSelf() }
+
     internal fun nativeColors(): Pair<Int, Int>? {
         for (state in views.values) {
             val owner = state.holder.get() ?: continue

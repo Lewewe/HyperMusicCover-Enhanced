@@ -13,6 +13,20 @@ class MediaCardConfigTest {
         assertEquals(-250, MediaCardConfig.limit("btOffset", -999))
         assertEquals(250, MediaCardConfig.limit("btOffset", 999))
     }
+    @Test fun waveColorDefaultsToTheArtworkGradientAndKeepsTheCustomColour() {
+        val defaults = MediaCardConfig.parse(null)
+        assertEquals(MediaCardConfig.WAVE_GRADIENT, defaults.getValue("island.waveColor"))
+        assertEquals(1 to 2, MediaCardConfig.waveColors(MediaCardConfig.WAVE_GRADIENT, 0, 1, 2))
+        assertEquals(-1 to -1, MediaCardConfig.waveColors(MediaCardConfig.WAVE_WHITE, 0, 1, 2))
+        val dark = MediaCardConfig.WAVE_DARK_COLOR
+        assertEquals(dark to dark, MediaCardConfig.waveColors(MediaCardConfig.WAVE_DARK, 0, 1, 2))
+        val red = 0xFFFF0000.toInt()
+        assertEquals(red to red, MediaCardConfig.waveColors(MediaCardConfig.WAVE_CUSTOM, red, 1, 2))
+        assertEquals(0x40FF0000, MediaCardConfig.limit("waveCustom", 0x40FF0000))
+        assertEquals(3, MediaCardConfig.limit("waveColor", 9))
+        val changed = defaults + ("island.waveColor" to 3) + ("island.waveCustom" to red)
+        assertEquals(changed, MediaCardConfig.parse(MediaCardConfig.encode(changed)))
+    }
     @Test fun independentProfilesRoundTripWithoutChangingNativeDefaults() {
         val defaults = MediaCardConfig.parse(null)
         assertEquals(0, defaults.getValue("notification.background"))

@@ -16,15 +16,26 @@ internal class AudioWaveDrawable(private val contentScale: Float = 1f, private v
     private val values = FloatArray(5)
     private val drawMatrix = Matrix()
     private val transform = FloatArray(9)
+    // The native gradient as last handed in, and what is drawn from it under the colour mode.
+    private var nativeTop = Color.WHITE
+    private var nativeBottom = Color.WHITE
     private var top = Color.WHITE
     private var bottom = Color.WHITE
+    private var styleSeen = -1
     private var nativeWidth = 40
     private var nativeHeight = 40
     fun nativeSize(w: Int, h: Int) { nativeWidth = w.coerceAtLeast(1); nativeHeight = h.coerceAtLeast(1) }
     private var shaderHeight = -1f
     fun colors(a: Int, b: Int) {
+        if (nativeTop == a && nativeBottom == b) return
+        nativeTop = a; nativeBottom = b; styleSeen = -1; invalidateSelf()
+    }
+    private fun applyStyle() {
+        if (styleSeen == styleGeneration) return
+        styleSeen = styleGeneration
+        val (a, b) = MediaCardConfig.waveColors(mode, custom, nativeTop, nativeBottom)
         if (top == a && bottom == b) return
-        top = a; bottom = b; shaderHeight = -1f; invalidateSelf()
+        top = a; bottom = b; shaderHeight = -1f
     }
     fun colorReport() = "${Integer.toHexString(top)}/${Integer.toHexString(bottom)}"
     fun step(target: FloatArray, frameScale: Float = 1f) {
@@ -37,6 +48,7 @@ internal class AudioWaveDrawable(private val contentScale: Float = 1f, private v
     override fun draw(canvas: Canvas) {
         val w = bounds.width() * contentScale; val h = bounds.height() * contentScale
         if (w <= 0 || h <= 0) return
+        applyStyle()
         if (shaderHeight != h) {
             paint.shader = LinearGradient(0f, bounds.exactCenterY() - h * .5f, 0f, bounds.exactCenterY() + h * .5f, top, bottom, Shader.TileMode.CLAMP)
             shaderHeight = h
@@ -69,4 +81,16 @@ internal class AudioWaveDrawable(private val contentScale: Float = 1f, private v
     override fun setAlpha(alpha: Int) { paint.alpha = alpha; invalidateSelf() }
     override fun setColorFilter(filter: ColorFilter?) { paint.colorFilter = filter; invalidateSelf() }
     @Deprecated("Deprecated in Java") override fun getOpacity() = PixelFormat.TRANSLUCENT
+
+    companion object {
+        @Volatile private var mode = MediaCardConfig.WAVE_GRADIENT
+        @Volatile private var custom = MediaCardConfig.WAVE_CUSTOM_DEFAULT
+        @Volatile private var styleGeneration = 0
+
+        /** The bar colour setting, for every wave; each picks it up on its next draw. */
+        fun style(mode: Int, custom: Int) {
+            if (this.mode == mode && this.custom == custom) return
+            this.mode = mode; this.custom = custom; styleGeneration++
+        }
+    }
 }
