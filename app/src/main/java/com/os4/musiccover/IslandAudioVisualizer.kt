@@ -253,7 +253,7 @@ object IslandAudioVisualizer {
     private class WaveState(image: ImageView, holder: Any, val slot: String) {
         val image = WeakReference(image)
         var holder = WeakReference(holder)
-        // Opaque: a translucent custom colour is applied by the view layer (syncTint).
+        // Opaque single colours: a translucent custom colour is applied by the view layer (syncTint).
         val bars = AudioWaveDrawable(opaque = true)
         private val visibleBounds = android.graphics.Rect()
         var original: Drawable? = null

@@ -35,11 +35,15 @@ internal class AudioWaveDrawable(private val contentScale: Float = 1f, private v
         if (styleSeen == styleGeneration) return
         styleSeen = styleGeneration
         val (a, b) = MediaCardConfig.waveColors(mode, custom, nativeTop, nativeBottom)
-            .let { if (opaque) (it.first or 0xFF000000.toInt()) to (it.second or 0xFF000000.toInt()) else it }
+            // Opaque only for a single colour, whose alpha the island's view layer applies. The
+            // artwork gradient keeps HyperOS's own alpha (0x99): forced opaque, the compact
+            // island's bars stood out brighter than the expanded island's and the players'.
+            .let { if (opaque && mode != MediaCardConfig.WAVE_GRADIENT) (it.first or 0xFF000000.toInt()) to (it.second or 0xFF000000.toInt()) else it }
         if (top == a && bottom == b) return
         top = a; bottom = b; shaderHeight = -1f
     }
-    fun colorReport() = "${Integer.toHexString(top)}/${Integer.toHexString(bottom)}"
+    fun colorReport() = "${Integer.toHexString(top)}/${Integer.toHexString(bottom)}" +
+        "<${Integer.toHexString(nativeTop)}/${Integer.toHexString(nativeBottom)}"
     fun step(target: FloatArray, frameScale: Float = 1f) {
         val attack = if (frameScale == 1f) .6f else 1f - Math.pow(.4, frameScale.toDouble()).toFloat()
         val release = if (frameScale == 1f) .28f else 1f - Math.pow(.72, frameScale.toDouble()).toFloat()

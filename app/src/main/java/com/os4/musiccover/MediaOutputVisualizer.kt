@@ -197,7 +197,7 @@ internal object MediaOutputVisualizer {
     /** Draws every wave again, for a colour setting changed while nothing moves. */
     fun redraw() = states.values.forEach { it.redraw() }
 
-    @JvmStatic fun describe(): String = "outputWave enabled=$enabled awake=$awake aod=$aod fps=${if (aod) 5 else 30} views=${states.size} visible=${states.values.count { displayable(it) }} replaced=${states.values.count { it.replaced }} aodOverlays=${states.values.count { it.hasAodOverlay() }} capturing=${lease != null} samples=$samples"
+    @JvmStatic fun describe(): String = "outputWave enabled=$enabled awake=$awake aod=$aod fps=${if (aod) 5 else 30} views=${states.size} visible=${states.values.count { displayable(it) }} replaced=${states.values.count { it.replaced }} aodOverlays=${states.values.count { it.hasAodOverlay() }} colors=${states.values.map { it.bars.colorReport() }} capturing=${lease != null} samples=$samples"
 
     private class Output(icon: ImageView, button: View, album: ImageView, private val lockScreenCapable: Boolean) {
         private val icon = WeakReference(icon)
