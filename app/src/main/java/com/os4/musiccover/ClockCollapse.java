@@ -2652,6 +2652,12 @@ final class ClockCollapse {
         }
         // Read against all_in_one's clock, a face's small clock is never larger than its own.
         if (!m.anchored && coverUnit > nativeUnit) coverUnit = nativeUnit;
+        // A face that is short but wide would not shrink at all by height: held to the width an
+        // all_in_one clock of the asked-for size takes. Not with the clock's own size chosen.
+        if (!m.anchored && coverUnit >= nativeUnit && !(sNativeClockSize > 0f)) {
+            coverUnit = Math.min(coverUnit, ClockSizePolicy.wideFaceUnit(
+                    requested * sArtworkClockScale, m.unit, m.box.width()));
+        }
         // The date and the clock move as one block.
         float offset = Main.sClockOffsetDp * d;
         float coverDate, coverTop;

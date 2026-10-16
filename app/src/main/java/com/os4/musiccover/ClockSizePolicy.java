@@ -31,6 +31,24 @@ final class ClockSizePolicy {
         return compact + (nativeUnit - compact) * nativeProgress;
     }
 
+    /**
+     * How wide a time of one row is against its digit height on all_in_one, the face the clock
+     * size is read against: "07:30" in its small-clock font, about 3.2 digit heights.
+     */
+    static final float ROW_ASPECT = 3.2f;
+
+    /**
+     * The cover unit for a face whose digits are already shorter than the size asked for, read
+     * against all_in_one: the height alone would leave it at its own full size. The eastern B
+     * face sets 136px digits 929px apart, so it stayed full width over the cover. Such a face is
+     * held to the width an all_in_one clock of the requested size takes instead; a face narrow
+     * enough to fit keeps its own unit.
+     */
+    static float wideFaceUnit(float requested, float unit, float width) {
+        if (!(requested > 0f) || !(unit > 0f) || !(width > 0f)) return unit;
+        return Math.min(unit, unit * requested * ROW_ASPECT / width);
+    }
+
     static float transitionUnit(float drawnUnit, float destination, float progress) {
         return drawnUnit + (destination - drawnUnit) * Math.max(0f, Math.min(1f, progress));
     }

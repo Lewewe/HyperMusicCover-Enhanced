@@ -85,4 +85,17 @@ public class ClockSizePolicyTest {
         assertFalse(ClockSizePolicy.retainLargest(key(75, 337), key(75, 250), 233.2f, 233.2f));
         assertFalse(ClockSizePolicy.retainLargest(key(75, 337), key(75, 337), Float.NaN, 233.2f));
     }
+
+    @Test public void shortWideFaceIsHeldToAnAllInOneRowWidth() {
+        // eastern B: 136px digits across 929px, asked for 15% of all_in_one's 992.6px.
+        float unit = ClockSizePolicy.wideFaceUnit(148.9f, 136f, 929f);
+        assertEquals(136f * 148.9f * ClockSizePolicy.ROW_ASPECT / 929f, unit, 0.01f);
+        assertTrue(unit < 136f);
+    }
+
+    @Test public void narrowFaceKeepsItsOwnUnit() {
+        assertEquals(136f, ClockSizePolicy.wideFaceUnit(148.9f, 136f, 300f), 0.001f);
+        assertEquals(136f, ClockSizePolicy.wideFaceUnit(Float.NaN, 136f, 929f), 0.001f);
+        assertEquals(136f, ClockSizePolicy.wideFaceUnit(148.9f, 136f, 0f), 0.001f);
+    }
 }
