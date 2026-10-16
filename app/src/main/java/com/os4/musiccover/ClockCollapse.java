@@ -685,6 +685,8 @@ final class ClockCollapse {
     }
 
     private static float sAodCoverZoom = 1f;
+    /** The face's native unit as the cover last read it; see the AOD hold. */
+    private static float sLastNativeUnit = Float.NaN;
     private static android.animation.ValueAnimator sAodCoverZoomAnimator;
 
     private static void stopAodCoverZoom() {
@@ -2340,9 +2342,12 @@ final class ClockCollapse {
             android.view.ViewGroup vg = (android.view.ViewGroup) p;
             if (!sUnclipped.containsKey(vg)) {
                 sUnclipped.put(vg, (vg.getClipChildren() ? 1 : 0) | (vg.getClipToPadding() ? 2 : 0));
-                if (vg.getClipChildren()) vg.setClipChildren(false);
-                if (vg.getClipToPadding()) vg.setClipToPadding(false);
             }
+            // Every time, not only the first: magazine A turns clipping back on in its clock
+            // containers as it swaps layouts, and the time walking up to the cover's line was cut
+            // off along clock_container_inner's top, then drawn back in from that edge.
+            if (vg.getClipChildren()) vg.setClipChildren(false);
+            if (vg.getClipToPadding()) vg.setClipToPadding(false);
             if (vg == Main.sContainer) break;
         }
     }
@@ -2476,8 +2481,77 @@ final class ClockCollapse {
         sCompBottom = bottom;
     }
 
+    /** Each lifted container's own translation and the lift on top of it, by container. */
+    private static final java.util.WeakHashMap<android.view.ViewGroup, float[]> sLifted =
+            new java.util.WeakHashMap<>();
+
+    /**
+     * Keeps a moved face inside the container it is drawn in.
+     *
+     * The magazine faces draw their time, date and weekday only within their clock container's
+     * bounds, clipChildren or not (the source is the OEM's, not found): magazine B's row taken up
+     * to the cover's line lost its top 70px, and magazine A's pieces were cut off along the
+     * container's top for the whole walk up from the pill. So when a piece is placed above its
+     * container, the container goes up by as much and its children down by as much: the same
+     * pixels on screen, now inside. Measured on screen, after the pieces are placed.
+     */
+    private static void liftContainers() {
+        for (View root : Main.clockRoots()) {
+            View g = Main.clockTarget(root);
+            if (g == null || !(g.getParent() instanceof android.view.ViewGroup)) continue;
+            android.view.ViewGroup p = (android.view.ViewGroup) g.getParent();
+            if (p == root || p == Main.sContainer) continue;
+            float cur = p.getTranslationY();
+            float[] st = sLifted.get(p);
+            float base, lift;
+            if (st != null && Math.abs(cur - (st[0] + st[1])) < 0.25f) {
+                base = st[0];
+                lift = st[1];
+            } else {
+                // First time, or the OEM moved it since (its own animation): that is the base.
+                base = cur;
+                lift = 0f;
+            }
+            int[] at = new int[2];
+            p.getLocationOnScreen(at);
+            float zoom = p.getParent() instanceof View ? chainScaleY((View) p.getParent()) : 1f;
+            if (!(zoom > 0f)) zoom = 1f;
+            float unliftedTop = at[1] - lift * zoom;
+            float minTop = Float.POSITIVE_INFINITY;
+            for (int i = 0; i < p.getChildCount(); i++) {
+                View c = p.getChildAt(i);
+                if (c.getVisibility() != View.VISIBLE || c.getWidth() <= 0 || c.getHeight() <= 0) continue;
+                c.getLocationOnScreen(at);
+                minTop = Math.min(minTop, at[1]);
+            }
+            if (minTop == Float.POSITIVE_INFINITY) continue;
+            float want = Math.min(0f, (minTop - unliftedTop) / zoom);
+            float d = want - lift;
+            if (Math.abs(d) >= 0.5f) {
+                p.setTranslationY(base + want);
+                for (int i = 0; i < p.getChildCount(); i++) {
+                    View c = p.getChildAt(i);
+                    c.setTranslationY(c.getTranslationY() - d);
+                }
+                lift = want;
+            }
+            sLifted.put(p, new float[]{base, lift});
+        }
+    }
+
     /** Puts back everything companions and unclip() changed. */
     private static void clearCompanions() {
+        for (java.util.Map.Entry<android.view.ViewGroup, float[]> e : sLifted.entrySet()) {
+            android.view.ViewGroup p = e.getKey();
+            float[] st = e.getValue();
+            if (p == null) continue;
+            if (Math.abs(p.getTranslationY() - (st[0] + st[1])) < 0.25f) p.setTranslationY(st[0]);
+            for (int i = 0; i < p.getChildCount(); i++) {
+                View c = p.getChildAt(i);
+                if (!sCompTouched.containsKey(c)) c.setTranslationY(c.getTranslationY() + st[1]);
+            }
+        }
+        sLifted.clear();
         for (View v : sCompTouched.keySet()) {
             if (v == null) continue;
             v.setTranslationX(0f);
@@ -2565,7 +2639,10 @@ final class ClockCollapse {
                 if (!Float.isNaN(sAodHoldY)) hold(sAodHoldY);
                 // Held still in the unzoomed pixels, so the doze's zoom takes it in with the rest
                 // of the screen - see parentTop().
-                float heldUnit = ClockSizePolicy.aodHeldUnit(sFromUnit, sAodCoverZoom, sFullNatural);
+                // A face whose full clock was never measured (magazine B) is held to the native
+                // size the cover last read for it instead.
+                float heldUnit = ClockSizePolicy.aodHeldUnit(sFromUnit, sAodCoverZoom,
+                        sFullNatural > 0f ? sFullNatural : sLastNativeUnit);
                 writePose(m, sFromTop, heldUnit, sFromDate, false);
                 // The wake starts from what is on screen, including a partly completed zoom.
                 sAodTop = sFromTop;
@@ -2641,6 +2718,7 @@ final class ClockCollapse {
         float requested = Float.isNaN(size) ? Main.sClockHeightDp * d : size * reference;
         // The notification list owns the native clock squeeze; never scale it back to its maximum.
         float nativeUnit = ClockSizePolicy.nativeUnit(full, m.unit, LockLyrics.notificationCompact());
+        if (nativeUnit > 0f) sLastNativeUnit = nativeUnit;
         float coverUnit = ClockSizePolicy.coverUnit(requested, reference, nativeUnit,
                 sArtworkClockScale, Main.MIN_CLOCK_K, sNativeClockSize);
         if (phase == Phase.ON && sArtworkSizeProgress < 1f
@@ -2890,7 +2968,10 @@ final class ClockCollapse {
             float tx = inkL - inkL0;
             if (Math.abs(g.getTranslationX() - tx) >= 0.25f) g.setTranslationX(tx);
         }
-        if (!m.anchored) placeCompanions(m, top, scale, k, midX);
+        if (!m.anchored) {
+            placeCompanions(m, top, scale, k, midX);
+            liftContainers();
+        }
         // The other styles lay their own date out, and it is only moved to follow the offset -
         // unless it sits inside the clock, which carries it already.
         if (m.anchored && m.date != null && !Float.isNaN(date)) {
