@@ -49,6 +49,22 @@ final class ClockSizePolicy {
         return Math.min(unit, unit * requested * ROW_ASPECT / width);
     }
 
+    /**
+     * The held clock on the AOD, grown with the media card's contraction - but never past the
+     * face's own full clock, and not at all for a face that already stood at about its own size
+     * over the cover. Magazine A (115px against a 122px full clock) was taken to 172px and its
+     * date ran off the top; even the 6% up to its full size still clipped the date's top.
+     */
+    static float aodHeldUnit(float fromUnit, float zoom, float fullUnit) {
+        float grown = fromUnit * zoom;
+        if (!(fullUnit > 0f)) return grown;
+        if (fromUnit >= fullUnit * NATIVE_SIZED) return fromUnit;
+        return Math.max(fromUnit, Math.min(grown, fullUnit));
+    }
+
+    /** A cover clock this close to its face's full size counts as the face's own size. */
+    static final float NATIVE_SIZED = 0.9f;
+
     static float transitionUnit(float drawnUnit, float destination, float progress) {
         return drawnUnit + (destination - drawnUnit) * Math.max(0f, Math.min(1f, progress));
     }

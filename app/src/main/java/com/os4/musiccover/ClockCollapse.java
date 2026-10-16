@@ -2565,7 +2565,7 @@ final class ClockCollapse {
                 if (!Float.isNaN(sAodHoldY)) hold(sAodHoldY);
                 // Held still in the unzoomed pixels, so the doze's zoom takes it in with the rest
                 // of the screen - see parentTop().
-                float heldUnit = sFromUnit * sAodCoverZoom;
+                float heldUnit = ClockSizePolicy.aodHeldUnit(sFromUnit, sAodCoverZoom, sFullNatural);
                 writePose(m, sFromTop, heldUnit, sFromDate, false);
                 // The wake starts from what is on screen, including a partly completed zoom.
                 sAodTop = sFromTop;

@@ -98,4 +98,12 @@ public class ClockSizePolicyTest {
         assertEquals(136f, ClockSizePolicy.wideFaceUnit(Float.NaN, 136f, 929f), 0.001f);
         assertEquals(136f, ClockSizePolicy.wideFaceUnit(148.9f, 136f, 0f), 0.001f);
     }
+
+    @Test public void aodZoomStopsAtTheFacesOwnFullClock() {
+        assertEquals(115f, ClockSizePolicy.aodHeldUnit(115f, 1.5f, 122f), 0.001f);
+        assertEquals(122f, ClockSizePolicy.aodHeldUnit(100f, 1.5f, 122f), 0.001f);
+        assertEquals(103.5f, ClockSizePolicy.aodHeldUnit(69f, 1.5f, 136f), 0.001f);
+        assertEquals(223.5f, ClockSizePolicy.aodHeldUnit(149f, 1.5f, Float.NaN), 0.001f);
+        assertEquals(130f, ClockSizePolicy.aodHeldUnit(130f, 1.5f, 122f), 0.001f);
+    }
 }
