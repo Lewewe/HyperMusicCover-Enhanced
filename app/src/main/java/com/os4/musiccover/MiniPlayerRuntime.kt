@@ -1587,6 +1587,12 @@ object MiniPlayerRuntime {
      * measured and every row in it is hidden (the media card behind its pill, folded rows, rows
      * let into islands). Unknown - the mini player is off, nothing measured - is true.
      */
+    /** Only the media card shows in the stack - see NotifPresence. False when unknown. */
+    @JvmStatic fun mediaOnlyShowing(): Boolean {
+        val runtime = live().firstOrNull { !it.stackContentTop().isNaN() } ?: return false
+        return runtime.contentMediaOnly
+    }
+
     @JvmStatic fun anyRowShowing(): Boolean {
         val runtime = live().firstOrNull { !it.stackContentTop().isNaN() } ?: return true
         return runtime.contentRows
@@ -4922,6 +4928,9 @@ private class MiniPlayerController(
     /** Whether the last stackContentTop found a row that shows, rather than only hidden ones. */
     internal var contentRows = true
         private set
+    /** Whether the only rows that show are the media card's (no notification under it). */
+    internal var contentMediaOnly = false
+        private set
 
     /**
      * See the static stackContentTop: every row and card in the stack, at the stack's own target -
@@ -4948,6 +4957,7 @@ private class MiniPlayerController(
             // music: counted as seen, the faces were told there was a notification and the
             // rhombus face stood 74px higher lit than in the doze, dropping on every AOD.
             var shown = false
+            var shownOther = false
             val stackY = IntArray(2).also(stack::getLocationOnScreen)[1]
             // Every child weighed, for `op mini`: name:target-on-screen/translation and why skipped.
             val recordDiagnostic = now - contentDiagnosticAt >= 100L
@@ -4985,6 +4995,7 @@ private class MiniPlayerController(
                     seen?.let { it.append(' ').append(shortName(c)).append(':').append((stackY + at).toInt()).append('S') }
                     if (at < top) { top = at; from = c }
                     shown = true
+                    shownOther = true
                     continue
                 }
                 val home = leaving.any { isInside(it, c) }
@@ -5013,6 +5024,7 @@ private class MiniPlayerController(
                 if (home || c in hiddenRows && !coming || c.visibility != View.VISIBLE ||
                     c.alpha <= 0.01f && !coming || folded) { skipped++; continue }
                 if (!(name.contains("MediaHeader") && pillShowsMusic && morph == null)) shown = true
+                if (!name.contains("MediaHeader")) shownOther = true
                 if (t < top) { top = t; from = c }
             }
             if (seen != null) {
@@ -5021,6 +5033,7 @@ private class MiniPlayerController(
                 (if (exchange != null) " X" else "") + (if (morph != null) " M" else "") + " [" + seen.toString().trim() + "]"
             }
             contentRows = shown
+            contentMediaOnly = shown && !shownOther
             when {
                 from != null -> stackY + top
                 skipped > 0 -> (stackY + stack.height).toFloat()

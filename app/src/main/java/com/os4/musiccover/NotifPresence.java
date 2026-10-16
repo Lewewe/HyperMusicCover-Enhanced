@@ -71,7 +71,78 @@ final class NotifPresence {
      */
     private static boolean wanted(boolean systemSays) {
         if (LockHold.clockHeld()) return true;
-        return systemSays && rowsShowing();
+        if (!systemSays || !rowsShowing()) return false;
+        // The media player alone, opened from the pill, under a face whose full layout still
+        // fits above it: kept full. The classic face otherwise dropped its date and weather for
+        // a player that left half the screen empty.
+        return !(mediaOnly() && fullFaceFits());
+    }
+
+    private static boolean mediaOnly() {
+        try {
+            return MiniPlayerRuntime.mediaOnlyShowing();
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /** How low the face reaches in its full layout, on screen; measured whenever it shows it. */
+    private static float sFullBottom = Float.NaN;
+    /** The face that was measured: its clock view, by identity and size. */
+    private static int sFullFace;
+
+    private static boolean fullFaceFits() {
+        if (Float.isNaN(sFullBottom) || sFullFace != faceKey()) return false;
+        float top;
+        try {
+            top = MiniPlayerRuntime.stackContentTop();
+        } catch (Throwable t) {
+            return false;
+        }
+        android.view.View v = Main.sContainer;
+        float gap = v == null ? 48f : FULL_GAP_DP * v.getResources().getDisplayMetrics().density;
+        return !Float.isNaN(top) && sFullBottom + gap <= top;
+    }
+
+    private static final float FULL_GAP_DP = 16f;
+
+    private static int faceKey() {
+        int key = 17;
+        for (android.view.View root : Main.clockRoots()) {
+            android.view.View t = Main.clockTarget(root);
+            key = key * 31 + (t == null ? 0 : System.identityHashCode(t));
+        }
+        return key;
+    }
+
+    /** The lowest piece the face draws now, on screen. Only while it shows its full layout. */
+    private static void measureFull() {
+        float bottom = Float.NaN;
+        int[] at = new int[2];
+        for (android.view.View root : Main.clockRoots()) {
+            bottom = lowest(root, at, bottom);
+        }
+        if (!Float.isNaN(bottom)) {
+            sFullBottom = bottom;
+            sFullFace = faceKey();
+        }
+    }
+
+    private static float lowest(android.view.View v, int[] at, float bottom) {
+        if (v == null || v.getVisibility() != android.view.View.VISIBLE || v.getAlpha() <= 0.01f) return bottom;
+        if (v instanceof android.view.ViewGroup) {
+            android.view.ViewGroup g = (android.view.ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) bottom = lowest(g.getChildAt(i), at, bottom);
+            return bottom;
+        }
+        if (v.getWidth() <= 0 || v.getHeight() <= 0) return bottom;
+        boolean draws = v instanceof android.widget.TextView
+                ? ((android.widget.TextView) v).length() > 0
+                : v instanceof android.widget.ImageView && ((android.widget.ImageView) v).getDrawable() != null;
+        if (!draws) return bottom;
+        v.getLocationOnScreen(at);
+        float b = at[1] + v.getHeight() * v.getScaleY();
+        return Float.isNaN(bottom) || b > bottom ? b : bottom;
     }
 
     /** Whether any notification row can be seen. Unknown is a yes: the system's word stands. */
@@ -99,6 +170,8 @@ final class NotifPresence {
         long now = android.os.SystemClock.uptimeMillis();
         if (!force && now - sCheckedAt < CHECK_MS) return;
         sCheckedAt = now;
+        // The full layout is on screen, with nothing of ours on the clock: how far it reaches.
+        if (!shown(panel) && !LockHold.clockHeld()) measureFull();
         if (wanted(sSystemSays) == shown(panel)) return;
         android.view.View v = Main.sContainer;
         if (v == null) return;
@@ -138,6 +211,7 @@ final class NotifPresence {
 
     static String describe() {
         return "system=" + sSystemSays + " passed=" + sPassed + " rows=" + rowsShowing()
+                + " mediaOnly=" + mediaOnly() + " fullBottom=" + sFullBottom + " fits=" + fullFaceFits()
                 + " hooked=" + (sUpdate != null) + " stack=" + safeSource();
     }
 }
