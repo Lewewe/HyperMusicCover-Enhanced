@@ -553,8 +553,13 @@ final class ClockCollapse {
         // start the spring from a clock several times the size of the one on screen.
         boolean flying = (sPhase == Phase.ENTER || sPhase == Phase.ON) && Main.sContainer != null;
         if (flying) captureFrom();
-        // A compact page may have restored the native clock; the cover's resting pose is the AOD target.
-        if (flying && Main.aodArtworkExpanded() && !Float.isNaN(sCoverRestTop)) {
+        // A compact page may have restored the native clock; the cover's resting pose is the AOD
+        // target. So it is when the pose cannot be read at all: put to sleep from an unlocked
+        // phone, the keyguard's clock is not laid out to be measured, the held doze kept a NaN
+        // pose, the OEM's big clock was drawn over the artwork, and the artwork compacting away
+        // from it handed the lock screen back - the player alone on the AOD, the cover on wake.
+        if (flying && (Main.aodArtworkExpanded() || Float.isNaN(sFromTop))
+                && !Float.isNaN(sCoverRestTop)) {
             sFromTop = sCoverRestTop;
             sFromUnit = sCoverRestUnit;
             sFromDate = sCoverRestDate;
