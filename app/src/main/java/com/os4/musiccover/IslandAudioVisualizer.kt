@@ -188,8 +188,8 @@ object IslandAudioVisualizer {
             worker.post {
                 if (generation != token) return@post
                 try {
-                    val created = AudioSpectrumCapture.acquire(true) { _, fft, rate ->
-                        if (generation == token) { spectrum.sample(fft, rate); samples++ }
+                    val created = AudioSpectrumCapture.acquire(true) { _, fft, rate, power ->
+                        if (generation == token) { spectrum.sample(fft, rate, power); samples++ }
                     }
                     main.post deliver@{
                         if (generation != token) { worker.post { created.release() }; return@deliver }

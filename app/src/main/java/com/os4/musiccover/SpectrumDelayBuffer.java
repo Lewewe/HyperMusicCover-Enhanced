@@ -8,19 +8,21 @@ final class SpectrumDelayBuffer<T> {
         final Object source;
         final byte[] data;
         final int rate;
+        final float[] power;
         final long due;
         final T targets;
-        Frame(Object source, byte[] data, int rate, long due, T targets) {
+        Frame(Object source, byte[] data, int rate, float[] power, long due, T targets) {
             this.source = source; this.data = data.clone(); this.rate = rate;
+            this.power = power == null ? null : power.clone();
             this.due = due; this.targets = targets;
         }
     }
     private final ArrayDeque<Frame<T>> frames = new ArrayDeque<>();
     private final int capacity;
     SpectrumDelayBuffer(int capacity) { this.capacity = capacity; }
-    void offer(Object source, byte[] data, int rate, long due, T targets) {
+    void offer(Object source, byte[] data, int rate, float[] power, long due, T targets) {
         if (frames.size() == capacity) frames.removeFirst();
-        frames.addLast(new Frame<>(source, data, rate, due, targets));
+        frames.addLast(new Frame<>(source, data, rate, power, due, targets));
     }
     Frame<T> poll(long now) { return !frames.isEmpty() && frames.peekFirst().due <= now ? frames.removeFirst() : null; }
     long nextAt() { return frames.isEmpty() ? -1 : frames.peekFirst().due; }

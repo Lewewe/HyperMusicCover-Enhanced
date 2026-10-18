@@ -25,7 +25,7 @@ public class AudioWaveSyncTest {
         SpectrumDelayBuffer<String> queue = new SpectrumDelayBuffer<>(3);
         byte[] fft = {1, 2, 3};
         Object source = new Object();
-        queue.offer(source, fft, 16000000, 100, "subscribers");
+        queue.offer(source, fft, 16000000, null, 100, "subscribers");
         fft[1] = 99;
         assertNull(queue.poll(99));
         SpectrumDelayBuffer.Frame<String> frame = queue.poll(100);
@@ -36,7 +36,7 @@ public class AudioWaveSyncTest {
     }
     @Test public void overflowAndRouteResetCannotLeaveAnUnboundedBacklog() {
         SpectrumDelayBuffer<String> queue = new SpectrumDelayBuffer<>(2);
-        for (int i = 1; i <= 3; i++) queue.offer(null, new byte[] {(byte) i}, 16000000, i * 10, "targets");
+        for (int i = 1; i <= 3; i++) queue.offer(null, new byte[] {(byte) i}, 16000000, null, i * 10, "targets");
         assertEquals(2, queue.size());
         assertNull(queue.poll(19));
         assertEquals(2, queue.poll(20).data[0]);

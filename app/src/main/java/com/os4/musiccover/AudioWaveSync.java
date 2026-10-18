@@ -62,12 +62,12 @@ final class AudioWaveSync {
         AudioWaveSync current = instance;
         if (current != null) current.requestRefresh();
     }
-    static boolean enqueue(Object source, byte[] data, int rate, AudioSpectrumCapture.Lease[] targets) {
+    static boolean enqueue(Object source, byte[] data, int rate, float[] power, AudioSpectrumCapture.Lease[] targets) {
         AudioWaveSync current = instance;
         if (current == null || !current.running || current.delayMs == 0) return false;
         synchronized (current.queue) {
             if (!current.running || current.delayMs == 0) return false;
-            current.queue.offer(source, data, rate, SystemClock.uptimeMillis() + current.delayMs, targets);
+            current.queue.offer(source, data, rate, power, SystemClock.uptimeMillis() + current.delayMs, targets);
             current.schedule();
         }
         return true;
@@ -88,7 +88,7 @@ final class AudioWaveSync {
                     if (frame == null) { scheduled = false; schedule(); return; }
                 }
                 // Never call the capture owner while holding the queue lock.
-                AudioSpectrumCapture.deliverDelayed(frame.source, frame.data, frame.rate, frame.targets);
+                AudioSpectrumCapture.deliverDelayed(frame.source, frame.data, frame.rate, frame.power, frame.targets);
             }
         }
     };

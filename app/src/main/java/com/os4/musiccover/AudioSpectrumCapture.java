@@ -8,7 +8,8 @@ import java.util.ArrayList;
 
 /** One playback capture shared by the BPM companion and all live music waves. */
 final class AudioSpectrumCapture {
-    interface Listener { void onFft(Lease source, byte[] fft, int rate); }
+    /** power: unrounded power per bin from the internal capture, null from the output mix. */
+    interface Listener { void onFft(Lease source, byte[] fft, int rate, float[] power); }
     private static final ArrayList<Lease> clients = new ArrayList<>();
     private static Visualizer effect;
     private static InternalAudioCapture playback;
@@ -91,7 +92,7 @@ final class AudioSpectrumCapture {
             check(created.setCaptureSize(Visualizer.getCaptureSizeRange()[1]));
             check(created.setDataCaptureListener(new Visualizer.OnDataCaptureListener() {
                 public void onWaveFormDataCapture(Visualizer source, byte[] data, int rate) { }
-                public void onFftDataCapture(Visualizer source, byte[] data, int rate) { dispatch(source, data, rate); }
+                public void onFftDataCapture(Visualizer source, byte[] data, int rate) { dispatch(source, data, rate, null); }
             }, Visualizer.getMaxCaptureRate(), false, true));
             effect = created;
             check(created.setEnabled(true));
@@ -102,7 +103,7 @@ final class AudioSpectrumCapture {
         }
     }
 
-    private static void dispatch(Object source, byte[] data, int rate) {
+    private static void dispatch(Object source, byte[] data, int rate, float[] power) {
         Lease[] targets;
         boolean internal;
         synchronized (AudioSpectrumCapture.class) {
@@ -116,17 +117,17 @@ final class AudioSpectrumCapture {
             }
             targets = clients.toArray(new Lease[0]);
         }
-        boolean delayed = internal && AudioWaveSync.enqueue(source, data, rate, targets);
+        boolean delayed = internal && AudioWaveSync.enqueue(source, data, rate, power, targets);
         for (Lease client : targets) if (!client.closed && (!delayed || !client.visual)) {
-            try { client.listener.onFft(client, data, rate); }
+            try { client.listener.onFft(client, data, rate, power); }
             catch (Throwable t) { Xp.w("Audio spectrum consumer failed: " + t); }
         }
     }
 
-    static void deliverDelayed(Object source, byte[] data, int rate, Lease[] targets) {
+    static void deliverDelayed(Object source, byte[] data, int rate, float[] power, Lease[] targets) {
         synchronized (AudioSpectrumCapture.class) { if (source != playback) return; }
         for (Lease client : targets) if (!client.closed && client.visual) {
-            try { client.listener.onFft(client, data, rate); }
+            try { client.listener.onFft(client, data, rate, power); }
             catch (Throwable t) { Xp.w("Delayed spectrum consumer failed: " + t); }
         }
     }

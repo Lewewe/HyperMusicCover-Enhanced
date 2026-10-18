@@ -148,7 +148,7 @@ final class BpmEstimator {
         int trustedBpm = validBpm(publishedBpm);
         AudioSpectrumCapture.Lease created = null;
         try {
-            final AudioSpectrumCapture.Lease v = AudioSpectrumCapture.acquire((source, fft, rate) -> {
+            final AudioSpectrumCapture.Lease v = AudioSpectrumCapture.acquire((source, fft, rate, power) -> {
                 if (!BpmCompanionPolicy.captureCallback(token, generation, source, visualizer)) return;
                 if (android.os.Looper.myLooper() == worker().getLooper()) {
                     sample(fft, rate);

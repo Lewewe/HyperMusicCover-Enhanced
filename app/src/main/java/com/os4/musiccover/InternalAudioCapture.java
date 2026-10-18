@@ -8,7 +8,7 @@ import android.media.AudioRecord;
 
 /** System playback loopback that leaves speaker/headphone routing and volume untouched. */
 final class InternalAudioCapture {
-    interface Listener { void onFft(InternalAudioCapture source, byte[] fft, int rate); }
+    interface Listener { void onFft(InternalAudioCapture source, byte[] fft, int rate, float[] power); }
     private static final int RATE = 16000;
     private final AudioManager manager;
     private Object policy;
@@ -74,7 +74,7 @@ final class InternalAudioCapture {
                 if (count == 0) continue;
                 filled += count;
                 if (filled == pcm.length) {
-                    listener.onFft(this, spectrum.transform(pcm), RATE * 1000);
+                    listener.onFft(this, spectrum.transform(pcm), RATE * 1000, spectrum.power());
                     filled = 0;
                 }
             }

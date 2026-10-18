@@ -126,12 +126,12 @@ internal object MediaOutputVisualizer {
         worker.post {
             if (generation != token) return@post
             try {
-                val created = AudioSpectrumCapture.acquire(true) { _, fft, rate ->
+                val created = AudioSpectrumCapture.acquire(true) { _, fft, rate, power ->
                     if (generation == token) {
                         val now = SystemClock.uptimeMillis()
                         if (!aod || now >= nextAudioSample) {
                             nextAudioSample = now + 200L
-                            spectrum.sample(fft, rate); samples++
+                            spectrum.sample(fft, rate, power); samples++
                         }
                     }
                 }
@@ -197,7 +197,7 @@ internal object MediaOutputVisualizer {
     /** Draws every wave again, for a colour setting changed while nothing moves. */
     fun redraw() = states.values.forEach { it.redraw() }
 
-    @JvmStatic fun describe(): String = "outputWave enabled=$enabled awake=$awake aod=$aod fps=${if (aod) 5 else 30} views=${states.size} visible=${states.values.count { displayable(it) }} replaced=${states.values.count { it.replaced }} aodOverlays=${states.values.count { it.hasAodOverlay() }} colors=${states.values.map { it.bars.colorReport() }} capturing=${lease != null} samples=$samples"
+    @JvmStatic fun describe(): String = "outputWave enabled=$enabled awake=$awake aod=$aod fps=${if (aod) 5 else 30} views=${states.size} visible=${states.values.count { displayable(it) }} replaced=${states.values.count { it.replaced }} aodOverlays=${states.values.count { it.hasAodOverlay() }} colors=${states.values.map { it.bars.colorReport() }} capturing=${lease != null} samples=$samples levels=${FloatArray(5).also { spectrum.copyTo(it) }.joinToString(",") { "%.2f".format(it) }}"
 
     private class Output(icon: ImageView, button: View, album: ImageView, private val lockScreenCapable: Boolean) {
         private val icon = WeakReference(icon)

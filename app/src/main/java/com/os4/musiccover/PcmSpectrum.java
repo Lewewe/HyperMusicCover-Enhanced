@@ -7,6 +7,14 @@ final class PcmSpectrum {
     private final double[] window = new double[SIZE];
     private final double[] cosine = new double[SIZE / 2], sine = new double[SIZE / 2];
     private final byte[] fft = new byte[SIZE];
+    /**
+     * Each bin's power in the byte format's units, before rounding. The bytes keep ~40 dB:
+     * quiet treble rounds to 0 there, which is what kept the fifth bar down.
+     */
+    private final float[] power = new float[SIZE / 2];
+
+    /** The last transform's unrounded power per bin; reused, so copy it to keep it. */
+    float[] power() { return power; }
 
     PcmSpectrum() {
         for (int i = 0; i < SIZE; i++) window[i] = .5 - .5 * Math.cos(2 * Math.PI * i / (SIZE - 1));
@@ -42,9 +50,12 @@ final class PcmSpectrum {
         double scale = 4d / (SIZE * 256d);
         fft[0] = quantize(real[0] * scale);
         fft[1] = quantize(real[SIZE / 2] * scale);
+        power[0] = 0f;
         for (int bin = 1; bin < SIZE / 2; bin++) {
             fft[2 * bin] = quantize(real[bin] * scale);
             fft[2 * bin + 1] = quantize(imaginary[bin] * scale);
+            double r = real[bin] * scale, im = imaginary[bin] * scale;
+            power[bin] = (float) (r * r + im * im);
         }
         return fft;
     }
