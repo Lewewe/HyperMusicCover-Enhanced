@@ -603,6 +603,7 @@ public class Main extends XposedModule {
      * different things - stop reserving the space, or reserve it even with no print enrolled.
      */
     private static volatile int sFpAvoid;
+    private static int sFpAvoidLogged;
     /**
      * Every fingerprint icon view built since SystemUI started, weakly held. The alpha is set at
      * construction, but the switch can move afterwards, and a hidden icon has to be able to come
@@ -1477,17 +1478,27 @@ public class Main extends XposedModule {
                         + " - fingerprint avoidance cannot be overridden");
             } else {
                 Xp.hook(invoke, chain -> {
+                    // The bound is first combined as the keyguard is built, before loadState
+                    // has run: the mode has to come out of the file here or that first value -
+                    // which stays until one of the seven flows moves - is the OEM's.
+                    peekHideFp();
                     if (sFpAvoid != 0) {
                         try {
                             java.util.List<Object> a = chain.getArgs();
                             Object second = a.size() > 1 ? a.get(1) : null;
                             if (second instanceof Object[]) {
                                 Object[] vals = (Object[]) second;
-                                // Exactly seven, or the indices below mean something else. A
-                                // build that combines a different number of flows gets left
-                                // alone rather than having two unknown values overwritten.
-                                if (vals.length == 7) {
+                                // Seven flows up to OS4.0.1; OS4.0.2 combines an eighth after
+                                // them and still reads 5 and 6 the same way. Anything else, or
+                                // those two not booleans, means the indices mean something else
+                                // and the build is left alone rather than having two unknown
+                                // values overwritten.
+                                if ((vals.length == 7 || vals.length == 8)
+                                        && vals[5] instanceof Boolean && vals[6] instanceof Boolean) {
                                     Boolean forced = sFpAvoid == 2;
+                                    if (sFpAvoidLogged++ < 2) Xp.log(TAG + "fingerprint avoidance"
+                                            + " mode=" + sFpAvoid + " was " + vals[5] + "/"
+                                            + vals[6] + " -> " + forced);
                                     // 5 is "fingerprint unlock is on", 6 is "a print is
                                     // enrolled". Written in place: the array is the one the
                                     // original will read, so proceed() needs no new arguments.
@@ -7699,7 +7710,11 @@ public class Main extends XposedModule {
      * the keyguard stayed up, and the print sat there for the whole session - which is what
      * "restarting SystemUI turns the hiding off until you lock the phone a second time" was.
      *
-     * Only this one key, and only until the real load has happened: the rest of the file belongs
+     * The notifications' sink mode (fpavoid) is read here too, for the same reason: the stack's
+     * bound is combined while the keyguard is built, and that first value stays until one of
+     * the seven flows behind it moves.
+     *
+     * Only these keys, and only until the real load has happened: the rest of the file belongs
      * to loadState, which applies values through setters that want a built keyguard. A file
      * caught mid-write costs the key its default for this one read, the same exposure loadState
      * has always had.
@@ -7725,7 +7740,12 @@ public class Main extends XposedModule {
                 if (line.startsWith("hidefp=")) {
                     sHideFp = "1".equals(line.substring(7).trim());
                     Xp.log(TAG + "fingerprint setting read early: hide=" + sHideFp);
-                    return;
+                } else if (line.startsWith("fpavoid=")) {
+                    try {
+                        sFpAvoid = Integer.parseInt(line.substring(8).trim());
+                        Xp.log(TAG + "fingerprint avoid mode read early: " + sFpAvoid);
+                    } catch (NumberFormatException ignored) {
+                    }
                 }
             }
         } catch (Throwable t) {
