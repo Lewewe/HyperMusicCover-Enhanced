@@ -180,6 +180,9 @@ final class CoverPush {
             Context ctx, boolean on, Bitmap art, boolean temporaryThumbnail, int gen, String key) {
         if (!currentPush(gen, key)) return;
         long t0 = android.os.SystemClock.uptimeMillis();
+        // A small private copy for an extension's backdrop (ExtensionSpectrum): the source
+        // itself is recycled with the composition it feeds.
+        if (on && art != null && !temporaryThumbnail) ExtensionSpectrum.noteArtwork(art, key);
         Intent out = wallpaperIntent("art");
         out.putExtra("cardmode", Main.effectiveCoverStyle().mode == CoverCardStyle.CARD);
         // The blur travels with the cover. A lyricblur broadcast is one shot - dropped, or

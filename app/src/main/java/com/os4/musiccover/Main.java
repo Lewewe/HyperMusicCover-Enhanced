@@ -3035,11 +3035,14 @@ public class Main extends XposedModule {
                         if (i.hasExtra("json")) MediaCardRuntime.configure(i.getStringExtra("json"));
                         else MediaCardRuntime.set(i.getStringExtra("key"), i.getIntExtra("v", 0));
                         saveState();
+                    } else if ("extspectrum".equals(op)) {
+                        ExtensionSpectrum.handle(c, i);
                     } else if ("canvasframe".equals(op)) {
                         setResultExtras(CanvasHostBridge.frame(c, i));
                     } else if ("islandwavestate".equals(op)) {
                         setResultData(IslandAudioVisualizer.describe() + "\n" + MediaOutputVisualizer.describe()
-                                + "\n" + AudioSpectrumCapture.describe());
+                                + "\n" + AudioSpectrumCapture.describe()
+                                + "\n" + ExtensionSpectrum.describe());
                     } else if ("mediastate".equals(op)) {
                         setResultData(MediaCardRuntime.describe());
                     } else if ("minicfg".equals(op)) {
@@ -3305,7 +3308,8 @@ public class Main extends XposedModule {
         }
         // The app, the wallpaper process (its hello and first-frame signals) and 高德 (its map).
         ProbeGuard.register(ctx, new IntentFilter(ACTION), TAG, Probe::new,
-                BuildConfig.APPLICATION_ID, "com.miui.miwallpaper", AmapNavScene.PKG);
+                BuildConfig.APPLICATION_ID, "com.miui.miwallpaper", AmapNavScene.PKG,
+                ExtensionSpectrum.PKG);
         registerSecretCode(ctx);
         Xp.log(TAG + "receiver registered for " + ACTION);
         // A SystemUI that starts mid-navigation missed 高德's init; there is a receiver now.

@@ -93,6 +93,16 @@ internal class AudioWaveDrawable(private val contentScale: Float = 1f, private v
         @Volatile private var custom = MediaCardConfig.WAVE_CUSTOM_DEFAULT
         @Volatile private var styleGeneration = 0
 
+        /**
+         * Top and bottom colour as the bar colour setting draws them now, for an extension's
+         * bars: the island's artwork gradient (the one the players take too) or the chosen
+         * single colour.
+         */
+        fun currentColors(): Pair<Int, Int> {
+            val native = IslandAudioVisualizer.nativeColors() ?: (Color.WHITE to Color.WHITE)
+            return MediaCardConfig.waveColors(mode, custom, native.first, native.second)
+        }
+
         /** The single colour the bars are drawn in, or null for the artwork gradient. */
         fun solidColor(): Int? = if (mode == MediaCardConfig.WAVE_GRADIENT) null
             else MediaCardConfig.waveColors(mode, custom, 0, 0).first

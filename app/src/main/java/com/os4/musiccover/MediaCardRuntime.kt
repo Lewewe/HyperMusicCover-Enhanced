@@ -98,6 +98,9 @@ object MediaCardRuntime {
         AudioWaveDrawable.style(setting("island", "waveColor"), setting("island", "waveCustom"))
         main.post { IslandAudioVisualizer.redraw(); MediaOutputVisualizer.redraw() }
     }
+    /** Audio visualization as a whole, the switch every live wave hangs off. */
+    @JvmStatic fun visualizerOn(): Boolean = on("island", "visualizer")
+
     private fun outputWavesOn(): Boolean = on("island", "visualizer") &&
         (on("notification", "outputWave") || on("notification", "lockOutputWave") || on("island", "outputWave"))
 
