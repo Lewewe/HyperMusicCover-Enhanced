@@ -797,7 +797,7 @@ final class ClockCollapse {
                 : Main.sClockSize * reference;
         float unit = ClockSizePolicy.coverUnit(requested, reference, full,
                 1f, Main.MIN_CLOCK_K, 0f);
-        if (!m.anchored && unit > full) unit = full;
+        if (unit > full) unit = full;
         float bottom = artworkContentBottom(m, unit);
         View g = firstTarget();
         if (g != null && g.getParent() instanceof View) {
@@ -1081,7 +1081,7 @@ final class ClockCollapse {
     static String describe() {
         return "phase=" + sPhase + (sExitToAod ? "(to AOD)" : "") + (sAodHeld ? "(held)" : "")
                 + " full=" + Main.r1(sFullNatural) + " estimate=" + Main.r1(sFullUnit)
-                + " reference=" + Main.r1(sizeReferenceFor(Float.NaN))
+                + " reference=" + Main.r1(sizeUnit())
                 + " editor=" + sEditorGeometry
                 + " t=" + Main.r3(sT)
                 + " waking=" + sWaking + " floor=" + Main.r1(sFloor)
@@ -1437,8 +1437,6 @@ final class ClockCollapse {
     private static volatile String sFullStyle;
     /** Until a measurement exists: one estimate per transition, so it cannot move mid-flight. */
     private static float sFullUnit = Float.NaN;
-    private static float sSizeReference = Float.NaN;
-    private static String sSizeReferenceStyle;
 
     private static String sEditorGeometry;
     private static android.database.ContentObserver sGeometryObserver;
@@ -1512,63 +1510,10 @@ final class ClockCollapse {
         return null;
     }
 
-    private static String rendererKey() {
-        String key = styleKey();
-        if (key == null) return null;
-        int at = key.indexOf("#geometry-v1/");
-        return at < 0 ? key : key.substring(0, at);
-    }
-
-    /** The module slider keeps its calibration when the OEM editor resizes the native clock. */
-    private static float sizeReferenceFor(float nativeUnit) {
-        String style = rendererKey();
-        return style != null && style.equals(sSizeReferenceStyle) && sSizeReference > 0f
-                ? sSizeReference : nativeUnit;
-    }
-
-    static String sizeReferenceState() {
-        return sSizeReferenceStyle == null || !(sSizeReference > 0f) ? null
-                : sSizeReferenceStyle + "|" + sSizeReference;
-    }
-
-    static void restoreSizeReference(String state) {
-        int at = state.lastIndexOf('|');
-        if (at <= 0) return;
-        try {
-            float unit = Float.parseFloat(state.substring(at + 1));
-            if (!Float.isFinite(unit) || !(unit > 0f)) return;
-            String style = state.substring(0, at);
-            int geometry = style.indexOf("#geometry-v1/");
-            sSizeReferenceStyle = geometry < 0 ? style : style.substring(0, geometry);
-            sSizeReference = unit;
-        } catch (NumberFormatException ignored) {
-        }
-    }
-
-    /** Diagnostic migration for a reference recovered from a pre-fix measurement. */
-    static void restoreCurrentSizeReference(float unit) {
-        String style = rendererKey();
-        if (style == null || !Float.isFinite(unit) || !(unit > 0f)) return;
-        restoreSizeReference(style + "|" + unit);
-        Main.saveState();
-        refresh();
-    }
-
     /** Called with the OEM's own lock screen clock, before anything of ours is on it. */
     private static void noteNaturalUnit(float unit) {
         String style = styleKey();
         if (style == null || !(unit > 0f)) return;
-        // The reference the other styles are sized against, by the same largest-seen rule.
-        if (LIVE.anchored && (!style.equals(sRefStyle) || !(unit < sRefNatural + 0.5f))) {
-            sRefStyle = style;
-            sRefNatural = unit;
-            Main.saveState();
-        }
-        String renderer = rendererKey();
-        if (!renderer.equals(sSizeReferenceStyle) || !(sSizeReference > 0f)) {
-            sSizeReferenceStyle = renderer;
-            sSizeReference = unit;
-        }
         // The largest seen: an entry can catch the OEM's clock still giving way to a notification,
         // and that is a smaller clock, never a larger one.
         if (ClockSizePolicy.retainLargest(sFullStyle, style, sFullNatural, unit)) return;
@@ -1590,11 +1535,8 @@ final class ClockCollapse {
         if (bar <= 0) return;
         try {
             String key = v.substring(0, bar);
-            // Legacy measurements calibrate the slider, but cannot restore the native size.
-            if (!key.contains("#geometry-v1/")) {
-                restoreSizeReference(v);
-                return;
-            }
+            // Legacy measurements cannot restore the native size.
+            if (!key.contains("#geometry-v1/")) return;
             float unit = Float.parseFloat(v.substring(bar + 1));
             if (!Float.isFinite(unit) || !(unit > 0f)) return;
             sFullNatural = unit;
@@ -1604,50 +1546,36 @@ final class ClockCollapse {
     }
 
     /**
-     * The full clock of the anchored styles (all_in_one), which the size setting is read against
-     * on every OTHER style (upstream 8415b20).
+     * The size setting's 100%: a fixed share of the screen's long side, the same on every face
+     * and whatever the OEM editor's clock size.
      *
-     * A fraction of each style's own full clock is a different clock on each: magazine C's whole
-     * clock is 339px where all_in_one's is ~750, so the same 9% came out at 30px, and the eastern
-     * face's stale 497px digit box sized it as if it were bigger than it is. The setting is "how
-     * big the small clock is", and that should not change with the face.
+     * It used to be a measurement - the first full clock seen per renderer, and all_in_one's
+     * largest for the other faces - kept for good once taken. A first reading taken with the
+     * editor's clock small (timeHeight 75 gave 233px on the Xiaomi 17 Pro, against the 992.6px
+     * the slider had been set by) turned 15% into a 35px clock, and resizing the clock in the
+     * editor moved or froze it. "How big the small clock is" does not need the OEM's clock at
+     * all: 0.3737 of the long side is that 992.6px on the 17 Pro's 2656px, so the sizes users
+     * had set keep their meaning. The face's own full clock still caps it (see the callers).
      */
-    private static volatile float sRefNatural = Float.NaN;
-    private static volatile String sRefStyle;
+    private static final float SIZE_SCREEN_SHARE = 0.3737f;
 
-    /** Until all_in_one has been measured once: its full clock as a share of the screen height. */
-    private static final float REF_SCREEN_SHARE = 0.287f;
-
-    static float refUnitState() {
-        return sRefNatural;
-    }
-
-    static void restoreRefUnit(float v) {
-        if (v > 0f) sRefNatural = v;
-    }
-
-    private static float refUnit() {
-        if (sRefNatural > 0f) return sRefNatural;
+    private static float sizeUnit() {
         View c = Main.sContainer;
-        return c == null ? Float.NaN
-                : REF_SCREEN_SHARE * c.getResources().getDisplayMetrics().heightPixels;
+        if (c == null) return Float.NaN;
+        android.util.DisplayMetrics dm = c.getResources().getDisplayMetrics();
+        return SIZE_SCREEN_SHARE * Math.max(dm.widthPixels, dm.heightPixels);
     }
 
-    /**
-     * The unit the size setting is a fraction of: the slider's calibration on the anchored
-     * styles; the anchored styles' full clock on every other, so the small clock comes out the
-     * same size whatever the face - never larger than the style's own full clock, though.
-     */
+    /** The unit the size setting is a fraction of; the face's full clock until one exists. */
     private static float sizeBase(Live m, float full) {
-        if (m.anchored) return sizeReferenceFor(full);
-        float ref = refUnit();
-        return ref > 0f ? ref : sizeReferenceFor(full);
+        float unit = sizeUnit();
+        return unit > 0f ? unit : full;
     }
 
     /** How many times the glyphs drawn now must grow to be the full clock, for the app. */
     static float fullRatio(float unitNow) {
         if (!(unitNow > 0f)) return 1f;
-        float reference = sizeReferenceFor(Float.NaN);
+        float reference = sizeUnit();
         if (reference > 0f) return reference / unitNow;
         String style = styleKey();
         if (style != null && style.equals(sFullStyle) && !Float.isNaN(sFullNatural)) {
@@ -2733,8 +2661,8 @@ final class ClockCollapse {
             coverUnit = ClockSizePolicy.transitionUnit(sArtworkSizeFromUnit, destination,
                     sArtworkSizeProgress);
         }
-        // Read against all_in_one's clock, a face's small clock is never larger than its own.
-        if (!m.anchored && coverUnit > nativeUnit) coverUnit = nativeUnit;
+        // Read against a fixed unit, the small clock is never larger than the face's own.
+        if (coverUnit > nativeUnit) coverUnit = nativeUnit;
         // A face that is short but wide would not shrink at all by height: held to the width an
         // all_in_one clock of the asked-for size takes. Not with the clock's own size chosen.
         if (!m.anchored && coverUnit >= nativeUnit && !(sNativeClockSize > 0f)) {
