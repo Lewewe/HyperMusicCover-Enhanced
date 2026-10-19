@@ -107,7 +107,7 @@ final class CoverMorphLayer extends View implements Choreographer.FrameCallback 
         ViewGroup root = Main.coverMorphRoot();
         Bitmap art = Main.coverMorphSource();
         CoverMorphMotion.Box thumb = Main.coverMorphThumbnail();
-        CoverMorphMotion.Box cover = art == null ? null : Main.coverMorphTarget(art);
+        CoverMorphMotion.Box cover = art == null ? null : Main.coverMorphTarget(art, toCover);
         if (root == null || art == null || art.isRecycled() || thumb == null || cover == null) {
             return false;
         }
@@ -139,7 +139,7 @@ final class CoverMorphLayer extends View implements Choreographer.FrameCallback 
         ViewGroup root = Main.coverMorphRoot();
         Bitmap art = Main.coverMorphSource();
         CoverMorphMotion.Box slot = MiniPlayerRuntime.artworkRestBox();
-        CoverMorphMotion.Box cover = art == null ? null : Main.coverMorphTarget(art);
+        CoverMorphMotion.Box cover = art == null ? null : Main.coverMorphTarget(art, toCover);
         if (root == null || art == null || art.isRecycled() || slot == null || cover == null) {
             return false;
         }
@@ -259,7 +259,7 @@ final class CoverMorphLayer extends View implements Choreographer.FrameCallback 
             thumb = compactToggle && motion.target == 0f && (notificationMorph || motion.atRest())
                     ? liveThumb : chase(thumb, liveThumb, follow);
         }
-        CoverMorphMotion.Box liveCover = Main.coverMorphTarget(art);
+        CoverMorphMotion.Box liveCover = Main.coverMorphTarget(art, motion.target == 1f);
         if (liveCover != null) cover = chase(cover, liveCover, follow);
         boolean endsSettled = (liveThumb == null || near(thumb, liveThumb))
                 && (liveCover == null || near(cover, liveCover));

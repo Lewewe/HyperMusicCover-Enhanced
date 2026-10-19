@@ -30,6 +30,7 @@ final class CanvasHostBridge {
         if (!Main.sHidePlayerBackground || !canvasReady && !frozenInAod
                 && !backdropHeld && !clockOwned && !autoCollapsed) return;
         canvasReady = frozenInAod = backdropHeld = autoCollapsed = false;
+        syncDepth();
         activeTrack = backdropTrack = "";
         resumeUntil = 0L;
         if (clockOwned) {
@@ -45,6 +46,23 @@ final class CanvasHostBridge {
     }
     static boolean hasBackgroundScene() { return canvasReady; }
     /** The extension already supplies its own live or frozen video backdrop. */
+    /** Whether the Canvas has the wallpaper's cut-out subject hidden (syncDepth). */
+    private static boolean depthHeld;
+
+    /**
+     * A depth-effect wallpaper's cut-out subject is drawn in SystemUI's window, over the Canvas
+     * seen through it: with the player in the pill nothing else hides it, and the subject stood
+     * on top of the video. It goes while the Canvas owns the backdrop, and comes back with it
+     * leaving unless the cover has it hidden anyway.
+     */
+    private static void syncDepth() {
+        boolean want = ownsVideoBackdrop();
+        if (want == depthHeld) return;
+        depthHeld = want;
+        if (want) Main.setDepthHidden(true);
+        else if (!Main.sCoverMode) Main.setDepthHidden(false);
+    }
+
     static boolean ownsVideoBackdrop() {
         return (canvasReady || frozenInAod)
                 && (showInPill || !MiniPlayerRuntime.canvasPlayerInPill());
@@ -185,6 +203,7 @@ final class CanvasHostBridge {
                 autoCollapsed = false;
             }
             sceneChanged();
+            syncDepth();
             String backdropIdentity = Main.canvasBackdropKey();
             if (ready && backdropAllowed && Main.screenOnCached() && !Main.coverModeOn()
                     && (!MiniPlayerRuntime.canvasPlayerInPill() || ready && showInPill)

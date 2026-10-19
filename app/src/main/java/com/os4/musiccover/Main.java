@@ -7510,6 +7510,11 @@ public class Main extends XposedModule {
 
     /** The full-screen destination is the sharp band in CoverCompose.composeWallpaper(). */
     static CoverMorphMotion.Box coverMorphTarget(Bitmap art) {
+        return coverMorphTarget(art, false);
+    }
+
+    /** [entering]: the cover is flying in; its card goes under the clock as it will end up. */
+    static CoverMorphMotion.Box coverMorphTarget(Bitmap art, boolean entering) {
         if (art == null || art.isRecycled()) return null;
         if (effectiveCoverStyle().mode == CoverCardStyle.FULL) {
             if (sScreenW <= 0 || sScreenH <= 0 || art.getWidth() <= 0) return null;
@@ -7533,12 +7538,18 @@ public class Main extends XposedModule {
         // Use the same aspect-aware placement as the card that receives the moving artwork.
         // A square reservation makes video thumbnails land small and grow again at handoff.
         float aspect = CoverCardStyle.aspect(art.getWidth(), art.getHeight());
-        CoverCardStyle.Rect r = effectiveCoverStyle().place(layer.getWidth(), layer.getHeight(),
+        // Flying in, the card's place is under the clock as it will be, not as it is: placed under
+        // the collapsing clock, a tall face held the flying cover small under it and let it grow
+        // only as fast as the clock shrank - a second, slower animation after the flight.
+        CoverCardStyle.Rect r = entering ? null : effectiveCoverStyle().place(layer.getWidth(), layer.getHeight(),
                 layer.getResources().getDisplayMetrics().density,
                 ClockCollapse.contentBottomFor(layer) - xy[1],
                 ClockCollapse.unzoomY(layer, mediaTop) - xy[1], aspect);
-        // Start the morph even when the old native clock has not made room for the cover yet.
-        if (r == null && sScreenOn && CoverCardStyle.usesNativeClock(aspect)) {
+        // Start the morph even when the old native clock has not made room for the cover yet:
+        // entering from the player, the full clock is still up and a tall face leaves no room,
+        // so the cover's own clock pose is what the card is placed under. Asked only for
+        // native-size (non-square) art, a square cover had no target and no morph at all.
+        if (r == null && sScreenOn) {
             r = effectiveCoverStyle().place(layer.getWidth(), layer.getHeight(),
                     layer.getResources().getDisplayMetrics().density,
                     ClockCollapse.compactContentBottomFor(layer) - xy[1],
@@ -7905,6 +7916,11 @@ public class Main extends XposedModule {
     static void setDepthHidden(final boolean hide, final int attempt) {
         // Whoever asks, the cut-out stays hidden while something has the lock screen: the video
         // cover's late hand-back (CoverPush.dropVideoCover) cannot know an immersive page is up.
+        // Nor while the Canvas is the backdrop: the subject would stand over the video.
+        if (!hide && CanvasHostBridge.ownsVideoBackdrop()) {
+            if (attempt == 0) Xp.log(TAG + "deducted_image_view kept hidden: Canvas backdrop");
+            return;
+        }
         if (!hide && !LockHold.depthFree()) {
             if (attempt == 0) Xp.log(TAG + "deducted_image_view kept hidden: " + LockHold.describe());
             return;
