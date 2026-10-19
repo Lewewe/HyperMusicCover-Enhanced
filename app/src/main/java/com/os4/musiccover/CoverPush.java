@@ -1524,7 +1524,7 @@ final class CoverPush {
     private static volatile int sMissingArtworkGen = -1;
 
     private static boolean artworkRefreshActive() {
-        return Main.sCoverMode || CanvasHostBridge.needsArtworkRefresh();
+        return Main.sCoverMode;
     }
 
     private static final Runnable sQualityRefresh = new Runnable() {

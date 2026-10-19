@@ -10033,7 +10033,6 @@ public class Main extends XposedModule {
                         if (sCoverWanted) attachCover();
                         onMediaUpdate();
                         CoverPush.watchMetadataArtwork();
-                        if (CanvasHostBridge.needsArtworkRefresh()) CoverPush.refreshArtworkQuality();
                     }
 
                     @Override
@@ -10815,7 +10814,7 @@ public class Main extends XposedModule {
      */
     private static void onLockTap(float y) {
         if (!singleCoverTapEnabled()) return;
-        // Background-only Canvas and its artwork fallback open solely from the player artwork.
+        // Background-only Canvas opens solely from the player artwork.
         if (!sCoverMode && CanvasHostBridge.backgroundOnly()) return;
         if (!screenOn() || !keyguardShowing()) return;
         // Only the keyguard shows the clock container, so this is also what rules out the shade

@@ -16,7 +16,6 @@ final class CanvasHostBridge {
     private static long resumeUntil;
     private static boolean backdropHeld;
     private static String backdropTrack = "";
-    private static boolean fallbackBackdrop;
     private static boolean backdropAllowed = true;
     private static boolean showInPill;
     private static boolean frozenInAod;
@@ -28,9 +27,9 @@ final class CanvasHostBridge {
     /** The extension's last word, for a release decided between its frames. */
     private static boolean lastReady, lastTemporary;
     static void suspendForBackdrop() {
-        if (!Main.sHidePlayerBackground || !canvasReady && !fallbackBackdrop && !frozenInAod
+        if (!Main.sHidePlayerBackground || !canvasReady && !frozenInAod
                 && !backdropHeld && !clockOwned && !autoCollapsed) return;
-        canvasReady = fallbackBackdrop = frozenInAod = backdropHeld = autoCollapsed = false;
+        canvasReady = frozenInAod = backdropHeld = autoCollapsed = false;
         activeTrack = backdropTrack = "";
         resumeUntil = 0L;
         if (clockOwned) {
@@ -42,9 +41,9 @@ final class CanvasHostBridge {
     }
     static boolean keepsClockInAod() {
         return !MiniPlayerRuntime.canvasPlayerInPill()
-                && (canvasReady || frozenInAod || fallbackBackdrop);
+                && (canvasReady || frozenInAod);
     }
-    static boolean hasBackgroundScene() { return canvasReady || fallbackBackdrop; }
+    static boolean hasBackgroundScene() { return canvasReady; }
     /** The extension already supplies its own live or frozen video backdrop. */
     static boolean ownsVideoBackdrop() {
         return (canvasReady || frozenInAod)
@@ -55,31 +54,23 @@ final class CanvasHostBridge {
         if (MiniPlayerRuntime.canvasPlayerInPill())
             return showInPill && canvasReady && backdropAllowed && Main.screenOnCached();
         if (frozenInAod && !Main.screenOnCached()) return true;
-        // Static artwork can remain in AOD even though the video surface is removed.
-        if (fallbackBackdrop && (backdropAllowed || !Main.screenOnCached())) return true;
         return Main.screenOnCached() && backdropAllowed && (active() || nativeClockScene());
     }
     static void backdropRetained() {
         // Keeping the outgoing bitmap does not mean artwork for the new track was loaded.
         backdropHeld = true;
     }
-    static boolean needsArtworkRefresh() {
-        return fallbackBackdrop && backdropAllowed && Main.screenOnCached()
-                && !MiniPlayerRuntime.canvasPlayerInPill();
-    }
     static boolean backgroundOnly() {
-        return active() || nativeClockScene() || fallbackBackdrop;
+        return active() || nativeClockScene();
     }
     static boolean nativeClockScene() { return clockOwned && !Main.coverModeOn(); }
     static void waking() {
-        if (clockOwned && (!activeTrack.isEmpty() || fallbackBackdrop)) resumeUntil = android.os.SystemClock.uptimeMillis() + 5000L;
+        if (clockOwned && !activeTrack.isEmpty()) resumeUntil = android.os.SystemClock.uptimeMillis() + 5000L;
     }
     private static void syncClock() {
         // Screen-off removes the video, but the clock's AOD flight must finish on its own.
-        // The artwork fallback is still the same expanded player scene after Canvas ends.
         boolean keep = !Main.coverModeOn() && !MiniPlayerRuntime.canvasPlayerInPill()
                 && (canvasReady && backdropAllowed && Main.screenOnCached()
-                || fallbackBackdrop && backdropAllowed && Main.screenOnCached()
                 || clockOwned && (!Main.screenOnCached()
                     || android.os.SystemClock.uptimeMillis() < resumeUntil));
         if (clockOwned == keep) return;
@@ -116,7 +107,7 @@ final class CanvasHostBridge {
         if (!backdropHeld || keepPaletteBackdrop()) return;
         boolean screenOn = Main.screenOnCached();
         if (backdropAllowed && screenOn && !MiniPlayerRuntime.canvasPlayerInPill()
-                && (lastReady || fallbackBackdrop || lastTemporary)) return;
+                && (lastReady || lastTemporary)) return;
         backdropHeld = false;
         backdropTrack = "";
         if (!Main.coverModeOn()) CoverPush.pushArtAsync(false, false);
@@ -157,12 +148,12 @@ final class CanvasHostBridge {
             boolean wasReady = canvasReady;
             showInPill = intent.getBooleanExtra("showInPill", false);
             frozenInAod = intent.getBooleanExtra("frozenInAod", false);
-            // A track without video retains the normal artwork backdrop, not a tappable cover.
             backdropAllowed = intent.getBooleanExtra("backdropAllowed", true);
-            if (ready) fallbackBackdrop = false;
-            else if (intent.getBooleanExtra("artworkFallback", false))
-                fallbackBackdrop = wasReady || fallbackBackdrop || backdropHeld;
-            else if (!temporary) fallbackBackdrop = false;
+            // The extension's "artworkFallback" - a track without video after one with it - is
+            // not taken up: such a track is presented as if there were no extension at all, the
+            // normal cover and pill over the user's own wallpaper. Holding its artwork behind the
+            // expanded player instead kept a tap on the clock from reaching the pill, and on a
+            // shared video wallpaper put the album art on the desktop too.
             canvasReady = ready;
             if (ready || !temporary) resumeUntil = 0L;
             else if (clockOwned && backdropAllowed && Main.screenOnCached() && resumeUntil == 0L) {
@@ -189,15 +180,13 @@ final class CanvasHostBridge {
             } else if (!temporary) {
                 activeTrack = "";
                 // Back to the cover only for a track without Canvas, not for music that has stopped.
-                if (autoCollapsed && !sessionEnded && !fallbackBackdrop && !Main.coverModeOn() && Main.screenOn()
+                if (autoCollapsed && !sessionEnded && !Main.coverModeOn() && Main.screenOn()
                         && !MiniPlayerRuntime.canvasPlayerInPill()) Main.miniPlayerEnterCover();
                 autoCollapsed = false;
             }
             sceneChanged();
             String backdropIdentity = Main.canvasBackdropKey();
-            if ((ready || fallbackBackdrop)
-                    && (backdropAllowed && Main.screenOnCached()
-                        || fallbackBackdrop && !Main.screenOnCached()) && !Main.coverModeOn()
+            if (ready && backdropAllowed && Main.screenOnCached() && !Main.coverModeOn()
                     && (!MiniPlayerRuntime.canvasPlayerInPill() || ready && showInPill)
                     && (!backdropHeld || !backdropIdentity.equals(backdropTrack))) {
                 // The glass clock samples the wallpaper behind the video, so retain music there.
