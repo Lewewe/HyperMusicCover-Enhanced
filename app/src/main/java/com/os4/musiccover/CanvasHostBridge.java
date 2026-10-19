@@ -21,6 +21,10 @@ final class CanvasHostBridge {
     private static boolean showInPill;
     private static boolean frozenInAod;
     private static boolean statusCanvas;
+    /** When the awake lock screen last started reporting no Spotify session; 0 = it has one. */
+    private static long sessionGoneSince;
+    /** Longer than a buffering gap between tracks; past it the session has ended. */
+    private static final long SESSION_GONE_MS = 2500L;
     static void suspendForBackdrop() {
         if (!Main.sHidePlayerBackground || !canvasReady && !fallbackBackdrop && !frozenInAod
                 && !backdropHeld && !clockOwned && !autoCollapsed) return;
@@ -119,6 +123,21 @@ final class CanvasHostBridge {
             }
             if (ready && (Main.miniPlayerSession() == null || !"com.spotify.music".equals(Main.miniPlayerSession().getPackageName()))) return out;
             sceneContext = context.getApplicationContext();
+            // "temporary" means the session may come back - buffering between tracks. On the awake
+            // lock screen one that stays away has ended, and treating it as temporary forever kept
+            // the retained artwork backdrop up until the next screen-off: the previous song's
+            // (often frosted) cover over the user's own wallpaper, a video one included.
+            boolean temporary = intent.getBooleanExtra("temporary", false);
+            boolean sessionEnded = false;
+            long now = android.os.SystemClock.uptimeMillis();
+            if (ready || !temporary || !Main.screenOnCached() || !Main.onKeyguardNow()) {
+                sessionGoneSince = 0L;
+            } else if (sessionGoneSince == 0L) {
+                sessionGoneSince = now;
+            } else if (now - sessionGoneSince >= SESSION_GONE_MS) {
+                temporary = false;
+                sessionEnded = true;
+            }
             boolean wasReady = canvasReady;
             showInPill = intent.getBooleanExtra("showInPill", false);
             frozenInAod = intent.getBooleanExtra("frozenInAod", false);
@@ -127,9 +146,9 @@ final class CanvasHostBridge {
             if (ready) fallbackBackdrop = false;
             else if (intent.getBooleanExtra("artworkFallback", false))
                 fallbackBackdrop = wasReady || fallbackBackdrop || backdropHeld;
-            else if (!intent.getBooleanExtra("temporary", false)) fallbackBackdrop = false;
+            else if (!temporary) fallbackBackdrop = false;
             canvasReady = ready;
-            if (ready || !intent.getBooleanExtra("temporary", false)) resumeUntil = 0L;
+            if (ready || !temporary) resumeUntil = 0L;
             else if (clockOwned && backdropAllowed && Main.screenOnCached() && resumeUntil == 0L) {
                 // A buffering session can disappear briefly between adjacent tracks.
                 resumeUntil = android.os.SystemClock.uptimeMillis() + 1500L;
@@ -149,9 +168,10 @@ final class CanvasHostBridge {
                         autoCollapsed = true;
                     }
                 } else if (Main.coverModeOn() && !LockLyrics.wantsCompactArtwork()) autoCollapsed = false;
-            } else if (!intent.getBooleanExtra("temporary", false)) {
+            } else if (!temporary) {
                 activeTrack = "";
-                if (autoCollapsed && !fallbackBackdrop && !Main.coverModeOn() && Main.screenOn()
+                // Back to the cover only for a track without Canvas, not for music that has stopped.
+                if (autoCollapsed && !sessionEnded && !fallbackBackdrop && !Main.coverModeOn() && Main.screenOn()
                         && !MiniPlayerRuntime.canvasPlayerInPill()) Main.miniPlayerEnterCover();
                 autoCollapsed = false;
             }
@@ -172,7 +192,7 @@ final class CanvasHostBridge {
                     && (!backdropAllowed || !Main.screenOnCached()
                     || MiniPlayerRuntime.canvasPlayerInPill()
                     || !ready && !fallbackBackdrop
-                    && (!Main.screenOnCached() || !intent.getBooleanExtra("temporary", false)))) {
+                    && (!Main.screenOnCached() || !temporary))) {
                 backdropHeld = false;
                 backdropTrack = "";
                 if (!Main.coverModeOn()) CoverPush.pushArtAsync(false, false);
