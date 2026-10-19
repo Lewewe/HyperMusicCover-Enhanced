@@ -506,7 +506,7 @@ final class CoverPush {
                     // exactly the way deducted_image_view did on the image path.
                     Main.setDepthHidden(true);
                     guardVideoCover(iv);
-                    iv.setVisibility(CoverBackdrop.hidden() ? View.INVISIBLE : View.VISIBLE);
+                    iv.setVisibility(videoCoverSuppressed() ? View.INVISIBLE : View.VISIBLE);
 
                     // Fade in to bridge FastPlayer's first frame render (~120-150ms), so the
                     // background and the card's blur do not change on two different frames. OWED
@@ -668,14 +668,15 @@ final class CoverPush {
                 // this full-screen (frosted) artwork stays down on the lock screen too. Without
                 // this the guard put it back on the next frame after anything hid it.
                 boolean backdropHidden = CoverBackdrop.hidden();
-                int want = onKeyguard && !backdropHidden ? View.VISIBLE : View.INVISIBLE;
+                boolean suppressed = videoCoverSuppressed();
+                int want = onKeyguard && !suppressed ? View.VISIBLE : View.INVISIBLE;
                 if (cover.getVisibility() != want) cover.setVisibility(want);
                 if (asleep && cover.getAlpha() > 0f) {
                     cover.animate().cancel();
                     cover.setAlpha(0f);
                     if (sCoverFadeWaitMs <= 0) sCoverFadeWaitMs = coverFadeMs();
                 }
-                if (onKeyguard && !backdropHidden) {
+                if (onKeyguard && !suppressed) {
                     // The one place the cover's fade can start from. This runs on the frame the
                     // cover is really being drawn in, which is the frame the fade is for - the
                     // push that armed it happens whenever the broadcast does. See
@@ -987,6 +988,21 @@ final class CoverPush {
 
     private static float alphaOf(View v) {
         return v == null ? -1f : v.getAlpha();
+    }
+
+    /**
+     * Whether the video cover stays down on the lock screen even in cover mode.
+     *
+     * Besides wallpaper background mode, that is while Spotify Canvas owns the backdrop. The
+     * Canvas is a SurfaceView, composed BEHIND SystemUI's window and seen through a hole in it.
+     * On a still wallpaper the cover lives in the wallpaper window, below that, so the Canvas
+     * shows; this cover is a view inside SystemUI's window, so it painted over the hole and the
+     * lyrics and the card stood on the frosted album art instead (measured on device: the
+     * SurfaceView at z=-2 under NotificationShade, the cover view shown above it). The Canvas
+     * dims and blurs itself for those scenes, so nothing of ours is needed over it.
+     */
+    static boolean videoCoverSuppressed() {
+        return CoverBackdrop.hidden() || CanvasHostBridge.ownsVideoBackdrop();
     }
 
     /** The live wallpaper's video, given back while its own wallpaper is the backdrop. */

@@ -55,7 +55,8 @@ final class CoverBackdrop {
         putState(out);
         if (Main.sAppCtx != null) ProbeGuard.send(Main.sAppCtx, out);
         if (Main.sVideoWallpaper && Main.sCover != null)
-            Main.sCover.setVisibility(next ? android.view.View.INVISIBLE : android.view.View.VISIBLE);
+            Main.sCover.setVisibility(CoverPush.videoCoverSuppressed()
+                    ? android.view.View.INVISIBLE : android.view.View.VISIBLE);
     }
 
     /** A lyricless compact player leaves the native wallpaper and clock unobstructed. */
