@@ -263,7 +263,7 @@ final class Prefetch {
             if (art != null && !art.isRecycled()
                     && (best == null || CoverPush.isArtworkUpgrade(best.getWidth(), best.getHeight(),
                             art.getWidth(), art.getHeight()))) best = art;
-            if (best != null && !CoverPush.shouldSoftenArtwork(best.getWidth(), best.getHeight())) {
+            if (best != null && CoverPush.fullSizeArtwork(best.getWidth(), best.getHeight())) {
                 break;
             }
         }

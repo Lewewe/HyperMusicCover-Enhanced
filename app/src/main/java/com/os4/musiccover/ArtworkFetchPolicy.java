@@ -22,10 +22,6 @@ final class ArtworkFetchPolicy {
         return value;
     }
 
-    static boolean finalKugouSessionArtwork(String packageName, int width, int height) {
-        return "com.kugou.android".equals(packageName) && width == height && width >= 360;
-    }
-
     boolean coolingDown(String key, long now) {
         Long failedAt = failures.get(key);
         if (failedAt == null) return false;

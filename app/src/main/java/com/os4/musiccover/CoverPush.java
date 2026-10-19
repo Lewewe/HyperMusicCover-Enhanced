@@ -82,21 +82,15 @@ final class CoverPush {
     };
 
     static boolean shouldSoftenArtwork(int width, int height) {
-        // Players can publish final artwork at 500x500 (Salt) or 480x270 (YouTube).
-        // Requiring 512 for square covers falsely treats their original bitmap as a thumbnail.
+        // Only true thumbnails wait for a sharper bitmap; players publish their final artwork
+        // anywhere from 360px (NetEase, KuGou) to 400px (md3music) and up, never upgraded.
         if (width <= 0 || height <= 0) return false;
-        return Math.max(width, height) < 480;
+        return Math.max(width, height) < 300;
     }
 
-    static boolean shouldSoftenArtwork(String packageName, int width, int height) {
-        // NetEase publishes final square session artwork at 363px on the tested device.
-        // Keep genuinely small thumbnails guarded without waiting for a nonexistent upgrade.
-        if ("com.netease.cloudmusic".equals(packageName) && width == height && width >= 360) {
-            return false;
-        }
-        // KuGou publishes its complete session cover at 360px, with no artwork URI.
-        if (ArtworkFetchPolicy.finalKugouSessionArtwork(packageName, width, height)) return false;
-        return shouldSoftenArtwork(width, height);
+    /** Big enough to stop looking for a larger copy (Salt publishes 500x500, YouTube 480x270). */
+    static boolean fullSizeArtwork(int width, int height) {
+        return Math.max(width, height) >= 480;
     }
 
     private static void clearSoftArtwork() {
@@ -123,8 +117,7 @@ final class CoverPush {
                                            int gen, String key) {
         if (!currentPush(gen, key)) return;
         clearSoftArtwork();
-        if (!on || art == null || !shouldSoftenArtwork(Main.artworkTrackPackage(key == null ? Main.sTrackKey : key),
-                art.getWidth(), art.getHeight())
+        if (!on || art == null || !shouldSoftenArtwork(art.getWidth(), art.getHeight())
                 || sAcceptedArtwork.accepted(key == null ? Main.sTrackKey : key,
                     artPrint(art), art.getWidth(), art.getHeight())) {
             pushRenderedArtToWallpaper(ctx, on, art, false, gen, key);
@@ -1641,7 +1634,7 @@ final class CoverPush {
     }
 
     private static void startArtworkQualityWatch(Context ctx, int gen, String key) {
-        if (sSoftArtGen != gen || !shouldSoftenArtwork(Main.artworkTrackPackage(key), sArtW, sArtH)) return;
+        if (sSoftArtGen != gen || !shouldSoftenArtwork(sArtW, sArtH)) return;
         watchArtworkQuality(ctx, gen, key, QUALITY_CHECKS);
     }
 
@@ -1657,13 +1650,13 @@ final class CoverPush {
                         || !artworkRefreshActive()
                         || sSoftArtGen != gen
                         || !Main.sameTrack(key, Main.sTrackKey)
-                        || !shouldSoftenArtwork(Main.artworkTrackPackage(key), sArtW, sArtH)) {
+                        || !shouldSoftenArtwork(sArtW, sArtH)) {
                     return;
                 }
 
                 upgradeArtwork(ctx, gen, key, true);
 
-                if (remaining > 1 && shouldSoftenArtwork(Main.artworkTrackPackage(key), sArtW, sArtH)) {
+                if (remaining > 1 && shouldSoftenArtwork(sArtW, sArtH)) {
                     watchArtworkQuality(ctx, gen, key, remaining - 1);
                 } else {
                     finishArtworkQualityWatch(ctx, gen, key);
@@ -1774,7 +1767,7 @@ final class CoverPush {
                         && ArtworkChangePolicy.changed(Main.sTrackKey, sArtW, sArtH, sArtPixels,
                             art.getWidth(), art.getHeight(), artworkPixels(art));
                 boolean awaitingUri = art != null
-                        && shouldSoftenArtwork(Main.artworkTrackPackage(key), art.getWidth(), art.getHeight())
+                        && shouldSoftenArtwork(art.getWidth(), art.getHeight())
                         && Prefetch.currentArtworkPending(key);
                 boolean stale = fresh && !presentationChanged
                         && art != null

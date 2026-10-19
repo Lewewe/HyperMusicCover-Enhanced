@@ -17,14 +17,6 @@ public class ArtworkFetchPolicyTest {
         }
     }
 
-    @Test public void finalKugouCoverDoesNotWaitForAnUnavailableLargerBitmap() {
-        assertTrue(ArtworkFetchPolicy.finalKugouSessionArtwork("com.kugou.android", 360, 360));
-        assertTrue(ArtworkFetchPolicy.finalKugouSessionArtwork("com.kugou.android", 400, 400));
-        assertFalse(ArtworkFetchPolicy.finalKugouSessionArtwork("com.kugou.android", 256, 256));
-        assertFalse(ArtworkFetchPolicy.finalKugouSessionArtwork("other.player", 360, 360));
-        assertFalse(ArtworkFetchPolicy.finalKugouSessionArtwork("com.kugou.android", 360, 240));
-    }
-
     @Test public void failedReadDoesNotKeepEveryMetadataUpdateWaiting() {
         ArtworkFetchPolicy policy = new ArtworkFetchPolicy();
         policy.failed("cover-a", 100);
