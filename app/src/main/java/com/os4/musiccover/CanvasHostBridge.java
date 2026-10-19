@@ -25,6 +25,8 @@ final class CanvasHostBridge {
     private static long sessionGoneSince;
     /** Longer than a buffering gap between tracks; past it the session has ended. */
     private static final long SESSION_GONE_MS = 2500L;
+    /** The extension's last word, for a release decided between its frames. */
+    private static boolean lastReady, lastTemporary;
     static void suspendForBackdrop() {
         if (!Main.sHidePlayerBackground || !canvasReady && !fallbackBackdrop && !frozenInAod
                 && !backdropHeld && !clockOwned && !autoCollapsed) return;
@@ -97,6 +99,10 @@ final class CanvasHostBridge {
     static void sceneChanged() {
         syncClock();
         refreshStatusColors();
+        // Here as well as on the extension's frames: those come 0.7s apart at best, and the
+        // player going to the pill waited for the next one - 1.2-2.6s measured between the
+        // swipe and the wallpaper coming back, felt as lag on a video wallpaper.
+        releaseBackdrop();
         if (!canvasReady || sceneContext == null) return;
         boolean next = Main.coverModeOn() && (!LockLyrics.wantsCompactArtwork() || LockLyrics.wantsWindow());
         boolean visible = showInPill || !MiniPlayerRuntime.canvasPlayerInPill();
@@ -104,6 +110,16 @@ final class CanvasHostBridge {
         lastScene = next;
         lastVisible = visible;
         sceneContext.sendBroadcast(new Intent("com.os4.canvas.SCENE_CHANGED").setPackage("com.android.systemui"));
+    }
+    /** Drops the retained artwork backdrop once nothing is showing it any more. */
+    private static void releaseBackdrop() {
+        if (!backdropHeld || keepPaletteBackdrop()) return;
+        boolean screenOn = Main.screenOnCached();
+        if (backdropAllowed && screenOn && !MiniPlayerRuntime.canvasPlayerInPill()
+                && (lastReady || fallbackBackdrop || lastTemporary)) return;
+        backdropHeld = false;
+        backdropTrack = "";
+        if (!Main.coverModeOn()) CoverPush.pushArtAsync(false, false);
     }
     static boolean active() { return canvasReady && !MiniPlayerRuntime.canvasPlayerInPill() && Main.screenOnCached() && android.os.SystemClock.uptimeMillis() - lastFrame < 2500L; }
     static Bundle frame(Context context, Intent intent) {
@@ -154,6 +170,8 @@ final class CanvasHostBridge {
                 resumeUntil = android.os.SystemClock.uptimeMillis() + 1500L;
             }
             lastFrame = android.os.SystemClock.uptimeMillis();
+            lastReady = ready;
+            lastTemporary = temporary;
             if (wasReady != canvasReady) {
                 Main.refreshCanvasControls();
                 Main.recolorClock();
@@ -188,15 +206,7 @@ final class CanvasHostBridge {
                     backdropTrack = backdropIdentity;
                     CoverPush.pushArtAsync(true, true);
                 }
-            } else if (backdropHeld && !keepPaletteBackdrop()
-                    && (!backdropAllowed || !Main.screenOnCached()
-                    || MiniPlayerRuntime.canvasPlayerInPill()
-                    || !ready && !fallbackBackdrop
-                    && (!Main.screenOnCached() || !temporary))) {
-                backdropHeld = false;
-                backdropTrack = "";
-                if (!Main.coverModeOn()) CoverPush.pushArtAsync(false, false);
-            }
+            } else releaseBackdrop();
             out.putBoolean("canvasBouncer", Main.bouncerShown());
             out.putBoolean("canvasVisible", showInPill || !MiniPlayerRuntime.canvasPlayerInPill());
             out.putBoolean("canvasLarge", Main.coverModeOn() && (!LockLyrics.wantsCompactArtwork() || LockLyrics.wantsWindow()));

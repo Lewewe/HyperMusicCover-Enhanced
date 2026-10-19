@@ -216,8 +216,13 @@ final class CoverPush {
             CoverCardLayer.clear();
             if (Main.sVideoWallpaper) showVideoCover(ctx, false, null, null, 0, gen, key);
             out.putExtra("off", true);
-            if (CanvasHostBridge.keepPaletteBackdrop()) CanvasHostBridge.backdropRetained();
-            else ProbeGuard.send(ctx, out);
+            if (CanvasHostBridge.keepPaletteBackdrop()) {
+                CanvasHostBridge.backdropRetained();
+                // The window keeps this very cover, so the reload the video cover's fade-out is
+                // held for never comes: it sat out its whole 1.8s timeout on every tap out.
+                if (Main.sVideoWallpaper) Main.main().post(
+                        () -> releaseCoverFadeWait("the cover stays on the wallpaper window"));
+            } else ProbeGuard.send(ctx, out);
             if (!CanvasHostBridge.keepPaletteBackdrop()) Main.sTrackKey = "";
             // Nothing behind the clock any more, so nothing to take a colour from. The repaint
             // that hands the OEM's own colours back happens with the rest of cover mode.
