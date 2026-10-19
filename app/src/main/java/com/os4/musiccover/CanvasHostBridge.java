@@ -16,15 +16,21 @@ final class CanvasHostBridge {
     private static long resumeUntil;
     private static boolean backdropHeld;
     private static String backdropTrack = "";
-    private static boolean fallbackBackdrop;
     private static boolean backdropAllowed = true;
     private static boolean showInPill;
     private static boolean frozenInAod;
     private static boolean statusCanvas;
+    /** When the awake lock screen last started reporting no Spotify session; 0 = it has one. */
+    private static long sessionGoneSince;
+    /** Longer than a buffering gap between tracks; past it the session has ended. */
+    private static final long SESSION_GONE_MS = 2500L;
+    /** The extension's last word, for a release decided between its frames. */
+    private static boolean lastReady, lastTemporary;
     static void suspendForBackdrop() {
-        if (!Main.sHidePlayerBackground || !canvasReady && !fallbackBackdrop && !frozenInAod
+        if (!Main.sHidePlayerBackground || !canvasReady && !frozenInAod
                 && !backdropHeld && !clockOwned && !autoCollapsed) return;
-        canvasReady = fallbackBackdrop = frozenInAod = backdropHeld = autoCollapsed = false;
+        canvasReady = frozenInAod = backdropHeld = autoCollapsed = false;
+        syncDepth();
         activeTrack = backdropTrack = "";
         resumeUntil = 0L;
         if (clockOwned) {
@@ -36,10 +42,27 @@ final class CanvasHostBridge {
     }
     static boolean keepsClockInAod() {
         return !MiniPlayerRuntime.canvasPlayerInPill()
-                && (canvasReady || frozenInAod || fallbackBackdrop);
+                && (canvasReady || frozenInAod);
     }
-    static boolean hasBackgroundScene() { return canvasReady || fallbackBackdrop; }
+    static boolean hasBackgroundScene() { return canvasReady; }
     /** The extension already supplies its own live or frozen video backdrop. */
+    /** Whether the Canvas has the wallpaper's cut-out subject hidden (syncDepth). */
+    private static boolean depthHeld;
+
+    /**
+     * A depth-effect wallpaper's cut-out subject is drawn in SystemUI's window, over the Canvas
+     * seen through it: with the player in the pill nothing else hides it, and the subject stood
+     * on top of the video. It goes while the Canvas owns the backdrop, and comes back with it
+     * leaving unless the cover has it hidden anyway.
+     */
+    private static void syncDepth() {
+        boolean want = ownsVideoBackdrop();
+        if (want == depthHeld) return;
+        depthHeld = want;
+        if (want) Main.setDepthHidden(true);
+        else if (!Main.sCoverMode) Main.setDepthHidden(false);
+    }
+
     static boolean ownsVideoBackdrop() {
         return (canvasReady || frozenInAod)
                 && (showInPill || !MiniPlayerRuntime.canvasPlayerInPill());
@@ -49,31 +72,23 @@ final class CanvasHostBridge {
         if (MiniPlayerRuntime.canvasPlayerInPill())
             return showInPill && canvasReady && backdropAllowed && Main.screenOnCached();
         if (frozenInAod && !Main.screenOnCached()) return true;
-        // Static artwork can remain in AOD even though the video surface is removed.
-        if (fallbackBackdrop && (backdropAllowed || !Main.screenOnCached())) return true;
         return Main.screenOnCached() && backdropAllowed && (active() || nativeClockScene());
     }
     static void backdropRetained() {
         // Keeping the outgoing bitmap does not mean artwork for the new track was loaded.
         backdropHeld = true;
     }
-    static boolean needsArtworkRefresh() {
-        return fallbackBackdrop && backdropAllowed && Main.screenOnCached()
-                && !MiniPlayerRuntime.canvasPlayerInPill();
-    }
     static boolean backgroundOnly() {
-        return active() || nativeClockScene() || fallbackBackdrop;
+        return active() || nativeClockScene();
     }
     static boolean nativeClockScene() { return clockOwned && !Main.coverModeOn(); }
     static void waking() {
-        if (clockOwned && (!activeTrack.isEmpty() || fallbackBackdrop)) resumeUntil = android.os.SystemClock.uptimeMillis() + 5000L;
+        if (clockOwned && !activeTrack.isEmpty()) resumeUntil = android.os.SystemClock.uptimeMillis() + 5000L;
     }
     private static void syncClock() {
         // Screen-off removes the video, but the clock's AOD flight must finish on its own.
-        // The artwork fallback is still the same expanded player scene after Canvas ends.
         boolean keep = !Main.coverModeOn() && !MiniPlayerRuntime.canvasPlayerInPill()
                 && (canvasReady && backdropAllowed && Main.screenOnCached()
-                || fallbackBackdrop && backdropAllowed && Main.screenOnCached()
                 || clockOwned && (!Main.screenOnCached()
                     || android.os.SystemClock.uptimeMillis() < resumeUntil));
         if (clockOwned == keep) return;
@@ -93,6 +108,10 @@ final class CanvasHostBridge {
     static void sceneChanged() {
         syncClock();
         refreshStatusColors();
+        // Here as well as on the extension's frames: those come 0.7s apart at best, and the
+        // player going to the pill waited for the next one - 1.2-2.6s measured between the
+        // swipe and the wallpaper coming back, felt as lag on a video wallpaper.
+        releaseBackdrop();
         if (!canvasReady || sceneContext == null) return;
         boolean next = Main.coverModeOn() && (!LockLyrics.wantsCompactArtwork() || LockLyrics.wantsWindow());
         boolean visible = showInPill || !MiniPlayerRuntime.canvasPlayerInPill();
@@ -100,6 +119,16 @@ final class CanvasHostBridge {
         lastScene = next;
         lastVisible = visible;
         sceneContext.sendBroadcast(new Intent("com.os4.canvas.SCENE_CHANGED").setPackage("com.android.systemui"));
+    }
+    /** Drops the retained artwork backdrop once nothing is showing it any more. */
+    private static void releaseBackdrop() {
+        if (!backdropHeld || keepPaletteBackdrop()) return;
+        boolean screenOn = Main.screenOnCached();
+        if (backdropAllowed && screenOn && !MiniPlayerRuntime.canvasPlayerInPill()
+                && (lastReady || lastTemporary)) return;
+        backdropHeld = false;
+        backdropTrack = "";
+        if (!Main.coverModeOn()) CoverPush.pushArtAsync(false, false);
     }
     static boolean active() { return canvasReady && !MiniPlayerRuntime.canvasPlayerInPill() && Main.screenOnCached() && android.os.SystemClock.uptimeMillis() - lastFrame < 2500L; }
     static Bundle frame(Context context, Intent intent) {
@@ -119,22 +148,39 @@ final class CanvasHostBridge {
             }
             if (ready && (Main.miniPlayerSession() == null || !"com.spotify.music".equals(Main.miniPlayerSession().getPackageName()))) return out;
             sceneContext = context.getApplicationContext();
+            // "temporary" means the session may come back - buffering between tracks. On the awake
+            // lock screen one that stays away has ended, and treating it as temporary forever kept
+            // the retained artwork backdrop up until the next screen-off: the previous song's
+            // (often frosted) cover over the user's own wallpaper, a video one included.
+            boolean temporary = intent.getBooleanExtra("temporary", false);
+            boolean sessionEnded = false;
+            long now = android.os.SystemClock.uptimeMillis();
+            if (ready || !temporary || !Main.screenOnCached() || !Main.onKeyguardNow()) {
+                sessionGoneSince = 0L;
+            } else if (sessionGoneSince == 0L) {
+                sessionGoneSince = now;
+            } else if (now - sessionGoneSince >= SESSION_GONE_MS) {
+                temporary = false;
+                sessionEnded = true;
+            }
             boolean wasReady = canvasReady;
             showInPill = intent.getBooleanExtra("showInPill", false);
             frozenInAod = intent.getBooleanExtra("frozenInAod", false);
-            // A track without video retains the normal artwork backdrop, not a tappable cover.
             backdropAllowed = intent.getBooleanExtra("backdropAllowed", true);
-            if (ready) fallbackBackdrop = false;
-            else if (intent.getBooleanExtra("artworkFallback", false))
-                fallbackBackdrop = wasReady || fallbackBackdrop || backdropHeld;
-            else if (!intent.getBooleanExtra("temporary", false)) fallbackBackdrop = false;
+            // The extension's "artworkFallback" - a track without video after one with it - is
+            // not taken up: such a track is presented as if there were no extension at all, the
+            // normal cover and pill over the user's own wallpaper. Holding its artwork behind the
+            // expanded player instead kept a tap on the clock from reaching the pill, and on a
+            // shared video wallpaper put the album art on the desktop too.
             canvasReady = ready;
-            if (ready || !intent.getBooleanExtra("temporary", false)) resumeUntil = 0L;
+            if (ready || !temporary) resumeUntil = 0L;
             else if (clockOwned && backdropAllowed && Main.screenOnCached() && resumeUntil == 0L) {
                 // A buffering session can disappear briefly between adjacent tracks.
                 resumeUntil = android.os.SystemClock.uptimeMillis() + 1500L;
             }
             lastFrame = android.os.SystemClock.uptimeMillis();
+            lastReady = ready;
+            lastTemporary = temporary;
             if (wasReady != canvasReady) {
                 Main.refreshCanvasControls();
                 Main.recolorClock();
@@ -149,17 +195,17 @@ final class CanvasHostBridge {
                         autoCollapsed = true;
                     }
                 } else if (Main.coverModeOn() && !LockLyrics.wantsCompactArtwork()) autoCollapsed = false;
-            } else if (!intent.getBooleanExtra("temporary", false)) {
+            } else if (!temporary) {
                 activeTrack = "";
-                if (autoCollapsed && !fallbackBackdrop && !Main.coverModeOn() && Main.screenOn()
+                // Back to the cover only for a track without Canvas, not for music that has stopped.
+                if (autoCollapsed && !sessionEnded && !Main.coverModeOn() && Main.screenOn()
                         && !MiniPlayerRuntime.canvasPlayerInPill()) Main.miniPlayerEnterCover();
                 autoCollapsed = false;
             }
             sceneChanged();
+            syncDepth();
             String backdropIdentity = Main.canvasBackdropKey();
-            if ((ready || fallbackBackdrop)
-                    && (backdropAllowed && Main.screenOnCached()
-                        || fallbackBackdrop && !Main.screenOnCached()) && !Main.coverModeOn()
+            if (ready && backdropAllowed && Main.screenOnCached() && !Main.coverModeOn()
                     && (!MiniPlayerRuntime.canvasPlayerInPill() || ready && showInPill)
                     && (!backdropHeld || !backdropIdentity.equals(backdropTrack))) {
                 // The glass clock samples the wallpaper behind the video, so retain music there.
@@ -168,15 +214,7 @@ final class CanvasHostBridge {
                     backdropTrack = backdropIdentity;
                     CoverPush.pushArtAsync(true, true);
                 }
-            } else if (backdropHeld && !keepPaletteBackdrop()
-                    && (!backdropAllowed || !Main.screenOnCached()
-                    || MiniPlayerRuntime.canvasPlayerInPill()
-                    || !ready && !fallbackBackdrop
-                    && (!Main.screenOnCached() || !intent.getBooleanExtra("temporary", false)))) {
-                backdropHeld = false;
-                backdropTrack = "";
-                if (!Main.coverModeOn()) CoverPush.pushArtAsync(false, false);
-            }
+            } else releaseBackdrop();
             out.putBoolean("canvasBouncer", Main.bouncerShown());
             out.putBoolean("canvasVisible", showInPill || !MiniPlayerRuntime.canvasPlayerInPill());
             out.putBoolean("canvasLarge", Main.coverModeOn() && (!LockLyrics.wantsCompactArtwork() || LockLyrics.wantsWindow()));

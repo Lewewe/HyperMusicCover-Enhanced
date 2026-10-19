@@ -3906,31 +3906,26 @@ public class WallpaperProbe {
         });
     }
 
-    /** Within this distance of the end, a play-once wallpaper counts as finished. */
+    /** Within this distance of the end, a wallpaper of unknown kind counts as finished. */
     private static final long END_ZONE_MS = 150L;
-    /** Where a finished wallpaper parks: inside its final frame. */
-    private static final long PARK_FROM_END_MS = 40L;
     /** How far below the target a read-back may be before a seek counts as lost. */
     private static final long SEEK_TOLERANCE_MS = 400L;
     private static final long SEEK_VERIFY_MS = 250L;
 
     /**
-     * Puts the rebuilt player back where the user's video would have been had it kept playing
-     * behind the cover - the rebuild itself always starts from zero - and only then tells
-     * SystemUI, whose cover view is still up over the window until it hears it. A looping video
-     * wraps; a play-once video that would have finished parks on its last frame instead of
-     * replaying its ending.
+     * Puts the rebuilt player back where the user's video should be - the rebuild itself always
+     * starts from zero - and only then tells SystemUI, whose cover view is still up over the
+     * window until it hears it. A looping video resumes where it would have been; a play-once
+     * video plays again from the start (see restoreTarget()).
      */
     private static void restorePosition(final Object eng, final int gen, final String path,
                                         final long savedPos, final long savedAt,
                                         final boolean tell) {
         long dur = videoDurationMs(path);
-        long[] t = restoreTarget(path, savedPos, savedAt);
-        long target = t[0];
-        boolean park = t[1] != 0L;
+        long target = restoreTarget(path, savedPos, savedAt);
         Xp.log(TAG + "restore: saved " + savedPos + "ms, target " + target + "ms of " + dur
-                + "ms, loops=" + sLockLoops + (park ? ", parking on the last frame" : ""));
-        if (target <= 100L && !park) {
+                + "ms, loops=" + sLockLoops);
+        if (target <= 100L) {
             if (tell) tellSystemUi("videoreload", "the wallpaper's video is back");
             return;
         }
@@ -3941,7 +3936,7 @@ public class WallpaperProbe {
         sPreSeeked = -1L;
         if (pre > 0L) {
             long at = playerPositionMs(lockPlayer(eng));
-            if (park ? at >= pre - SEEK_TOLERANCE_MS - 500L : at >= target - SEEK_TOLERANCE_MS) {
+            if (at >= target - SEEK_TOLERANCE_MS) {
                 Xp.log(TAG + "restore: seeked to " + pre + "ms before the first frame, at " + at + "ms");
                 if (tell) tellSystemUi("videoreload", "the wallpaper's video is back at " + at + "ms");
                 return;
@@ -3949,7 +3944,6 @@ public class WallpaperProbe {
             Xp.log(TAG + "restore: the seek before start did not hold (at " + at + "ms)");
         }
         final long want = target;
-        final boolean parkIt = park;
         final Handler h = new Handler(Looper.getMainLooper());
         // SystemUI is told now, with the first seek, not after it has been read back: the
         // cover view over the window starts its fade-out on this word, and its first frames are
@@ -3967,43 +3961,41 @@ public class WallpaperProbe {
             }
             h.postDelayed(() -> {
                 if (gen != sTakeoverGen.get()) return;
-                Object now = lockPlayer(eng);
-                long at = playerPositionMs(now);
-                // A park is not read back: a finished play-once player reports where its last
-                // decoded frame sits, not the seek target (5200ms against 5960ms, measured), so
-                // the read-back never agreed and three more seeks held the SystemUI cover up for
-                // three quarters of a second longer on every exit.
-                if (!parkIt && at < want - SEEK_TOLERANCE_MS && ++tries[0] < 3) {
+                long at = playerPositionMs(lockPlayer(eng));
+                if (at < want - SEEK_TOLERANCE_MS && ++tries[0] < 3) {
                     h.post(step[0]);
                     return;
                 }
-                if (parkIt) playerPause(now);
-                Xp.log(TAG + "restore: at " + at + "ms after " + (tries[0] + 1) + " seek(s)");
-                Xp.log(TAG + "restore: settled at " + at + "ms");
+                Xp.log(TAG + "restore: settled at " + at + "ms after " + (tries[0] + 1) + " seek(s)");
             }, SEEK_VERIFY_MS);
         };
         h.post(step[0]);
     }
 
     /**
-     * Where the user's video should resume: {target ms, 1 when it parks on its last frame}. A
-     * looping video wraps; a play-once video that would have finished parks instead of
-     * replaying its ending.
+     * Where the user's video should resume, in ms.
+     *
+     * A play-once wallpaper - HyperOS's dynamic ones, a second or two that play on each wake -
+     * plays again from the start, the way a wake plays it. It used to park on its last frame
+     * instead, seeked 40ms from its end and paused, and that drew nothing: the player completed
+     * before a frame reached the window, so the window kept the cover video's last frame - the
+     * album art on the lock screen, on the desktop sharing the video and in the AOD, until the
+     * next wake (measured on a 1696ms clip; a second seek and a pause on the stopped player drew
+     * nothing either). Played from zero, the clip ends on its own last frame.
+     *
+     * A looping video wraps to where it would have been. One whose kind is not known yet resumes
+     * likewise, and starts over if it would have finished.
      */
-    private static long[] restoreTarget(String path, long savedPos, long savedAt) {
+    private static long restoreTarget(String path, long savedPos, long savedAt) {
+        Boolean loops = sLockLoops;
+        if (loops != null && !loops) return 0L;
         long dur = videoDurationMs(path);
         long target = savedPos < 0 ? 0L : savedPos + (SystemClock.uptimeMillis() - savedAt);
-        long park = 0L;
         if (dur > 0) {
-            Boolean loops = sLockLoops;
-            if (loops != null && loops) {
-                target %= dur;
-            } else if (target >= dur - END_ZONE_MS) {
-                target = Math.max(1L, dur - PARK_FROM_END_MS);
-                park = 1L;
-            }
+            if (loops != null) target %= dur;
+            else if (target >= dur - END_ZONE_MS) target = 0L;
         }
-        return new long[] {target, park};
+        return target;
     }
 
     /**
@@ -4032,7 +4024,7 @@ public class WallpaperProbe {
                     Object self = chain.getThisObject();
                     if (eng != null && lockPlayer(eng) == self) {
                         sPreSeekPos = -1L;
-                        long target = restoreTarget(sPreSeekPath, pos, sPreSeekAt)[0];
+                        long target = restoreTarget(sPreSeekPath, pos, sPreSeekAt);
                         if (target > 100L) {
                             try {
                                 Xp.callMethod(self, "seekto", 0.0f, target, 0);
@@ -4059,7 +4051,7 @@ public class WallpaperProbe {
                     Object self = chain.getThisObject();
                     if (eng != null && lockPlayer(eng) == self) {
                         sPreSeekPos = -1L;
-                        long target = restoreTarget(sPreSeekPath, pos, sPreSeekAt)[0];
+                        long target = restoreTarget(sPreSeekPath, pos, sPreSeekAt);
                         if (target > 100L) {
                             try {
                                 ((android.media.MediaPlayer) self).seekTo(target,

@@ -216,8 +216,13 @@ final class CoverPush {
             CoverCardLayer.clear();
             if (Main.sVideoWallpaper) showVideoCover(ctx, false, null, null, 0, gen, key);
             out.putExtra("off", true);
-            if (CanvasHostBridge.keepPaletteBackdrop()) CanvasHostBridge.backdropRetained();
-            else ProbeGuard.send(ctx, out);
+            if (CanvasHostBridge.keepPaletteBackdrop()) {
+                CanvasHostBridge.backdropRetained();
+                // The window keeps this very cover, so the reload the video cover's fade-out is
+                // held for never comes: it sat out its whole 1.8s timeout on every tap out.
+                if (Main.sVideoWallpaper) Main.main().post(
+                        () -> releaseCoverFadeWait("the cover stays on the wallpaper window"));
+            } else ProbeGuard.send(ctx, out);
             if (!CanvasHostBridge.keepPaletteBackdrop()) Main.sTrackKey = "";
             // Nothing behind the clock any more, so nothing to take a colour from. The repaint
             // that hands the OEM's own colours back happens with the rest of cover mode.
@@ -506,7 +511,7 @@ final class CoverPush {
                     // exactly the way deducted_image_view did on the image path.
                     Main.setDepthHidden(true);
                     guardVideoCover(iv);
-                    iv.setVisibility(CoverBackdrop.hidden() ? View.INVISIBLE : View.VISIBLE);
+                    iv.setVisibility(videoCoverSuppressed() ? View.INVISIBLE : View.VISIBLE);
 
                     // Fade in to bridge FastPlayer's first frame render (~120-150ms), so the
                     // background and the card's blur do not change on two different frames. OWED
@@ -577,6 +582,26 @@ final class CoverPush {
                 applyVideoCoverCrossfade(iv, from, to, blur);
             }
         });
+    }
+
+    /**
+     * Puts a crossfade still on the view onto its far end, before its first layer is recycled.
+     *
+     * A TransitionDrawable only advances while it is drawn, so one started behind a hidden cover
+     * - the screen going to the AOD mid track change, the shade - has not begun when the swap
+     * gives the old album's bitmaps back, and its first frame after that drew the recycled one:
+     * "Canvas: trying to use a recycled bitmap" in ImageView.onDraw, which took SystemUI down
+     * (twice on 2026-10-19, both a track change followed by the AOD within half a second).
+     */
+    private static void settleCrossfade(ImageView iv) {
+        android.graphics.drawable.Drawable d = iv.getDrawable();
+        if (!(d instanceof android.graphics.drawable.TransitionDrawable)) return;
+        android.graphics.drawable.Drawable to =
+                ((android.graphics.drawable.TransitionDrawable) d).getDrawable(1);
+        Bitmap b = to instanceof android.graphics.drawable.BitmapDrawable
+                ? ((android.graphics.drawable.BitmapDrawable) to).getBitmap() : null;
+        if (b != null && !b.isRecycled()) iv.setImageBitmap(b);
+        else iv.setImageDrawable(null);
     }
 
     private static void applyVideoCoverCrossfade(ImageView iv, Bitmap from, Bitmap to, boolean blur) {
@@ -668,14 +693,15 @@ final class CoverPush {
                 // this full-screen (frosted) artwork stays down on the lock screen too. Without
                 // this the guard put it back on the next frame after anything hid it.
                 boolean backdropHidden = CoverBackdrop.hidden();
-                int want = onKeyguard && !backdropHidden ? View.VISIBLE : View.INVISIBLE;
+                boolean suppressed = videoCoverSuppressed();
+                int want = onKeyguard && !suppressed ? View.VISIBLE : View.INVISIBLE;
                 if (cover.getVisibility() != want) cover.setVisibility(want);
                 if (asleep && cover.getAlpha() > 0f) {
                     cover.animate().cancel();
                     cover.setAlpha(0f);
                     if (sCoverFadeWaitMs <= 0) sCoverFadeWaitMs = coverFadeMs();
                 }
-                if (onKeyguard && !backdropHidden) {
+                if (onKeyguard && !suppressed) {
                     // The one place the cover's fade can start from. This runs on the frame the
                     // cover is really being drawn in, which is the frame the fade is for - the
                     // push that armed it happens whenever the broadcast does. See
@@ -989,6 +1015,21 @@ final class CoverPush {
         return v == null ? -1f : v.getAlpha();
     }
 
+    /**
+     * Whether the video cover stays down on the lock screen even in cover mode.
+     *
+     * Besides wallpaper background mode, that is while Spotify Canvas owns the backdrop. The
+     * Canvas is a SurfaceView, composed BEHIND SystemUI's window and seen through a hole in it.
+     * On a still wallpaper the cover lives in the wallpaper window, below that, so the Canvas
+     * shows; this cover is a view inside SystemUI's window, so it painted over the hole and the
+     * lyrics and the card stood on the frosted album art instead (measured on device: the
+     * SurfaceView at z=-2 under NotificationShade, the cover view shown above it). The Canvas
+     * dims and blurs itself for those scenes, so nothing of ours is needed over it.
+     */
+    static boolean videoCoverSuppressed() {
+        return CoverBackdrop.hidden() || CanvasHostBridge.ownsVideoBackdrop();
+    }
+
     /** The live wallpaper's video, given back while its own wallpaper is the backdrop. */
     private static void showVideoBackground() {
         View bg = Main.sVideoBg;
@@ -1113,6 +1154,7 @@ final class CoverPush {
             }
             final long dur = Math.max(150, Math.min(500, coverFadeMs())) + 100L;
             iv.postDelayed(() -> {
+                settleCrossfade(iv);
                 recycleUnless(oldSharp, Main.sCoverBitmap, Main.sCoverBlurBitmap);
                 if (oldBlur != oldSharp) {
                     recycleUnless(oldBlur, Main.sCoverBitmap, Main.sCoverBlurBitmap);
@@ -1503,7 +1545,7 @@ final class CoverPush {
     private static volatile int sMissingArtworkGen = -1;
 
     private static boolean artworkRefreshActive() {
-        return Main.sCoverMode || CanvasHostBridge.needsArtworkRefresh();
+        return Main.sCoverMode;
     }
 
     private static final Runnable sQualityRefresh = new Runnable() {
