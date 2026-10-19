@@ -584,6 +584,26 @@ final class CoverPush {
         });
     }
 
+    /**
+     * Puts a crossfade still on the view onto its far end, before its first layer is recycled.
+     *
+     * A TransitionDrawable only advances while it is drawn, so one started behind a hidden cover
+     * - the screen going to the AOD mid track change, the shade - has not begun when the swap
+     * gives the old album's bitmaps back, and its first frame after that drew the recycled one:
+     * "Canvas: trying to use a recycled bitmap" in ImageView.onDraw, which took SystemUI down
+     * (twice on 2026-10-19, both a track change followed by the AOD within half a second).
+     */
+    private static void settleCrossfade(ImageView iv) {
+        android.graphics.drawable.Drawable d = iv.getDrawable();
+        if (!(d instanceof android.graphics.drawable.TransitionDrawable)) return;
+        android.graphics.drawable.Drawable to =
+                ((android.graphics.drawable.TransitionDrawable) d).getDrawable(1);
+        Bitmap b = to instanceof android.graphics.drawable.BitmapDrawable
+                ? ((android.graphics.drawable.BitmapDrawable) to).getBitmap() : null;
+        if (b != null && !b.isRecycled()) iv.setImageBitmap(b);
+        else iv.setImageDrawable(null);
+    }
+
     private static void applyVideoCoverCrossfade(ImageView iv, Bitmap from, Bitmap to, boolean blur) {
         if (iv == null || from == null || to == null || from == to || from.isRecycled() || to.isRecycled()) {
             if (iv != null && to != null && !to.isRecycled()) iv.setImageBitmap(to);
@@ -1134,6 +1154,7 @@ final class CoverPush {
             }
             final long dur = Math.max(150, Math.min(500, coverFadeMs())) + 100L;
             iv.postDelayed(() -> {
+                settleCrossfade(iv);
                 recycleUnless(oldSharp, Main.sCoverBitmap, Main.sCoverBlurBitmap);
                 if (oldBlur != oldSharp) {
                     recycleUnless(oldBlur, Main.sCoverBitmap, Main.sCoverBlurBitmap);
