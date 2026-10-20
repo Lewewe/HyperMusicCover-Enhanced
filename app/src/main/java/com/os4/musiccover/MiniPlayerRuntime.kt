@@ -339,7 +339,9 @@ object MiniPlayerRuntime {
                     val card = Main.miniPlayerMediaHeader()
                     val mine = effectDepth == 0 && target != null && (card == null || target === card)
                     if (mine) {
-                        recordTarget = Main.miniPlayerMediaBg(target)
+                        // The holder's own mediaBg, the view the effect dresses: looked up by
+                        // name it was often not found yet, and Soft Glass was never recorded.
+                        recordTarget = holderMediaBg(target) ?: Main.miniPlayerMediaBg(target)
                         recording = ArrayList()
                     }
                     effectDepth++
@@ -421,6 +423,19 @@ object MiniPlayerRuntime {
             }.onFailure { Xp.w("MCMini: material recorder on $className unavailable: $it") }
         }
     }
+
+    private fun holderMediaBg(header: View): View? = runCatching {
+        val holder = header.javaClass.getMethod("getMediaViewHolder").invoke(header) ?: return null
+        var c: Class<*>? = holder.javaClass
+        while (c != null) {
+            c.declaredFields.firstOrNull { it.name == "mediaBg" }?.let {
+                it.isAccessible = true
+                return it.get(holder) as? View
+            }
+            c = c.superclass
+        }
+        null
+    }.getOrNull()
 
     private fun copyArray(value: Any?): Any? = when (value) {
         is IntArray -> value.copyOf()
