@@ -21,13 +21,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.os4.musiccover.ui.screen.features.IslandDemo
 import com.os4.musiccover.ui.screen.features.ValueSlider
 import com.os4.musiccover.ui.theme.AppTheme
 import com.os4.musiccover.ui.util.PageScaffold
 import org.json.JSONObject
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.preference.SwitchPreference
+import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 
 class MiniPlayerActivity : ComponentActivity() {
@@ -80,9 +80,9 @@ private fun MiniPlayerPage(blur: Boolean, refreshKey: Int, onBack: () -> Unit) {
     PageScaffold(title = stringResource(R.string.mini_page_title), isBlurEnabled = blur,
         onBack = onBack) {
         item {
-            // What the islands do, played on a drawn phone, before the switches that turn them on.
+            // What the row does, drawn with the module's own island geometry, before the switches.
             Card(Modifier.padding(horizontal = 12.dp).padding(top = 12.dp)) {
-                IslandDemo(Modifier.padding(top = 16.dp))
+                IslandDemo(MiniPlayerConfig.colorOs(config))
             }
         }
         item {
@@ -100,6 +100,15 @@ private fun MiniPlayerPage(blur: Boolean, refreshKey: Int, onBack: () -> Unit) {
                                   else stringResource(R.string.mini_enabled_waiting),
                         checked = config.optBoolean(MiniPlayerConfig.ENABLED), enabled = alive,
                         onCheckedChange = { push(MiniPlayerConfig.ENABLED, it) })
+                    // ColorOS first: it is the default, and the order is the stored value.
+                    WindowDropdownPreference(title = stringResource(R.string.mini_style),
+                        summary = stringResource(R.string.mini_style_summary),
+                        items = listOf(stringResource(R.string.mini_style_coloros),
+                            stringResource(R.string.mini_style_hyperos)),
+                        selectedIndex = config.optInt(MiniPlayerConfig.PILL_STYLE,
+                            MiniPlayerConfig.STYLE_COLOROS).coerceIn(0, 1),
+                        enabled = alive && config.optBoolean(MiniPlayerConfig.ENABLED),
+                        onSelectedIndexChange = { push(MiniPlayerConfig.PILL_STYLE, it) })
                     SwitchPreference(title = stringResource(R.string.mini_widen),
                         summary = stringResource(R.string.mini_widen_summary),
                         checked = config.optBoolean(MiniPlayerConfig.ADAPTIVE_WIDTH),

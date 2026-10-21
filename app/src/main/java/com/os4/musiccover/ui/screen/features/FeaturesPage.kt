@@ -256,16 +256,6 @@ internal fun CoverPageView(
         onBack = onBack,
         pinned = {
             Spacer(Modifier.height(8.dp))
-            // Framed as the islands' page frames its demonstration: a card, three plays in it.
-            Card(Modifier.padding(horizontal = 12.dp)) {
-                CoverDemo(
-                    coverStyle = if (module.hidePlayerBackground) 1 else module.coverStyle,
-                    bias = module.bias,
-                    clockSize = module.clockSize,
-                    modifier = Modifier.padding(top = 16.dp),
-                )
-            }
-            Spacer(Modifier.height(12.dp))
             TabRow(
                 tabs = groups,
                 selectedTabIndex = group,

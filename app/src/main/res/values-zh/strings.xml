@@ -191,7 +191,6 @@
     <string name="shade_mode_restore">系统默认</string>
     <string name="shade_mode_keep">保持音乐封面</string>
 
-    <string name="demo_island_switch_title">切换与打断</string>
     <string name="islands_background_blur">背景模糊</string>
     <string name="islands_background_blur_summary">为超级岛和快捷按钮添加模糊背景。关闭后，Frosted Glass 使用纯色背景，Soft Glass 使用 HyperOS 4 原生玻璃效果。</string>
     <string name="islands_background_blur_radius">背景模糊强度</string>
@@ -200,13 +199,12 @@
     <string name="mini_page_title">锁屏超级岛</string>
     <string name="mini_enabled">启用锁屏超级岛</string>
     <string name="mini_enabled_waiting">等待 SystemUI 模块响应</string>
+    <string name="mini_style">岛样式</string>
+    <string name="mini_style_summary">多个岛如何共用一行</string>
+    <string name="mini_style_coloros">ColorOS · 一次一个，滑动切换</string>
+    <string name="mini_style_hyperos">HyperOS · 大岛旁边带小岛</string>
     <string name="mini_widen">快捷方式关闭时加宽</string>
     <string name="mini_widen_summary">手电筒或相机快捷方式关闭后占用空位</string>
-    <string name="demo_cover_takeover_title">封面接管锁屏</string>
-    <string name="demo_cover_lyrics_title">锁屏歌词</string>
-    <string name="demo_cover_aod_title">息屏保持</string>
-    <string name="demo_island_immersive_title">沉浸页面</string>
-    <string name="demo_island_stack_title">聚合岛</string>
     <string name="lyrics_roma">显示罗马音</string>
     <string name="lyrics_on_device_transliteration">本地转写</string>
     <string name="lyrics_on_device_transliteration_summary">下载词典以获得更清晰的本地罗马音。</string>

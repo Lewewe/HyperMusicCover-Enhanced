@@ -40,6 +40,18 @@ object MiniPlayerConfig {
     /** Move lasting lock screen status beside the date while islands are enabled. */
     const val STATUS_AT_DATE = "statusAtDate"
 
+    /**
+     * The row's look: [STYLE_COLOROS], ColorOS 16/17's capsule - one island at a time, swiped
+     * between with a liquid switch (ColorOsPill) - or [STYLE_HYPEROS], the super island's big
+     * island with the next one as a small circle beside it.
+     */
+    const val PILL_STYLE = "pillStyle"
+    const val STYLE_COLOROS = 0
+    const val STYLE_HYPEROS = 1
+
+    @JvmStatic fun colorOs(config: JSONObject): Boolean =
+        config.optInt(PILL_STYLE, STYLE_COLOROS) == STYLE_COLOROS
+
     const val COMPACT_NOTIFICATIONS = "compactNotifications"
     const val NOTIFICATION_SIZE = "notificationSizePercent"
     const val NOTIFICATION_DROP = "notificationDropDp"
@@ -58,6 +70,7 @@ object MiniPlayerConfig {
         ART_RADIUS to 12f,
         ADAPTIVE_WIDTH to false,
         STATUS_AT_DATE to true,
+        PILL_STYLE to STYLE_COLOROS,
         COMPACT_NOTIFICATIONS to false,
         NOTIFICATION_SIZE to 80f,
         NOTIFICATION_DROP to 16f,
@@ -98,6 +111,8 @@ object MiniPlayerConfig {
         defaults.forEach { (key, fallback) ->
             out.put(key, if (key == ENABLED || key == MEDIA_COLLAPSED_DEFAULT || key == ADAPTIVE_WIDTH || key == BACKGROUND_BLUR || key == STATUS_AT_DATE || key == COMPACT_NOTIFICATIONS) {
                 runCatching { input.getBoolean(key) }.getOrDefault(fallback)
+            } else if (key == PILL_STYLE) {
+                input.optInt(key, STYLE_COLOROS).coerceIn(STYLE_COLOROS, STYLE_HYPEROS)
             } else if (key == NOTIFICATION_SIZE) {
                 notificationSize(input.optDouble(key, 80.0))
             } else if (key == NOTIFICATION_DROP) {

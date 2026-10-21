@@ -171,7 +171,7 @@ internal class MiniPlayerView(context: Context) : FrameLayout(context) {
         toggle2.visibility = View.GONE
         toggle2.setOnClickListener { secondFaceClick?.invoke() }
         content.addView(toggle2)
-        contentDescription = SystemUiLanguage.text("锁屏超级岛", "Lock screen islands")
+        contentDescription = SystemUiLanguage.text("锁屏超级岛", "Lock screen Super Island")
     }
 
     fun bind(
@@ -226,10 +226,7 @@ internal class MiniPlayerView(context: Context) : FrameLayout(context) {
         // 2026-09-28). Both lines have words, the layout is the one it always was.
         title.visibility = if (trackTitle.isNullOrBlank()) View.GONE else View.VISIBLE
         artist.visibility = if (trackArtist.isNullOrBlank()) View.GONE else View.VISIBLE
-        if (lastArtwork !== cover) {
-            lastArtwork = cover
-            if (artworkOverride == null) artwork.setImageBitmap(cover)
-        }
+        if (lastArtwork !== cover) setArtworkBitmap(cover)
         if (lastPlaying != playing) {
             lastPlaying = playing
             if (toggleOverride == null) toggle.setImageDrawable(MiniPlayerPathDrawable(
@@ -492,8 +489,14 @@ internal class MiniPlayerView(context: Context) : FrameLayout(context) {
     /** The artwork alone, for a scaled copy that arrives between refreshes. */
     fun showArtwork(bitmap: Bitmap?) {
         if (bitmap == null || lastArtwork === bitmap) return
+        setArtworkBitmap(bitmap)
+    }
+
+    private fun setArtworkBitmap(bitmap: Bitmap?) {
+        val reshaped = fitArtwork && artworkAspect(lastArtwork) != artworkAspect(bitmap)
         lastArtwork = bitmap
         if (artworkOverride == null) artwork.setImageBitmap(bitmap)
+        if (reshaped) updateGeometry(lastHeightRadiusDp)
     }
 
     /**
@@ -628,8 +631,21 @@ internal class MiniPlayerView(context: Context) : FrameLayout(context) {
     fun artworkRestBoxOnScreen(): CoverMorphMotion.Box? {
         val rest = restBoxOnScreen() ?: return null
         if (slot.width <= 0 || slot.height <= 0) return null
-        return CoverMorphMotion.Box(rest.x + slot.left, rest.y + slot.top,
-            slot.width.toFloat(), slot.height.toFloat())
+        // As updateGeometry has it, not as last laid out: a new picture's shape is set before
+        // the pass that lays it out, and the flight aimed at the old square (filmed 2026-10-20).
+        val lp = slot.layoutParams as? LayoutParams
+        val w = lp?.width?.takeIf { it > 0 } ?: slot.width
+        val h = lp?.height?.takeIf { it > 0 } ?: slot.height
+        val x = lp?.leftMargin?.toFloat() ?: slot.left.toFloat()
+        return CoverMorphMotion.Box(rest.x + x, rest.y + (restHeight() - h) / 2f, w.toFloat(), h.toFloat())
+    }
+
+    /** The pieces at their new places now, not on the next pass: a shape change mid-flight jumped. */
+    private fun layoutNow() {
+        if (!isLaidOut || restWidth() <= 1 || restHeight() <= 1) return
+        measure(MeasureSpec.makeMeasureSpec(restWidth(), MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(restHeight(), MeasureSpec.EXACTLY))
+        layout(left, top, left + restWidth(), top + restHeight())
     }
 
     fun artworkRestRadius(): Float = artworkRadiusPx
@@ -774,6 +790,11 @@ internal class MiniPlayerView(context: Context) : FrameLayout(context) {
         }
     }
 
+    /** Its own glass's alpha in a morph, between frames (a fade running on its own clock). */
+    fun setMaterialAlpha(alpha: Float) {
+        if (morphing) materialLayer.alpha = alpha.coerceIn(0f, 1f)
+    }
+
     /** The artwork's corner in its own pixels while it is scaled onto the card's. */
     fun setArtworkMorphRadius(radius: Float) {
         if (artworkMorphRadius == radius) return
@@ -791,6 +812,7 @@ internal class MiniPlayerView(context: Context) : FrameLayout(context) {
             toggle2.translationX = 0f
         }
         layoutOnly = false
+        setContentScale(1f, 0f)
         artworkMorphRadius = Float.NaN
         slot.invalidateOutline()
         slot.alpha = if (artworkHidden) 0f else 1f
@@ -896,6 +918,31 @@ internal class MiniPlayerView(context: Context) : FrameLayout(context) {
         toggle2.alpha = a * secondShown
     }
 
+    /**
+     * The whole content scaled by [scale] about [pivotX] (in the pill's own pixels) on its middle
+     * line: ColorOS's leaving island draws its content in along the way it goes.
+     */
+    fun setContentScale(scale: Float, pivotX: Float) {
+        content.pivotX = pivotX
+        content.pivotY = height / 2f
+        content.scaleX = scale
+        content.scaleY = scale
+    }
+
+    /**
+     * The content as it draws now, in the pill's own pixels: ColorOS's update (MultiWidthAnimController
+     * phase 1) blurs the old island's content away while the pill already holds the new one.
+     * shortcut: recorded in software, so outline clips (the artwork's corners) are dropped for the
+     * ~150 ms it shows; record through a RenderNode copy if that is ever visible.
+     */
+    fun recordContent(): android.graphics.Picture? {
+        if (width <= 0 || height <= 0 || content.alpha <= 0f) return null
+        return android.graphics.Picture().also {
+            content.draw(it.beginRecording(width, height))
+            it.endRecording()
+        }
+    }
+
     /** The text and the button alone: an island shrinking to its circle keeps its picture. */
     fun setTextAlpha(alpha: Float) {
         val a = alpha.coerceIn(0f, 1f)
@@ -963,13 +1010,32 @@ internal class MiniPlayerView(context: Context) : FrameLayout(context) {
         updateGeometry(lastHeightRadiusDp)
     }
 
+    /**
+     * ColorOS: the picture at its own shape - a square cover square, a wide one wide - on a
+     * rounded rectangle as tall as the circle was, rather than cut to the small island's circle.
+     */
+    private var fitArtwork = false
+
+    fun setFitArtwork(fit: Boolean) {
+        if (fitArtwork == fit) return
+        fitArtwork = fit
+        updateGeometry(lastHeightRadiusDp)
+    }
+
+    // shortcut: past 1:2 / 2:1 the cover is cropped to that, upgrade if such art turns up.
+    private fun artworkAspect(b: Bitmap?): Float =
+        if (b == null || b.width <= 0 || b.height <= 0) 1f
+        else (b.width.toFloat() / b.height).coerceIn(0.5f, 2f)
+
     private fun updateGeometry(heightRadiusDp: Float) {
         lastHeightRadiusDp = heightRadiusDp
         val height = (dp(heightRadiusDp * 2f).coerceAtLeast(dp(48)) * compactScale).roundToInt()
         val verticalPadding = max(dp(7f * compactScale), height / 9)
         val artworkSize = (height * ShortcutDisc.ICON_SHARE).toInt().coerceAtLeast(dp(24f * compactScale))
         val horizontalPadding = max(dp(10f * compactScale), height / 7)
-        slot.layoutParams = LayoutParams(artworkSize, artworkSize, Gravity.CENTER_VERTICAL).apply {
+        val shaped = fitArtwork && !artworkBare
+        val artworkWidth = if (shaped) (artworkSize * artworkAspect(lastArtwork)).roundToInt() else artworkSize
+        slot.layoutParams = LayoutParams(artworkWidth, artworkSize, Gravity.CENTER_VERTICAL).apply {
             leftMargin = horizontalPadding
         }
         val toggleSize = dp(40f * compactScale).coerceAtMost((height - verticalPadding * 2).coerceAtLeast(dp(34f * compactScale)))
@@ -987,10 +1053,10 @@ internal class MiniPlayerView(context: Context) : FrameLayout(context) {
         }
         textRightBase = if (toggleShown) toggleW + max(dp(10f * compactScale), verticalPadding) else horizontalPadding
         textColumn.layoutParams = LayoutParams(-1, -1, Gravity.CENTER_VERTICAL).apply {
-            leftMargin = horizontalPadding + artworkSize + max(dp(10f * compactScale), height / 8)
+            leftMargin = horizontalPadding + artworkWidth + max(dp(10f * compactScale), height / 8)
             rightMargin = textRightBase + ((toggle2W + toggleGapPx) * secondShown).toInt()
         }
-        val radius = artworkSize / 2f
+        val radius = if (shaped) artworkSize * ART_CORNER_SHARE else artworkSize / 2f
         artworkRadiusPx = radius
         slot.background = if (artworkBare) null else rounded(Color.rgb(55, 55, 55), radius)
         slot.outlineProvider = object : ViewOutlineProvider() {
@@ -1000,6 +1066,9 @@ internal class MiniPlayerView(context: Context) : FrameLayout(context) {
             }
         }
         slot.invalidateOutline()
+        // A new shape for the picture is laid out at once: a morph holds the pass back until it
+        // ends, and a cover flight aimed at the old square meanwhile (filmed 2026-10-20).
+        if (slot.width != artworkWidth || slot.height != artworkSize) layoutNow()
     }
 
     private fun rounded(color: Int, radius: Float) = GradientDrawable().apply {
@@ -1025,6 +1094,9 @@ internal class ActionFace(
 )
 
 private const val SECOND_MS = 320L
+
+/** A shaped (ColorOS) picture's corner, of its height. */
+private const val ART_CORNER_SHARE = 0.22f
 
 /** Room round a focus button's picture, and between two of them. */
 private const val FACE_PAD_DP = 4

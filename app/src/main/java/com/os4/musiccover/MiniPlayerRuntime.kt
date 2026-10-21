@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.Matrix
+import android.graphics.Path
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
 import android.media.MediaMetadata
@@ -2271,6 +2272,8 @@ private class MiniPlayerController(
     private fun canSwitchIsland(next: Boolean): Boolean {
         val keys = islandKeys
         if (keys.size < 2) return false
+        // ColorOS goes round: the brackets either side are there whichever island is in.
+        if (colorOs()) return true
         val at = keys.indexOf(selectedIsland).coerceAtLeast(0)
         return if (next) at < keys.size - 1 else at > 0 || !firstAlone(keys, selectedIsland)
     }
@@ -2282,6 +2285,10 @@ private class MiniPlayerController(
         val keys = islandKeys
         if (!canSwitchIsland(next)) {
             resetIslandDrag()
+            return
+        }
+        if (colorOs()) {
+            if (!gooActive) switchGoo(next)
             return
         }
         val oldBig = selectedIsland
@@ -2368,6 +2375,11 @@ private class MiniPlayerController(
      * island sits under its big one.
      */
     private fun updateSmallIsland(music: MediaController?, notes: List<LockIslands.Note>) { android.os.Trace.beginSection("MC updateSmall"); try {
+        // ColorOS's capsule shows one island at a time: the others are a swipe away, not a circle.
+        if (colorOs()) {
+            if (smallKey != null || smallIsland?.visibility == View.VISIBLE) hideSmallIsland()
+            return
+        }
         // A notification folding back into the small island's place, or pulled out of it and
         // not let go yet, holds that place for as long as its flight is out: whatever was
         // there shrinks away and the flight lands in it. One that has left for good (a tap, a
@@ -2754,7 +2766,31 @@ private class MiniPlayerController(
         var started = 0L
         var last = 0L
 
+        /**
+         * SWAP_UPDATE, ColorOS's MultiWidthAnimController: the width (in capsule heights) set off
+         * from the old island's toward the new one's at a kick inward, so it dips and comes back
+         * out; the old content goes on [oldScale]/[oldAlpha]/[oldBlur] (0 to 1) from the start, the
+         * new one comes into focus on [newBlur] once the width turns round ([grown]).
+         */
+        val width = Jelly(UPDATE_WIDTH_RESPONSE, UPDATE_WIDTH_DAMPING)
+        val oldScale = Jelly(UPDATE_OLD_SCALE_RESPONSE, UPDATE_DAMPING).apply { target = 1f }
+        val oldAlpha = Jelly(UPDATE_OLD_ALPHA_RESPONSE, UPDATE_DAMPING).apply { target = 1f }
+        val oldBlur = Jelly(UPDATE_OLD_BLUR_RESPONSE, UPDATE_DAMPING).apply { target = 1f }
+        val newBlur = Jelly(UPDATE_NEW_BLUR_RESPONSE, UPDATE_DAMPING).apply { target = 1f }
+        var grown = false
+        /** The capsule as applyUpdate last drew it. */
+        var drawn: CoverMorphMotion.Box? = null
+
         fun step(dt: Float, now: Long) {
+            if (kind == SWAP_UPDATE) {
+                width.step(dt)
+                oldScale.step(dt)
+                oldAlpha.step(dt)
+                oldBlur.step(dt)
+                if (!grown && width.velocity >= 0f) grown = true
+                if (grown) newBlur.step(dt)
+                return
+            }
             spring.step(dt)
             small.step(dt)
             if (now - started >= CONTENT_IN_DELAY_MS) contentIn.step(dt)
@@ -2762,7 +2798,8 @@ private class MiniPlayerController(
             if (disc) ghostDisc.step(dt)
         }
 
-        fun atRest(now: Long) = spring.atRest() && small.atRest() &&
+        fun atRest(now: Long) = if (kind == SWAP_UPDATE) width.atRest() && grown && newBlur.atRest() &&
+            oldAlpha.atRest() else spring.atRest() && small.atRest() &&
             (kind != SWAP_PREV || pillKept || (now - started >= CONTENT_IN_DELAY_MS && contentIn.atRest())) &&
             (!ghost || (ghostBox.atRest() && ghostContent.atRest())) && (!disc || ghostDisc.atRest())
     }
@@ -2976,7 +3013,139 @@ private class MiniPlayerController(
 
     private fun swapBlurPx() = dp(SWAP_BLUR_DP).toFloat()
 
+    /**
+     * ColorOS's capsule taking another island where it stands (CapsuleItemPhysicalAnimator
+     * createMultiCardSwapAnim): [old] is the content it showed at [oldRest], recorded before the
+     * refresh that bound the new island. Called after that refresh.
+     */
+    private fun startUpdate(old: android.graphics.Picture?, oldRest: CoverMorphMotion.Box) {
+        val view = player ?: return
+        if (view.visibility != View.VISIBLE || gooActive || frameTaken() && !updating()) return
+        // Taking over a running update: the content it was bringing into focus goes on from as
+        // blurred and as faint as it was drawn (the recording has neither).
+        val focus = swap?.takeIf { it.kind == SWAP_UPDATE }?.let(::updateFocus) ?: 1f
+        endSwap()
+        endRow()
+        resetIslandDrag()
+        clearSmallNudge()
+        position()
+        endRow()
+        val rest = view.restBoxOnScreen() ?: return
+        val s = Swap(oldRest, rest, SMALL_KEPT, SWAP_UPDATE)
+        s.started = android.os.SystemClock.uptimeMillis()
+        s.width.value = oldRest.w / rest.h
+        s.width.target = rest.w / rest.h
+        s.width.velocity = -dp(UPDATE_KICK_DP) / rest.h
+        s.oldBlur.value = 1f - focus
+        s.oldAlpha.value = 1f - MiniCardMorph.smooth(0f, 0.4f, focus)
+        swap = s
+        view.beginMorph(layoutOnly = true)
+        // Not lifted to MORPH_Z as a card morph is: the control center or the shade over the
+        // lock screen shares the host, and the capsule drew over it for the whole update.
+        view.translationZ = 0f
+        if (old != null) showOldContent(old, oldRest)
+        applySwap(s)
+        Choreographer.getInstance().postFrameCallback(swapFrame)
+    }
+
+    /** The old island's content over the capsule while it goes (SWAP_UPDATE), room left for its blur. */
+    private var oldContent: OldContentView? = null
+
+    private class OldContentView(context: Context, val room: Int) : View(context) {
+        var picture: android.graphics.Picture? = null
+        override fun onDraw(canvas: android.graphics.Canvas) {
+            val p = picture ?: return
+            canvas.translate(room.toFloat(), room.toFloat())
+            canvas.drawPicture(p)
+        }
+    }
+
+    private fun showOldContent(picture: android.graphics.Picture, at: CoverMorphMotion.Box) {
+        val room = dp(UPDATE_BLUR_DP) * 2
+        val w = picture.width + room * 2
+        val h = picture.height + room * 2
+        val view = oldContent?.takeIf { it.room == room } ?: OldContentView(context, room).also {
+            oldContent?.let { old -> runCatching { host.removeView(old) } }
+            oldContent = it
+            host.addView(it, ViewGroup.LayoutParams(w, h))
+        }
+        // Right over the capsule, and under whatever is over the capsule (the control center).
+        val pillAt = player?.let { host.indexOfChild(it) } ?: -1
+        if (pillAt >= 0 && host.indexOfChild(view) != pillAt + 1) {
+            host.removeView(view)
+            host.addView(view, host.indexOfChild(player) + 1, ViewGroup.LayoutParams(w, h))
+        }
+        if (view.layoutParams.width != w || view.layoutParams.height != h) {
+            view.layoutParams = view.layoutParams.apply { width = w; height = h }
+        }
+        view.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY))
+        view.layout(0, 0, w, h)
+        view.picture = picture
+        view.translationZ = 0f
+        view.visibility = View.VISIBLE
+        view.invalidate()
+        placeOldContent(view, at.cx(), at.cy())
+    }
+
+    private fun placeOldContent(view: View, cx: Float, cy: Float) {
+        val xy = IntArray(2).also(host::getLocationOnScreen)
+        view.translationX = cx - xy[0] - view.layoutParams.width / 2f - view.left
+        view.translationY = cy - xy[1] - view.layoutParams.height / 2f - view.top
+    }
+
+    private fun hideOldContent() {
+        oldContent?.let {
+            it.picture = null
+            it.setRenderEffect(null)
+            it.visibility = View.GONE
+        }
+    }
+
+    /** How far the new island's content has come into focus, 0 to 1. */
+    private fun updateFocus(s: Swap): Float = if (s.grown) s.newBlur.value.coerceIn(0f, 1f) else 0f
+
+    private fun applyUpdate(s: Swap) {
+        val view = player ?: return
+        val to = s.pillTo
+        val h = to.h
+        val w = (s.width.value * h).coerceAtLeast(h)
+        // The capsule stays on its place; a new one centred elsewhere gets there as it grows.
+        val t = ((android.os.SystemClock.uptimeMillis() - s.started) / UPDATE_MOVE_MS).coerceIn(0f, 1f)
+        val cx = lerp(s.pillFrom.cx(), to.cx(), MiniCardMorph.smooth(0f, 1f, t))
+        val box = CoverMorphMotion.Box(cx - w / 2f, to.y, w, h)
+        s.drawn = box
+        if (pillLandingBox == null) view.setMorphFrame(box, h / 2f, 1f)
+        val blurPx = dp(UPDATE_BLUR_DP).toFloat()
+        val focus = updateFocus(s)
+        view.setContentAlpha(MiniCardMorph.smooth(0f, 0.4f, focus))
+        view.setContentBlur((1f - focus) * blurPx)
+        oldContent?.takeIf { it.visibility == View.VISIBLE }?.let {
+            val scale = lerp(1f, UPDATE_OLD_MIN_SCALE, s.oldScale.value.coerceIn(0f, 1f))
+            it.scaleX = scale
+            it.scaleY = scale
+            // Faded with the pill (followPill's transitionAlpha): it is not the pill's child.
+            it.alpha = (1f - s.oldAlpha.value).coerceIn(0f, 1f) * view.alpha * view.transitionAlpha
+            val r = s.oldBlur.value.coerceIn(0f, 1f) * blurPx
+            it.setRenderEffect(if (r < 0.5f) null
+                else android.graphics.RenderEffect.createBlurEffect(r, r, android.graphics.Shader.TileMode.DECAL))
+            placeOldContent(it, box.cx(), box.cy())
+            if (s.oldAlpha.value >= 0.99f) hideOldContent()
+        }
+        // The brackets keep to the capsule's ends as it narrows and widens.
+        if (islandKeys.size >= 2) {
+            gooShape.reset()
+            ColorOsPill.neighbourPath(box, right = false, grow = 1f, out = gooOut(), stroke = gooStroke(), into = gooShape)
+            ColorOsPill.neighbourPath(box, right = true, grow = 1f, out = gooOut(), stroke = gooStroke(), into = gooShape)
+            showGoo(gooShape, box)
+        }
+    }
+
     private fun applySwap(s: Swap) {
+        if (s.kind == SWAP_UPDATE) {
+            applyUpdate(s)
+            return
+        }
         val view = player ?: return
         val p = s.spring.value
         val grown = lerpBox(s.pillFrom, s.pillTo, p)
@@ -3057,6 +3226,7 @@ private class MiniPlayerController(
      * they are not put away for the frame between.
      */
     private fun endSwap(keepGhosts: Boolean = false) {
+        if (gooActive && !gooHeld && !gooBeginning) endGoo()
         val s = swap ?: return
         swap = null
         Choreographer.getInstance().removeFrameCallback(swapFrame)
@@ -3069,6 +3239,7 @@ private class MiniPlayerController(
             it.setContentAlpha(1f)
             it.setContentBlur(0f)
         }
+        hideOldContent()
         if (!keepGhosts) endGhosts()
         if (smallDx != 0f) {
             smallDx = 0f
@@ -3126,10 +3297,16 @@ private class MiniPlayerController(
             else -> return false
         }
         view.setInteractionsEnabled(false)
+        // At the pill's own content size: ColorOS's shorter capsule (shortcutScale) drew the
+        // stand-in's picture and lines a quarter bigger than the pill's (filmed 2026-10-18).
+        view.setCompactScale(compactScale() * shortcutScale())
+        view.setFitArtwork(colorOs())
         view.visibility = View.VISIBLE
         view.alpha = 1f
-        // Laid out now, as the flight is: new, it showed an empty frame until the next pass.
-        if (!view.isLaidOut || view.width != w || view.height != h) {
+        // Laid out now, as the flight is: new, it showed an empty frame until the next pass. Also
+        // whenever its pieces changed size (the compact scale above): left to the next pass, the
+        // stand-in kept them at its last size - ColorOS's swap showed it a quarter too big.
+        if (!view.isLaidOut || view.isLayoutRequested || view.width != w || view.height != h) {
             view.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY))
             view.layout(0, 0, w, h)
@@ -3427,8 +3604,13 @@ private class MiniPlayerController(
     }.joinToString(",").ifEmpty { "quiet" }
 
     /** Another motion is drawing the pill's frame, and ends its own morph when it is done. */
-    private fun frameTaken(): Boolean = swap != null || morph != null || group != null || flight != null ||
+    private fun frameTaken(): Boolean = swap != null || frameTakenBesideSwap()
+
+    private fun frameTakenBesideSwap(): Boolean = morph != null || group != null || flight != null ||
         exchange != null || noteMorphKey != null || pillLandingBox != null || spread != null
+
+    /** A ColorOS update is drawing the capsule and nothing else: another update takes over from it. */
+    private fun updating(): Boolean = swap?.kind == SWAP_UPDATE && !frameTakenBesideSwap()
 
     /** Going back into nothing: set to GONE once it is there (endAppear). */
     private fun leaving(): Boolean = appearing && appear.target == 0f
@@ -4554,6 +4736,10 @@ private class MiniPlayerController(
         val view = player ?: return
         // A switch still settling is finished where it was headed: the finger has the row now.
         if (swap != null) endSwap()
+        if (colorOs() && islandKeys.size >= 2) {
+            gooDrag(dx)
+            return
+        }
         if (!islandDragging) springSmallNudgeBack(0f, 0f)
         islandDragging = true
         // The row's end: nothing to switch to, so the pull takes the pill with it instead - it
@@ -4593,6 +4779,11 @@ private class MiniPlayerController(
 
     /** The finger is off: over the threshold the switch runs, under it the row springs back. */
     fun islandDragEnd(commit: Boolean, next: Boolean, vx: Float = 0f) {
+        if (gooActive && gooHeld) {
+            // ColorOS decides by where the finger left the gesture, and how fast.
+            gooLetGo(vx)
+            return
+        }
         if (!islandDragging) return
         // Past the row's end there is nothing to switch to: it springs back as from a short pull.
         val switchable = canSwitchIsland(next)
@@ -4611,6 +4802,10 @@ private class MiniPlayerController(
     }
 
     private fun resetIslandDrag() {
+        // The finger still holds a ColorOS gesture: only its own let-go (or cancel, through
+        // islandDragEnd) ends it. A refresh it starts itself came back here and killed it, and
+        // the let-go found nothing to animate - the pill snapped home (filmed 2026-10-18).
+        if (gooActive && gooHeld) return
         if (!islandDragging) return
         islandDragging = false
         player?.let {
@@ -4620,6 +4815,494 @@ private class MiniPlayerController(
             it.alpha = 1f
             it.clearNudge()
         }
+    }
+
+    // ------------------------------------------------------------ ColorOS: one island at a time
+
+    /** MiniPlayerConfig.PILL_STYLE: ColorOS's capsule, or HyperOS's big and small islands. */
+    private fun colorOs(): Boolean = MiniPlayerConfig.colorOs(config)
+
+    /**
+     * The torch and the camera, circle and glyph, against the capsule's height: ColorOS draws
+     * them smaller than the capsule, which balances the row (the user's request, 2026-10-18).
+     */
+    private fun shortcutScale(): Float = if (colorOs()) COLOROS_SHORTCUT else 1f
+
+    /** The glass of ColorOS's row: the brackets, and through a pull or a switch all of it. */
+    private var gooGlass: GooGlass? = null
+
+    /** One switch's islands and frames, from when the drag goes past the pull. */
+    private class GooSwitch(val next: Boolean, val oldKey: String, val rest: CoverMorphMotion.Box)
+
+    private var goo: GooSwitch? = null
+
+    /**
+     * Touch owns progress while held; the spring owns it only after release. A following
+     * spring continued moving even with a stationary finger, making the capsule drift.
+     * Release starts at the last rendered pose with the measured touch velocity.
+     */
+    private val gooP = Jelly(GOO_RESPONSE, GOO_DAMPING)
+    private var gooActive = false
+    private var gooHeld = false
+    private var gooNext = true
+    private var gooRest: CoverMorphMotion.Box? = null
+
+    /**
+     * The finger's dx at which the island now in the capsule took it: a whole switch done under
+     * the finger starts the next pull from there, so one long drag goes through island after
+     * island, as ColorOS's does.
+     */
+    private var gooBase = 0f
+    private var gooLast = 0L
+    private var gooFrameOn = false
+    private var gooBeginning = false
+    private val gooShape = Path()
+
+    /** The views' Soft Glass and the liquid glass crossing over (ColorOS fades its card blur about this long). */
+    private val GLASS_FADE_MS = 220L
+
+    private fun gooGap(): Float = dp(MiniPlayerGeometry.DISC_GAP_DP).toFloat()
+
+    private fun gooBlurPx(): Float = dp(ColorOsPill.BLUR_DP).toFloat()
+
+    /** Where the brackets stand, out of the capsule's ends: the neighbours come out of them. */
+    private fun gooOut(): Float = dp(ColorOsPill.BRACKET_OUT_DP).toFloat()
+
+    private fun gooStroke(): Float =
+        ColorOsPill.BRACKET_STROKE_DP * context.resources.displayMetrics.density
+
+    /** The drag that makes a whole switch: the arriving edge's whole way, one to one. */
+    // ColorOS scrolls one capsule width per switch.
+    private fun gooSpan(rest: CoverMorphMotion.Box): Float = rest.w.coerceAtLeast(1f)
+
+    /** The shared glass as [path] (screen pixels), laid over a band twice the capsule's height. */
+    private fun showGoo(path: Path, rest: CoverMorphMotion.Box) {
+        placeGlass(glassView(merge = false), path, rest)
+    }
+
+    /**
+     * The two capsules and their neck as one liquid glass at [alpha] (joinStrength), over the
+     * views' own Soft Glass at 1 - [alpha]: one blur while they run together, Soft Glass apart.
+     */
+    private fun showMerge(path: Path, rest: CoverMorphMotion.Box, alpha: Float) {
+        mergeAlpha = alpha
+        placeGlass(glassView(merge = true), path, rest)
+    }
+
+    private fun hideMerge() {
+        mergeAlpha = 0f
+        mergeGlass?.let { if (it.visibility != View.GONE) { it.clearShape(); it.visibility = View.GONE } }
+    }
+
+    private var mergeGlass: GooGlass? = null
+    private var mergeAlpha = 0f
+    private val mergeShape = Path()
+
+    private fun glassView(merge: Boolean): GooGlass {
+        val view = player
+        val existing = if (merge) mergeGlass else gooGlass
+        if (existing != null) return existing
+        return GooGlass(context).also {
+            if (merge) mergeGlass = it else gooGlass = it
+            // Under the pill and anything a switch puts under it (ghostIndex).
+            host.addView(it, maxOf(0, if (view != null) host.indexOfChild(view) else 0), ViewGroup.LayoutParams(1, 1))
+            if (!merge) host.viewTreeObserver.addOnPreDrawListener(gooFollow)
+        }
+    }
+
+    private fun placeGlass(glass: GooGlass, path: Path, rest: CoverMorphMotion.Box) {
+        val bandH = (rest.h * 2f).roundToInt()
+        if (glass.layoutParams.width != host.width || glass.layoutParams.height != bandH) {
+            glass.layoutParams = glass.layoutParams.apply { width = host.width; height = bandH }
+            glass.measure(View.MeasureSpec.makeMeasureSpec(host.width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(bandH, View.MeasureSpec.EXACTLY))
+            glass.layout(glass.left, glass.top, glass.left + host.width, glass.top + bandH)
+        }
+        glass.dress(MiniPlayerRuntime.materialGeneration) { MiniPlayerRuntime.material(it, loader) }
+        val xy = IntArray(2).also(host::getLocationOnScreen)
+        val bandTop = rest.cy() - bandH / 2f
+        gooGlassX = -glass.left.toFloat()
+        gooGlassY = bandTop - xy[1] - glass.top
+        glass.translationX = gooGlassX
+        glass.translationY = gooGlassY
+        glass.setPath(path, xy[0].toFloat(), bandTop)
+        if (glass.visibility != View.VISIBLE) glass.visibility = View.VISIBLE
+    }
+
+    private fun hideGoo() {
+        hideMerge()
+        gooGlass?.let {
+            if (it.visibility == View.GONE) return
+            it.clearShape()
+            it.visibility = View.GONE
+        }
+    }
+
+    private val gooFollowMatrix = Matrix()
+
+    /**
+     * The glass goes with the pill whatever moves it: its fade, the buttons' zoom and swipe, the
+     * press and the squeeze (the pill's animation matrix, MiniPlayerController.followShortcuts),
+     * and a nudge. Hidden whenever that matrix was set, the brackets went the moment the pill
+     * was pressed (filmed 2026-10-18).
+     */
+    private val gooFollow = android.view.ViewTreeObserver.OnPreDrawListener {
+        followGlass(gooGlass, 1f)
+        followGlass(mergeGlass, mergeAlpha)
+        true
+    }
+
+    private fun followGlass(glass: GooGlass?, share: Float) {
+        val view = player
+        if (glass != null && view != null && glass.visibility == View.VISIBLE) {
+            val a = (if (view.visibility == View.VISIBLE) view.alpha * view.transitionAlpha else 0f) * share
+            if (glass.alpha != a) glass.alpha = a
+            val m = view.animationMatrix
+            if (m == null || m.isIdentity) {
+                if (glass.animationMatrix != null) glass.setAnimationMatrix(null)
+            } else {
+                // The pill's matrix is the host's conjugated into the pill's slot: back into the
+                // host's, then into the glass's own slot.
+                gooFollowMatrix.set(m)
+                gooFollowMatrix.preTranslate(-view.left.toFloat(), -view.top.toFloat())
+                gooFollowMatrix.postTranslate(view.left.toFloat(), view.top.toFloat())
+                gooFollowMatrix.preTranslate(glass.left.toFloat(), glass.top.toFloat())
+                gooFollowMatrix.postTranslate(-glass.left.toFloat(), -glass.top.toFloat())
+                glass.setAnimationMatrix(gooFollowMatrix)
+            }
+            // At rest the brackets stand about the rest frame; a nudge carries the pill off it.
+            val nx = if (gooActive) 0f else view.nudgeX
+            val ny = if (gooActive) 0f else view.nudgeY
+            if (glass.translationX != gooGlassX + nx) glass.translationX = gooGlassX + nx
+            if (glass.translationY != gooGlassY + ny) glass.translationY = gooGlassY + ny
+        }
+    }
+
+    /** Where showGoo last put the glass, before any nudge. */
+    private var gooGlassX = 0f
+    private var gooGlassY = 0f
+
+    /**
+     * The finger dragging the capsule sideways with other islands in the row, [dx] from where it
+     * went down: a capsule's width is one switch, sampled directly on the next display frame.
+     */
+    private fun gooDrag(dx: Float) {
+        val view = player ?: return
+        val starting = !islandDragging
+        islandDragging = true
+        // A drag is not a press: the pill comes back up from the finger's press as it goes, as
+        // ColorOS's does. Left pressed, its squeeze was carried onto the glass - the brackets
+        // stood in, and stepped back out at the let-go (filmed 2026-10-19).
+        if (starting) squeeze.pressPill(false)
+        if (starting) {
+            if (gooActive) {
+                // A switch still running from a let-go: the finger takes it where it is.
+                val rest = gooRest ?: return
+                gooHeld = true
+                gooBase = dx - gooP.value * gooSpan(rest) * if (gooNext) -1f else 1f
+            } else {
+                gooRest = view.restBoxOnScreen() ?: return
+                gooActive = true
+                gooHeld = true
+                gooBase = 0f
+                gooP.value = 0f
+                gooP.velocity = 0f
+                gooP.target = 0f
+                gooNext = dx < 0f
+            }
+        }
+        val rest = gooRest ?: return
+        val local = dx - gooBase
+        // The way is the finger's while nothing has come out yet.
+        if (goo == null && gooP.value < 0.02f && local != 0f) gooNext = local < 0f
+        val along = (if (gooNext) -local else local) / gooSpan(rest)
+        gooP.target = along.coerceIn(-0.05f, 1.05f)
+        gooRun()
+    }
+
+    /** The finger off: on to the end, or back, with the speed the gesture had. */
+    private fun gooLetGo(vx: Float) {
+        val rest = gooRest ?: run { endGoo(); return }
+        islandDragging = false
+        gooHeld = false
+        gooBase = 0f
+        val span = gooSpan(rest)
+        val v = (if (gooNext) -vx else vx) / span
+        val fling = GOO_FLING_DP * context.resources.displayMetrics.density / span
+        val on = v > fling || v > -fling && gooP.value > GOO_COMMIT_AT
+        gooP.velocity = v
+        gooP.target = if (on) 1f else 0f
+        gooP.response = GOO_RESPONSE
+        gooRun()
+    }
+
+    /** The next island (or the one before it) takes the capsule, run by the spring alone. */
+    private fun switchGoo(next: Boolean) {
+        val rest = player?.restBoxOnScreen() ?: return
+        gooRest = rest
+        gooActive = true
+        gooHeld = false
+        gooNext = next
+        gooP.value = 0f
+        gooP.velocity = 0f
+        gooP.target = 1f
+        gooP.response = GOO_RESPONSE
+        gooRun()
+    }
+
+    private fun gooRun() {
+        if (gooFrameOn) return
+        gooFrameOn = true
+        gooLast = 0L
+        Choreographer.getInstance().postFrameCallback(gooFrame)
+    }
+
+    private val gooFrame = object : Choreographer.FrameCallback {
+        override fun doFrame(frameTimeNanos: Long) { android.os.Trace.beginSection("MC goo"); try {
+            gooFrameOn = false
+            if (!gooActive) return
+            val rest = gooRest ?: return
+            val dt = if (gooLast == 0L) 1f / 120f
+                else ((frameTimeNanos - gooLast) / 1e9f).coerceIn(0f, 0.05f)
+            gooLast = frameTimeNanos
+            if (gooHeld) {
+                gooP.value = gooP.target
+                gooP.velocity = 0f
+            } else {
+                gooP.step(dt)
+            }
+            if (gooHeld && gooP.value >= 1f) {
+                // Draw the boundary before committing, even when one move crossed the entire
+                // switch. Otherwise no incoming island may have been bound yet.
+                gooDraw(1f)
+                completeGoo()
+                gooBase += gooSpan(rest) * if (gooNext) -1f else 1f
+                gooP.value -= 1f
+                gooP.target -= 1f
+            }
+            gooDraw(gooP.value)
+            if (!gooHeld && gooP.atRest()) {
+                if (gooP.target >= 1f) completeGoo()
+                endGoo()
+                return
+            }
+            // A held pose changes only on MOVE; do not animate toward a stationary finger.
+            if (!gooHeld) {
+                gooFrameOn = true
+                Choreographer.getInstance().postFrameCallback(this)
+            }
+        } finally { android.os.Trace.endSection() } }
+    }
+
+    /** The gesture at [p] of its way: the arriving island's edge across the row, with the finger. */
+    private fun gooDraw(p: Float) {
+        val rest = gooRest ?: return
+        val f = ColorOsPill.frame(rest, p, gooNext, gooGap(), gooOut(), gooStroke())
+        // Until the arriving island is round it is only glass; from there it has the capsule.
+        if (p >= ColorOsPill.roundAt(rest, gooStroke()) && (goo != null || beginGoo())) {
+            gooDrawSwitch(goo ?: return, f, p)
+            return
+        }
+        goo?.let(::revertGoo)
+        val view = player ?: return
+        view.beginMorph(layoutOnly = true)
+        // The pill keeps its own glass (Soft Glass draws its rim from the view's own rounded
+        // frame; the shared glass, one wide view cut by a path, came out a plain blur until the
+        // pill settled, 2026-10-20). The shared glass only draws what no view covers.
+        view.suppressBackdropBlur(false)
+        view.setMorphFrame(f.old, f.old.h / 2f, 1f)
+        gooShrink(view, f.old, rest)
+        val (oldSharp, _) = ColorOsPill.oldContent(p)
+        view.setContentAlpha(1f)
+        view.setContentBlur((1f - oldSharp) * gooBlurPx())
+        gooShape.reset()
+        ColorOsPill.earGlass(f.new, outerLeft = !gooNext, rest, gooStroke(), gooShape)
+        gooBrackets(rest, f)
+        showGoo(gooShape, rest)
+        resetGlassFade()
+    }
+
+    /** The leaving island's content drawn in toward the bracket it hides in, as its glass narrows. */
+    private fun gooShrink(view: MiniPlayerView, old: CoverMorphMotion.Box, rest: CoverMorphMotion.Box,
+                          toLeft: Boolean = gooNext) {
+        // With the glass, not ahead of it: under sqrt half the width still drew 71% of the content,
+        // which read as cut off rather than drawn in (filmed 2026-10-20).
+        val scale = (old.w / rest.w).coerceIn(0.2f, 1f)
+        // The hiding end's centre, the way the finger went: the left end on a swipe left.
+        view.setContentScale(scale, if (toLeft) old.h / 2f else old.w - old.h / 2f)
+    }
+
+    /** The two ears about [rest], scaled as ColorOS scales its ear views through a switch. */
+    private fun gooBrackets(rest: CoverMorphMotion.Box, f: ColorOsPill.Frame) {
+        ColorOsPill.neighbourPath(rest, right = gooNext, grow = f.bracket,
+            out = gooOut(), stroke = gooStroke(), into = gooShape)
+        ColorOsPill.neighbourPath(rest, right = !gooNext, grow = f.oldBracket,
+            out = gooOut(), stroke = gooStroke(), into = gooShape)
+    }
+
+    private fun gooDrawSwitch(g: GooSwitch, f: ColorOsPill.Frame, p: Float) {
+        val view = player ?: return
+        val blur = gooBlurPx()
+        val (oldSharp, oldSeen) = ColorOsPill.oldContent(p)
+        val (newSharp, newSeen) = ColorOsPill.newContent(p, ColorOsPill.roundAt(g.rest, gooStroke()))
+        // A capsule while wider than its ear's end; narrower it is drawn as its ear, its content gone.
+        val oldGlass = f.oldBean < 0f
+        // Joined, the liquid glass takes over from the views' Soft Glass on a short fade of its
+        // own: tied to the finger it either lingered half way (each fading rim a ring inside the
+        // blur) or snapped (2026-10-20).
+        fadeGlassTo(if (ColorOsPill.joinStrength(f.new, if (oldGlass) f.old else null, f.reach) > 0.1f) 1f else 0f)
+        val join = glassFade
+        ghostPill?.let {
+            if (!oldGlass) {
+                if (it.visibility == View.VISIBLE) it.visibility = View.INVISIBLE
+            } else {
+                if (it.visibility != View.VISIBLE) it.visibility = View.VISIBLE
+                it.setMorphFrame(f.old, minOf(f.old.w, f.old.h) / 2f, 1f - join)
+                gooShrink(it, f.old, g.rest)
+                it.setContentBlur((1f - oldSharp) * blur)
+                it.setContentAlpha(oldSeen)
+            }
+        }
+        view.setMorphFrame(f.new, f.new.h / 2f, 1f - join)
+        // Grown in from the side it arrives on: left at the leaving island's scale, it shrank,
+        // then jumped back to full size when the switch ended (2026-10-20).
+        gooShrink(view, f.new, g.rest, toLeft = !gooNext)
+        view.setContentBlur((1f - newSharp) * blur)
+        view.setContentAlpha(newSeen)
+        gooShape.reset()
+        // The capsules are the views' own Soft Glass; joined, the liquid glass takes them over.
+        if (!oldGlass) ColorOsPill.earGlass(f.old, outerLeft = gooNext, g.rest, gooStroke(), gooShape)
+        gooBrackets(g.rest, f)
+        showGoo(gooShape, g.rest)
+        if (join > 0.01f || glassFadeTarget > 0f) {
+            mergeShape.reset()
+            ColorOsPill.gooPath(f.new, if (oldGlass) f.old else null, mergeShape, f.reach)
+            showMerge(mergeShape, g.rest, join)
+        } else hideMerge()
+    }
+
+    /**
+     * The neighbour on the gesture's side takes the capsule: the pill holds it from here, a
+     * stand-in the island leaving. False with nothing to switch to.
+     */
+    private fun beginGoo(): Boolean {
+        val view = player ?: return false
+        val rest = gooRest ?: return false
+        val keys = islandKeys
+        if (keys.size < 2) return false
+        val next = gooNext
+        val oldKey = selectedIsland?.takeIf { it in keys } ?: keys[0]
+        val at = keys.indexOf(oldKey).coerceAtLeast(0)
+        val newKey = keys[(at + if (next) 1 else keys.size - 1) % keys.size]
+        val oldFrom = ColorOsPill.frame(rest, ColorOsPill.roundAt(rest, gooStroke()), next, gooGap(),
+            gooOut(), gooStroke()).old
+        aloneFirst = null
+        preferredSmall = null
+        selectedIsland = newKey
+        // The pill holds the new island from here; its frame is the gesture's. A switch the
+        // refresh starts is put away without taking the gesture with it.
+        gooBeginning = true
+        try {
+            refresh()
+            if (swap != null) endSwap()
+        } finally { gooBeginning = false }
+        endRow()
+        startGhost(oldKey, oldFrom)
+        ghostPill?.let {
+            it.suppressBackdropBlur(false)
+            it.setMorphFrame(oldFrom, oldFrom.h / 2f, 1f)
+        }
+        view.beginMorph(layoutOnly = true)
+        view.suppressBackdropBlur(false)
+        goo = GooSwitch(next, oldKey, rest)
+        return true
+    }
+
+    /** Back short of the switch: the island that had the capsule has it again. */
+    private fun revertGoo(g: GooSwitch) {
+        goo = null
+        endGhosts()
+        if (g.oldKey in islandKeys) {
+            selectedIsland = g.oldKey
+            gooBeginning = true
+            try { refresh() } finally { gooBeginning = false }
+        }
+    }
+
+    /** A switch done: the stand-in goes, the arriving island has the capsule. */
+    private fun completeGoo() {
+        if (goo == null) return
+        goo = null
+        endGhosts()
+    }
+
+    /** The gesture over, or cut short: the pill has its own glass and frame back. */
+    private var glassFade = 0f
+    private var glassFadeTarget = 0f
+    private var glassFadeAnim: android.animation.ValueAnimator? = null
+
+    private fun fadeGlassTo(target: Float) {
+        if (target == glassFadeTarget) return
+        glassFadeTarget = target
+        glassFadeAnim?.cancel()
+        glassFadeAnim = android.animation.ValueAnimator.ofFloat(glassFade, target).apply {
+            duration = (GLASS_FADE_MS * kotlin.math.abs(target - glassFade)).toLong().coerceAtLeast(1L)
+            interpolator = android.view.animation.PathInterpolator(0.33f, 0f, 0.67f, 1f)
+            addUpdateListener { a ->
+                glassFade = a.animatedValue as Float
+                player?.setMaterialAlpha(1f - glassFade)
+                ghostPill?.setMaterialAlpha(1f - glassFade)
+                mergeAlpha = glassFade
+                if (glassFade <= 0.01f && glassFadeTarget == 0f) hideMerge() else followGlass(mergeGlass, mergeAlpha)
+            }
+            start()
+        }
+    }
+
+    private fun resetGlassFade() {
+        glassFadeAnim?.cancel()
+        glassFadeAnim = null
+        glassFade = 0f
+        glassFadeTarget = 0f
+        hideMerge()
+    }
+
+    private fun endGoo() {
+        resetGlassFade()
+        Choreographer.getInstance().removeFrameCallback(gooFrame)
+        gooFrameOn = false
+        val wasActive = gooActive
+        gooActive = false
+        gooHeld = false
+        gooBase = 0f
+        if (goo != null) completeGoo()
+        islandDragging = false
+        player?.let {
+            if ((morph == null || flight != null) && pillLandingBox == null) it.endMorph()
+            it.setContentAlpha(1f)
+            it.setContentBlur(0f)
+        }
+        if (wasActive) schedulePosition()
+        placeHints()
+    }
+
+    /** The brackets at rest about the capsule, while there is anything to swipe to. */
+    private fun placeHints() {
+        // An update draws them about the capsule as it narrows and widens (applyUpdate).
+        if (gooActive || swap?.kind == SWAP_UPDATE) return
+        val view = player
+        val rest = view?.takeIf { colorOs() && islandKeys.size >= 2 && it.visibility == View.VISIBLE }
+            ?.restBoxOnScreen()
+        if (rest == null) {
+            hideGoo()
+            return
+        }
+        gooShape.reset()
+        ColorOsPill.neighbourPath(rest, right = false, grow = 1f, out = gooOut(),
+            stroke = gooStroke(), into = gooShape)
+        ColorOsPill.neighbourPath(rest, right = true, grow = 1f, out = gooOut(),
+            stroke = gooStroke(), into = gooShape)
+        showGoo(gooShape, rest)
     }
 
     // ------------------------------------------------------------ one island out as its card
@@ -6290,6 +6973,31 @@ private class MiniPlayerController(
         var letGoSent = false
         /** Pulled open by a finger still on the island: it scrolls the stack (followFinger). */
         var finger: SpreadFinger? = null
+        /**
+         * ColorOS: the capsule is the list's first card (its proxy, scale 1.0 in
+         * getStackViewScaleInCapsuleState) - the pill morphs into that row and back.
+         */
+        var lead: MiniCardMorph? = null
+        var leadWhyLogged = false
+        var leadRow: View? = null
+        /**
+         * How far up the finger has the capsule (ColorOS's drag, rubber-banded): held at the
+         * commit and gone as the card comes out; let go short, it springs home on [nudgeBack].
+         */
+        var leadNudge = 0f
+        var nudgeBack: Jelly? = null
+        var nudgeLast = 0L
+        /** The capsule's rest place as the pull began: both ends of the morph are there. */
+        var home: CoverMorphMotion.Box? = null
+        /**
+         * ColorOS's fold into the capsule, on its own spring (StackToCapsule translationY: bounce
+         * 0.25, response 0.35) rather than the stack's scroll: HyperOS piles the rows at the
+         * stack's foot as it folds, and the list followed that, not the capsule (2026-10-21).
+         */
+        var fold: Jelly? = null
+        var foldLast = 0L
+        /** Folding: each card's place in the list as the fold began, centre x and top (closeFrom). */
+        var closeFrom: Map<View, FloatArray>? = null
     }
 
     /**
@@ -6401,6 +7109,9 @@ private class MiniPlayerController(
         val items = islandKeys.filter { it != STACK_ISLAND }.map { SpreadItem(it, seatOf(it)) } +
             out.map { SpreadItem(it, SEAT_HIDDEN, wasOut = true) }
         val s = Spread(items, if (STACK_ISLAND in islandKeys) seatOf(STACK_ISLAND) else SEAT_NONE)
+        // Before the list moves the row: open, the capsule's rest rode up with the notifications,
+        // and the card folded into a capsule 250px over its place, then dropped (2026-10-21).
+        s.home = player?.restBoxOnScreen()
         s.since = android.os.SystemClock.uptimeMillis()
         // Read before the spread's rows come in (setSpread runs the pipeline on the next frame).
         s.focusBefore = NumState.focusCount()
@@ -6537,6 +7248,77 @@ private class MiniPlayerController(
             // The stand-in is the small island's place from here, in its very shape.
             if (small) smallIsland?.visibility = View.GONE
         }
+        if (colorOs() && s.stackSeat == SEAT_BIG) startSpreadLead(s, toCards)
+    }
+
+    /** The stack's notification rows on screen, top first, but those morphing with an island. */
+    private fun spreadRows(s: Spread): List<View> {
+        val stack = notificationStack() ?: return emptyList()
+        val morphing = s.items.mapNotNull { it.native?.takeIf { _ -> it.morph != null } }.toHashSet()
+        val xy = IntArray(2)
+        val rows = ArrayList<Pair<View, Float>>()
+        for (i in 0 until stack.childCount) {
+            val row = stack.getChildAt(i)
+            if (row.visibility != View.VISIBLE || row.height <= 0 || row in morphing) continue
+            if (!row.javaClass.name.endsWith("ExpandableNotificationRow")) continue
+            (row.parent as? View)?.getLocationOnScreen(xy)
+            rows += row to xy[1] + row.top + row.translationY
+        }
+        return rows.sortedBy { it.second }.map { it.first }
+    }
+
+    /** ColorOS: the pill turns into the list's first card - its shape, its place - and back. */
+    private fun startSpreadLead(s: Spread, toCards: Boolean) {
+        s.lead?.cancel()
+        s.lead = null
+        val pill = player ?: return
+        val row = spreadRows(s).firstOrNull()
+        if (row == null) {
+            if (!s.leadWhyLogged) { s.leadWhyLogged = true; spreadTrace("spread lead: no row (stack children=${notificationStack()?.childCount})") }
+            return
+        }
+        pill.visibility = View.VISIBLE
+        pill.alpha = 1f
+        showRow(row)
+        val home = s.home
+        val m = MiniCardMorph(pill, row, toCards, spreadListener, rowLanding(row),
+            restBox = home?.let { h -> { h } }, circle = false)
+        if (!m.startDragging()) {
+            if (!s.leadWhyLogged) {
+                s.leadWhyLogged = true
+                spreadTrace("spread lead: morph refused ${m.lastCancel} pill=${pill.width}x${pill.height} " +
+                    "row=${row.width}x${row.height} ta=${row.transitionAlpha} home=$home")
+            }
+            return
+        }
+        spreadTrace("spread lead started")
+        pill.clearNudge()
+        s.lead = m
+        s.leadRow = row
+    }
+
+    /** ColorOS's capsule drag: the finger's pull, slowing toward dragMaxDistance. */
+    private fun spreadRubber(pulled: Float): Float {
+        val max = SPREAD_DRAG_MAX_PX * density() / COLOROS_DENSITY
+        return max * (1f - kotlin.math.exp(-pulled.coerceAtLeast(0f) / max))
+    }
+
+    private fun endSpreadLead(s: Spread) {
+        val had = s.lead != null
+        // Still up where the finger left it: the pill's own spring takes it home from there. Cut
+        // with the morph, it dropped 36px in one frame (measured on the user's file4.mp4).
+        val left = if (had && s.phase != SPREAD_CLOSING && s.progress < 0.5f) s.leadNudge * (1f - s.progress) else 0f
+        s.lead?.cancel()
+        if (left > 1f) player?.let {
+            it.setNudge(0f, -left)
+            it.springNudgeBack(0f, 0f)
+        }
+        s.lead = null
+        // The morph leaves the first card's text in the capsule: its own back at once, not a
+        // pipeline run later (the summary popped in 0.15 s after it had landed, 2026-10-21).
+        if (had) handler.post { if (spread == null || spread?.phase == SPREAD_OPEN) refresh() }
+        s.leadRow?.let(::showRow)
+        s.leadRow = null
     }
 
     /** 0 at the islands' end, 1 at the cards'. */
@@ -6562,7 +7344,177 @@ private class MiniPlayerController(
             }
             fadeSeat(item.seat, 1f - p)
         }
-        fadeSeat(s.stackSeat, 1f - p)
+        // From the finger: the pull it set off with goes as the card comes out.
+        if (colorOs()) {
+            val held = s.finger?.takeIf { !it.ended }
+            val back = s.nudgeBack
+            if (held != null) s.leadNudge = spreadRubber(held.pulled())
+            else if (back != null) {
+                val now = android.os.SystemClock.uptimeMillis()
+                back.step(if (s.nudgeLast == 0L) 1f / 120f else ((now - s.nudgeLast) / 1000f).coerceIn(0f, 0.05f))
+                s.nudgeLast = now
+                s.leadNudge = back.value
+            }
+        }
+        // From the finger, opening only: the pull goes as the card comes out of the capsule. Kept
+        // into the fold it lifted the landing capsule by the whole pull, 150px over its place.
+        // The stack had no row laid out yet when the spread began (a pull right after a fold):
+        // the capsule becomes the first card as soon as there is one. Without, the capsule
+        // faded to an empty blurred glass while the row came up at its place in the list.
+        if (colorOs() && s.lead == null && s.stackSeat == SEAT_BIG && s.phase != SPREAD_OPEN &&
+            s.items.none { it.morph != null }) startSpreadLead(s, toCards = s.phase != SPREAD_CLOSING)
+        val nudge = if (s.phase == SPREAD_CLOSING) 0f else s.leadNudge * (1f - p)
+        s.lead?.takeIf { it.active }?.led(p, nudge)
+        if (colorOs()) colorOsSpread(s, p) else fadeSeat(s.stackSeat, 1f - p)
+    }
+
+    /** The stack's rows the ColorOS spread has drawn on (colorOsSpread), to be given back. */
+    private val spreadCards = java.util.WeakHashMap<View, Boolean>()
+    /** The blur each of them has now, so an unchanged one is not set again. */
+    private val spreadBlurOf = java.util.WeakHashMap<View, Float>()
+    /** Their own translationZ before the pile put each under the one before it. */
+    private val spreadZOf = java.util.WeakHashMap<View, Float>()
+    private val spreadMatrix = Matrix()
+    private var spreadLast = 0L
+    /** The capsule going (1) as the list comes out of it, back (0) as it folds, with no lead. */
+    private val spreadPillGone = Jelly(0.3f, 0.89f)
+
+    /**
+     * ColorOS's list out of its capsule (filmed on ColorOS 16, file3.mp4; CapsuleCardControl
+     * handleStackViewForCapsule): folded, every card stands behind the capsule at the capsule's
+     * size times FIRST_ITEM_SCALE 0.85 less ITEM_SCALE_DIFF 0.1 for each card after the first
+     * (not under ITEM_SCALE_MINI 0.1), centred on it, blurred by 70; the capsule fades as they
+     * open out to their places and come into focus, each a little after the one before.
+     * shortcut: ColorOS clips each card to that size (setTargetClipWidth/Height, corner h/2);
+     * here it is scaled, its own corners kept - clip the row's outline if the text size shows.
+     */
+    private fun colorOsSpread(s: Spread, p: Float) {
+        val now = android.os.SystemClock.uptimeMillis()
+        val dt = if (spreadLast == 0L || now - spreadLast > 100) 1f / 120f else (now - spreadLast) / 1000f
+        spreadLast = now
+        val opening = s.phase != SPREAD_CLOSING
+        val view = player
+        val pill = s.home ?: view?.restBoxOnScreen()
+        // On its own clock to its end, as ColorOS's capsule alpha (0.11, 0.3 out; 0.9 back): it
+        // goes as soon as the list comes out of it, whatever the pull - on the pull it stood as
+        // an empty glass under the cards all the way up.
+        spreadPillGone.response = if (opening) 0.3f else 0.9f
+        spreadPillGone.target = if (opening) 1f else 0f
+        spreadPillGone.step(dt)
+        val gone = spreadPillGone.value.coerceIn(0f, 1f)
+        // The capsule morphing into the first card is that card; without a lead it fades.
+        val led = s.lead?.active == true
+        if (!led) {
+            fadeSeat(s.stackSeat, 1f - gone)
+            val blurMax = SPREAD_BLUR_PX * density() / COLOROS_DENSITY
+            if (s.stackSeat == SEAT_BIG) view?.setContentBlur(gone * blurMax)
+        }
+        if (pill == null) return
+        val skip = s.items.mapNotNull { it.native?.takeIf { _ -> it.morph != null } }.toHashSet()
+        s.leadRow?.takeIf { led }?.let { skip += it }
+        // Behind the first card wherever its morph has it: they come out from under it.
+        val anchor = s.lead?.takeIf { led }?.containerBox() ?: pill
+        val refTop = s.leadRow?.takeIf { led }?.let { row ->
+            val xy = IntArray(2)
+            (row.parent as? View)?.getLocationOnScreen(xy)
+            xy[1] + row.top + row.translationY
+        }
+        spreadCardsTo(p, anchor, refTop, skip, if (opening) null else s.closeFrom, pill)
+    }
+
+    /**
+     * The cards behind the first one at [p] (1 their places, 0 the capsule), held to [anchor] -
+     * the first card's frame as its morph draws it, or the capsule - as one piece with it: on the
+     * same progress, no spring of their own. At 0 each stands centred behind it at its size times
+     * ColorOS's 0.85, 0.75, ...; at 1 where the list has it, [refTop] being the first card's top
+     * there. Pulled up, they come out from under the first card as it rises into its place, and
+     * fold back under it the same way. On springs of their own (CapsuleToStack's response step)
+     * they came apart from it and bounced in after it (the user, 2026-10-21).
+     */
+    private fun spreadCardsTo(p: Float, anchor: CoverMorphMotion.Box, refTop: Float?, morphing: Set<View>,
+                              closeFrom: Map<View, FloatArray>? = null, home: CoverMorphMotion.Box = anchor) {
+        val stack = notificationStack() ?: return
+        // In whole steps: a new blur effect per row per frame is a new offscreen pass each time.
+        val blur = if (Main.sPerfOff.contains("spreadblur")) 0f
+            else kotlin.math.round((1f - p).coerceIn(0f, 1f) * SPREAD_BLUR_PX * density() / COLOROS_DENSITY / 2f) * 2f
+        val xy = IntArray(2)
+        val rows = ArrayList<View>()
+        for (i in 0 until stack.childCount) {
+            val row = stack.getChildAt(i)
+            if (row.visibility != View.VISIBLE || row.height <= 0 || row in morphing) continue
+            if (!row.javaClass.name.endsWith("ExpandableNotificationRow")) continue
+            rows += row
+        }
+        val tops = rows.associateWith { row ->
+            (row.parent as? View)?.getLocationOnScreen(xy)
+            xy[1] + row.top + row.translationY
+        }
+        val ordered = rows.sortedBy { tops[it] }
+        val ref = refTop ?: ordered.firstOrNull()?.let { tops[it] } ?: return
+        for ((i, row) in ordered.withIndex()) {
+            val w = row.width.toFloat()
+            val h = row.height.toFloat()
+            val top = tops[row] ?: continue
+            (row.parent as? View)?.getLocationOnScreen(xy)
+            val cx = xy[0] + row.left + row.translationX + w / 2f
+            val cy = top + h / 2f
+            // A pile under the front card, each one smaller than the one before (ColorOS's 0.85,
+            // 0.75 ...; HyperOS's own stack piles the same way) and peeking out below it by a
+            // little more; past the second they wait hidden under it.
+            val depth = i + 1
+            val scale = (SPREAD_FIRST_SCALE - SPREAD_SCALE_STEP * i).coerceAtLeast(SPREAD_SCALE_MIN)
+            val peek = depth.coerceAtMost(SPREAD_PILE_SHOWN)
+            val from = closeFrom?.get(row)
+            // Folding: from where the list had it into the pile under the capsule's place,
+            // there before the first card is, which then comes down over them.
+            val q = if (from != null) ((p - SPREAD_REAR_FADE) / (1f - SPREAD_REAR_FADE)).coerceIn(0f, 1f) else p
+            val base = if (from != null) home else anchor
+            val pileW = base.w * scale
+            val pileH = base.h * scale
+            val pileCy = base.y + base.h + base.h * SPREAD_PILE_PEEK * peek - pileH / 2f
+            val sx = lerp(pileW / w, 1f, q)
+            val sy = lerp(pileH / h, 1f, q)
+            val toX = lerp(base.cx(), from?.get(0) ?: cx, q)
+            val toY = lerp(pileCy, if (from != null) from[1] + h / 2f else anchor.y + (top - ref) + h / 2f, q)
+            // Each under the one before it: the stack draws its later rows over the earlier.
+            if (row !in spreadZOf) spreadZOf[row] = row.translationZ
+            val z = (spreadZOf[row] ?: 0f) - depth
+            if (row.translationZ != z) row.translationZ = z
+            spreadMatrix.setScale(sx, sy, w / 2f, row.translationY + h / 2f)
+            spreadMatrix.postTranslate(toX - cx, toY - cy)
+            row.setAnimationMatrix(if (p >= 0.999f) null else spreadMatrix)
+            // Behind the capsule's glass they showed through it, the second card's colours as the
+            // list folded (the user, 2026-10-21): gone by the time it is the capsule again.
+            if (row !in hiddenRows) {
+                val a = if (depth > SPREAD_PILE_SHOWN) MiniCardMorph.smooth(0f, 0.5f, p)
+                    else MiniCardMorph.smooth(0f, SPREAD_REAR_FADE, p)
+                if (kotlin.math.abs(row.transitionAlpha - a) > 0.002f) row.transitionAlpha = a
+            }
+            if (spreadBlurOf[row] != blur) {
+                spreadBlurOf[row] = blur
+                row.setRenderEffect(if (blur < 0.5f) null
+                    else android.graphics.RenderEffect.createBlurEffect(blur, blur, android.graphics.Shader.TileMode.DECAL))
+            }
+            spreadCards[row] = true
+        }
+    }
+
+    /** At the spread's end the cards are where it left them (an end): given back. */
+    private fun settleColorOsSpread(@Suppress("UNUSED_PARAMETER") opened: Boolean) = clearColorOsSpread()
+
+    private fun clearColorOsSpread() {
+        for (row in spreadCards.keys.toList()) {
+            row.setAnimationMatrix(null)
+            row.setRenderEffect(null)
+            if (row !in hiddenRows) row.transitionAlpha = 1f
+            spreadZOf[row]?.let { row.translationZ = it }
+        }
+        spreadZOf.clear()
+        spreadCards.clear()
+        spreadBlurOf.clear()
+        spreadLast = 0L
+        spreadPillGone.value = 0f
+        player?.setContentBlur(0f)
     }
 
     private fun fadeSeat(seat: Int, a: Float) {
@@ -6577,7 +7529,31 @@ private class MiniPlayerController(
 
     /** Opening or closing: every island on the stack's scroll, until the stack rests at an end. */
     private fun moveSpread(s: Spread) {
-        s.finger?.takeIf { !it.ended && s.phase == SPREAD_OPENING }?.let { followFinger(s, it) }
+        s.finger?.takeIf { !it.ended && s.phase == SPREAD_OPENING }?.let { f ->
+            // ColorOS does not scrub the list with the finger: the capsule follows it a little
+            // (spreadRubber) and past dragMaxAction the list comes out on its own, from there.
+            if (!colorOs()) followFinger(s, f)
+            else if (f.pulled() >= SPREAD_DRAG_ACTION_PX * density() / COLOROS_DENSITY) {
+                spreadFingerEnd(-(SPREAD_FLING_DP + 1f) * density(), cancelled = false)
+            }
+        }
+        // ColorOS: pulled back down while still opening, it folds the same way as from open.
+        if (colorOs() && s.phase == SPREAD_OPENING && s.finger?.ended != false && s.lead != null &&
+            s.items.none { it.morph != null } && stackDragged()) {
+            s.closeFrom = spreadRows(s).associateWith { row ->
+                val xy = IntArray(2)
+                (row.parent as? View)?.getLocationOnScreen(xy)
+                floatArrayOf(xy[0] + row.left + row.translationX + row.width / 2f, xy[1] + row.top + row.translationY)
+            }
+            s.phase = SPREAD_CLOSING
+            s.since = android.os.SystemClock.uptimeMillis()
+            s.fold = null
+            spreadTrace("spread closing (pulled back opening): " + describeSpread())
+        }
+        if (colorOs() && s.phase == SPREAD_CLOSING && s.items.none { it.morph != null }) {
+            foldColorOs(s)
+            return
+        }
         val y = NumState.position() ?: return
         val p = spreadProgress(s, y)
         if (s.items.any { it.morph?.active == false }) {
@@ -6653,6 +7629,25 @@ private class MiniPlayerController(
         }
     }
 
+    /** ColorOS: the list into the capsule on [Spread.fold], the stack folding under it on its own. */
+    private fun foldColorOs(s: Spread) {
+        val now = android.os.SystemClock.uptimeMillis()
+        val f = s.fold ?: Jelly(SPREAD_FOLD_RESPONSE, SPREAD_FOLD_DAMPING).also {
+            it.value = s.progress.coerceIn(0f, 1f)
+            it.target = 0f
+            s.fold = it
+            s.foldLast = now
+            if (NumState.inNumber != true) NumState.goTo("NUMBER", why = "colorOS fold")
+        }
+        f.step(((now - s.foldLast) / 1000f).coerceIn(1f / 240f, 0.05f))
+        s.foldLast = now
+        applySpread(s, f.value.coerceAtLeast(-0.05f))
+        // Landed, and the stack folded under it (or long enough waiting for it).
+        if (f.atRest() && (NumState.inNumber == true || now - s.since > SPREAD_GIVE_UP_MS)) {
+            endSpread(folded = true, why = "colorOS folded")
+        }
+    }
+
     /** The spread's own events, in `op mini` and in `op numstate`'s frames with its frames. */
     private fun spreadTrace(what: String) {
         trace(what)
@@ -6697,6 +7692,13 @@ private class MiniPlayerController(
             else -> s.progress >= SPREAD_OPEN_AT
         }
         spreadTrace("spread let go p=${"%.2f".format(s.progress)} v=${velocityY.toInt()} list=${f.toList}")
+        // Let go: the finger's lift goes on a spring of its own, whichever way the list goes. Kept
+        // till the progress took it, a list pulled back mid-way left the capsule lifted by the
+        // whole pull while the stack folded under it (the user, 2026-10-21).
+        if (colorOs()) s.nudgeBack = Jelly(SPREAD_NUDGE_BACK_RESPONSE, 0.8f).apply {
+            value = s.leadNudge
+            target = 0f
+        }
         // Still waiting for the rows: waitSpread takes the decision when they are in.
         if (s.phase != SPREAD_OPENING) return true
         s.finger = null
@@ -6708,6 +7710,8 @@ private class MiniPlayerController(
 
     /** The list is open: the cards are the lock screen's own, the row's views put away. */
     private fun finishOpen(s: Spread, y: Int) {
+        endSpreadLead(s)
+        settleColorOsSpread(opened = true)
         for (item in s.items) {
             item.morph?.cancel()
             item.morph = null
@@ -6752,8 +7756,21 @@ private class MiniPlayerController(
         s.lastY = y
         val toward = if (s.cardsY >= islandsY) s.cardsY - y else y - s.cardsY
         val folded = NumState.inNumber == true
-        if (folded || listPulled() && toward > dp(SPREAD_PULL_DP)) {
+        // The stack folding on its own (a let-go, a wake to its default) counts as soon as it is
+        // on its way, not once it is folded: noticed only at the end, the cards folded the
+        // stack's way and the capsule then appeared at once under them (filmed 2026-10-21).
+        // ColorOS: the list follows the finger down (HyperOS's own pull) until dragMaxAction
+        // (DraggerParams stack 60dp), then goes into the capsule on its own.
+        val pullAt = if (colorOs()) dp(SPREAD_LIST_DRAG_ACTION_DP).toFloat() else dp(SPREAD_PULL_DP).toFloat()
+        val pulledFar = colorOs() && kotlin.math.abs(NumState.overScroll()) >= pullAt
+        if (folded || pulledFar || (listPulled() || NumState.busy()) && toward > pullAt) {
             s.islandsY = islandsY
+            // The list's places now, before the stack piles them at its foot as it folds.
+            s.closeFrom = if (colorOs()) spreadRows(s).associateWith { row ->
+                val xy = IntArray(2)
+                (row.parent as? View)?.getLocationOnScreen(xy)
+                floatArrayOf(xy[0] + row.left + row.translationX + row.width / 2f, xy[1] + row.top + row.translationY)
+            } else null
             startSpreadMorphs(s, toCards = false)
             s.phase = SPREAD_CLOSING
             s.since = android.os.SystemClock.uptimeMillis()
@@ -6761,6 +7778,7 @@ private class MiniPlayerController(
             s.nudged = false
             s.wasDragged = stackDragged()
             s.letGoSent = false
+            s.fold = null
             s.lastY = Int.MIN_VALUE
             applySpread(s, spreadProgress(s, y))
             spreadTrace("spread closing (${if (folded) "folded" else "pulled"}): " + describeSpread())
@@ -6783,6 +7801,8 @@ private class MiniPlayerController(
         val s = spread ?: return
         spread = null
         Choreographer.getInstance().removeFrameCallback(spreadFrame)
+        endSpreadLead(s)
+        settleColorOsSpread(opened = !folded)
         for (item in s.items) {
             item.morph?.cancel()
             item.morph = null
@@ -6804,6 +7824,9 @@ private class MiniPlayerController(
             else showRow(native)
         }
         player?.alpha = 1f
+        // Whatever a cut-short morph or the capsule's fade left on its content.
+        player?.setContentBlur(0f)
+        player?.setContentAlpha(1f)
         if (folded) player?.visibility = View.VISIBLE
         smallIsland?.alpha = 1f
         // The small island's place as the fold left it: whoever came down into it stays. Nobody
@@ -8027,7 +9050,8 @@ private class MiniPlayerController(
     private fun updateDiscs() {
         // First, so that the discs below see the buttons as they will be drawn.
         holdButtonsThroughDoze()
-        val d = discDiameter()
+        // The torch's and the camera's circles: ColorOS's are smaller than the capsule is tall.
+        val d = (discDiameter() * shortcutScale()).roundToInt()
         val frame = discFrame(d)
         followHost.reset()
         host.transformMatrixToGlobal(followHost)
@@ -8248,7 +9272,8 @@ private class MiniPlayerController(
      * icon behind when only the scale was checked.
      */
     private fun squeezeButton(side: Int, button: View, d: Int) {
-        val k = squeeze.iconScale(side)
+        // The glyph shrinks with its circle (shortcutScale).
+        val k = squeeze.iconScale(side) * shortcutScale()
         val outward = if (side == 0) -1f else 1f
         // The disc's shift in the button's own pixels: the button's own scale, not its row's.
         val shift = outward * squeeze.discShift(side) * d * button.scaleX
@@ -8390,6 +9415,8 @@ private class MiniPlayerController(
         dropFlight()
         spareViews.forEach { runCatching { host.removeView(it) } }
         spareViews.clear()
+        oldContent?.let { runCatching { host.removeView(it) } }
+        oldContent = null
         player?.let { runCatching { host.removeView(it) } }
         player = null
         controller = null
@@ -8869,6 +9896,12 @@ private class MiniPlayerController(
         // gesture is the row's and the button never hears of it.
         val onSmall = smallIslandAt(x, y)
         if (!onSmall && (!inside || onButton(left, x, y) || onButton(right, x, y))) return null
+        // ColorOS: a finger on the capsule while the list is still folding into it - the fold is
+        // done at once and the pull is the capsule's. Refused, it went to the stack itself and
+        // the list came up HyperOS's way, the capsule a blurred empty glass (2026-10-21).
+        spread?.takeIf { colorOs() && it.phase == SPREAD_CLOSING && it.fold != null }?.let {
+            endSpread(folded = true, why = "touched while folding")
+        }
         val refused = when {
             view.visibility != View.VISIBLE -> "hidden"
             !view.isAttachedToWindow -> "detached"
@@ -9032,8 +10065,11 @@ private class MiniPlayerController(
         val others = notes.isNotEmpty() || returning.isNotEmpty() || exchange != null ||
             noteMorphKey.let { it != null && it != MUSIC_ISLAND }
         val musicInRow = music != null && (!carded || !others || musicMoving)
+        // Known before this run, the row's and those out as their cards (islandOrder).
+        val keysBefore = islandKeys
+        val orderBefore = islandOrder
         // The row: the music first, then the notifications in LockIslands' order.
-        islandKeys = (if (musicInRow) listOf(MUSIC_ISLAND) else emptyList()) + notes.map { it.key }
+        islandKeys =(if (musicInRow) listOf(MUSIC_ISLAND) else emptyList()) + notes.map { it.key }
         // Two can be on their way back at once: a tap mid-switch brings one down as another lands.
         val now = android.os.SystemClock.uptimeMillis()
         returning.entries.removeAll { (key, since) ->
@@ -9075,14 +10111,28 @@ private class MiniPlayerController(
             return
         }
         val lost = selectedIsland != null && selectedIsland !in islandKeys
-        val selected = selectedIsland?.takeIf { it in islandKeys } ?: islandKeys.first()
+        val shown = player?.takeIf { it.visibility == View.VISIBLE }
+        // Faded out under the control center or the shade, it just takes the new island.
+        val seen = shown?.takeIf { it.alpha * it.transitionAlpha > 0.01f }
+        // ColorOS shows the newest capsule: an island that has just come into the row takes it,
+        // and the capsule plays its update where it stands (startUpdate).
+        val colorOsUpdate = colorOs() && seen != null && keysBefore.isNotEmpty() && !gooActive &&
+            (!frameTaken() || updating())
+        val arrived = if (colorOsUpdate) islandKeys.firstOrNull { it !in keysBefore && it !in orderBefore } else null
+        val previous = selectedIsland
+        val selected = arrived ?: selectedIsland?.takeIf { it in islandKeys } ?: islandKeys.first()
         selectedIsland = selected
-        // The notification in the pill went (dismissed, answered elsewhere): the next island
-        // grows into the pill from its end, as one coming out of the stack does.
-        // A pill not on screen - the music hidden by its cover, say - has nothing to switch from:
-        // a switch here took the next island's coming-up from its first frame (`op mini`: up done
-        // frames=1), and it grows in as a new row instead.
-        if (lost && player?.visibility == View.VISIBLE) {
+        // From where a running update has the capsule, else its rest.
+        val updateFrom = if (colorOsUpdate && (lost || arrived != null) && selected != previous)
+            swap?.takeIf { it.kind == SWAP_UPDATE }?.drawn ?: shown?.restBoxOnScreen() else null
+        // Recorded before the new island is bound over it.
+        val updateContent = updateFrom?.let { shown?.recordContent() }
+        if (updateFrom == null && lost && player?.visibility == View.VISIBLE) {
+            // The notification in the pill went (dismissed, answered elsewhere): the next island
+            // grows into the pill from its end, as one coming out of the stack does.
+            // A pill not on screen - the music hidden by its cover, say - has nothing to switch from:
+            // a switch here took the next island's coming-up from its first frame (`op mini`: up done
+            // frames=1), and it grows in as a new row instead.
             val oldSmall = smallKey
             handler.post { if (swap == null && morph == null) startSwap(null, oldSmall) }
         }
@@ -9115,6 +10165,8 @@ private class MiniPlayerController(
         traced("MC r.artBridge") { applyArtBridge() }
         updateVisibility()
         schedulePosition()
+        // Started now, before a frame shows the new island at its rest width.
+        if (updateFrom != null) startUpdate(updateContent, updateFrom)
         prewarmSpares()
     } finally { android.os.Trace.endSection() } }
 
@@ -10258,18 +11310,24 @@ private class MiniPlayerController(
         val centerX = if (l != null && r != null) (l[0] + r[0]) / 2f else host.width / 2f
         val config = this.config
         val requestedWidth = dp(config.getDouble(MiniPlayerConfig.WIDTH).toFloat())
-        val height = dp(MiniPlayerConfig.visibleHeightDp(config.toString()))
+        // ColorOS's capsule is as tall as its torch and camera are round (shortcutScale).
+        val height = (dp(MiniPlayerConfig.visibleHeightDp(config.toString())) * shortcutScale()).roundToInt()
         val centerY = rowCentreY(l, r, height)
         if ((l == null || r == null) && config.optBoolean(MiniPlayerConfig.ADAPTIVE_WIDTH)) {
             widenedRest(l, r, small, height, centerY)?.let { return compactRest(it) }
         }
         // Clear of the discs, a circle as tall as the pill on each button. Laid out rather than
         // shown: the buttons are put away in the doze, and the pill must not widen for it.
+        // ColorOS's capsule takes the room its smaller torch and camera give up.
+        val shortcutD = height.toFloat()
         val width = MiniPlayerGeometry.clearOfDiscsPx(
-            MiniPlayerGeometry.widthPx(min(requestedWidth, (host.width * .64f).toInt()),
+            MiniPlayerGeometry.widthPx(min(maxOf(requestedWidth, if (colorOs()) host.width else 0),
+                (host.width * if (colorOs()) .72f else .64f).toInt()),
                 host.width, centerX, dp(12f)),
-            centerX, l?.get(0), r?.get(0), height.toFloat(),
-            dp(MiniPlayerGeometry.DISC_GAP_DP).toFloat(), dp(MiniPlayerGeometry.MIN_PILL_DP))
+            centerX, l?.get(0), r?.get(0), shortcutD,
+            // ColorOS keeps room either side for its brackets.
+            dp(MiniPlayerGeometry.DISC_GAP_DP + if (colorOs()) COLOROS_BRACKET_ROOM_DP else 0f).toFloat(),
+            dp(MiniPlayerGeometry.MIN_PILL_DP))
         // With a small island the pill makes room for it, the two centred as one group - and
         // the group kept clear of both discs: the camera's touch area is wider than its disc,
         // and a group reaching into it lost the small island's taps to the camera.
@@ -10428,7 +11486,8 @@ private class MiniPlayerController(
         if (view.visibility != View.VISIBLE || spread != null) return
         val small = smallKey != null
         val rest = pillRest(small) ?: return
-        view.setCompactScale(compactScale())
+        view.setCompactScale(compactScale() * shortcutScale())
+        view.setFitArtwork(colorOs())
         val pillWidth = rest.width
         val height = rest.height
         val centerY = rest.centerY
@@ -10446,6 +11505,7 @@ private class MiniPlayerController(
         val y = centerY - height / 2f - view.top
         view.setBaseTranslation(x, y)
         rowTarget(groupLeft, pillWidth.toFloat())
+        placeHints()
         if (view.layoutParams.width != pillWidth || view.layoutParams.height != height) {
             view.layoutParams = view.layoutParams.apply { this.width = pillWidth; this.height = height }
             schedulePosition()
@@ -10562,6 +11622,50 @@ private const val LAND_HIDDEN = 2
 private const val SWAP_PAIR = 0
 private const val SWAP_NEXT = 1
 private const val SWAP_PREV = 2
+/** ColorOS's capsule taking another island where it stands (startUpdate). */
+private const val SWAP_UPDATE = 3
+
+// The ColorOS spread (colorOsSpread), from its ExtStateAnimParams: the cards' blur folded (70 px
+// at ColorOS's 560 dpi) and their size behind the capsule.
+private const val SPREAD_BLUR_PX = 70f
+private const val COLOROS_DENSITY = 3.5f
+private const val SPREAD_FIRST_SCALE = 0.85f
+private const val SPREAD_SCALE_STEP = 0.1f
+private const val SPREAD_SCALE_MIN = 0.1f
+// ColorOS ExtStateAnimParams CapsuleToStack dragMaxDistance / dragMaxAction (px at 560 dpi): how
+// far the capsule follows the finger, and the pull that sends the list out.
+private const val SPREAD_DRAG_MAX_PX = 200f
+private const val SPREAD_DRAG_ACTION_PX = 68f
+private const val SPREAD_NUDGE_BACK_RESPONSE = 0.35f
+// ColorOS DraggerParams stack dragMaxAction (dp) and StackToCapsule translationY spring.
+private const val SPREAD_LIST_DRAG_ACTION_DP = 60f
+private const val SPREAD_FOLD_RESPONSE = 0.35f
+private const val SPREAD_FOLD_DAMPING = 0.75f
+/** The pile behind the first card is gone below this much of the way to the list. */
+private const val SPREAD_REAR_FADE = 0.08f
+/** Cards of the pile shown under the front one, and how far each peeks below the one before. */
+private const val SPREAD_PILE_SHOWN = 2
+private const val SPREAD_PILE_PEEK = 0.12f
+
+// ColorOS SystemUI CapsuleSpringAnimParams.SwitchParams ("新增动画_1到多"), (bounce, response)
+// as damping 1 - bounce. Width: (0.4, 0.9) with an initial -3500 px/s at 560 dpi (the light
+// level; -4800 full) - the kick that makes it dip before it opens to the new width.
+private const val UPDATE_WIDTH_RESPONSE = 0.9f
+private const val UPDATE_WIDTH_DAMPING = 0.6f
+private const val UPDATE_KICK_DP = 1000f
+// No bounce; Jelly divides by sqrt(1 - damping^2), so not quite 1.
+private const val UPDATE_DAMPING = 0.99f
+// OldCard: blur (0, 0.9), fade (0, 0.3), scale (0, 0.15) to Common.minScale 0.2.
+private const val UPDATE_OLD_BLUR_RESPONSE = 0.9f
+private const val UPDATE_OLD_ALPHA_RESPONSE = 0.3f
+private const val UPDATE_OLD_SCALE_RESPONSE = 0.15f
+private const val UPDATE_OLD_MIN_SCALE = 0.2f
+// NewCard: blur (0, 0.5) out of Common.maxBlur.
+private const val UPDATE_NEW_BLUR_RESPONSE = 0.5f
+// shortcut: ColorOS's maxBlur is 120 in its own blur units; 12 dp matched by eye to its recording (sharp ~0.2 s in).
+private const val UPDATE_BLUR_DP = 12f
+/** A capsule centred elsewhere for the new island gets there over this long. */
+private const val UPDATE_MOVE_MS = 350f
 
 /**
  * The super island's other springs (FolmeEase.spring(damping, response)): APPEAR 0.7/0.5,
@@ -10591,6 +11695,23 @@ private const val CUTOUT_SHARE = 0.55f
 /** How far an island's content goes out of focus leaving the big island's place. */
 /** ColorOS's capsule content blur, 9dp (SystemUIPlugin u4.k / u4.b0: j6.j.a(ctx, 9f)). */
 private const val SWAP_BLUR_DP = 9f
+
+/** ColorOS's switch: the waist, the flow and the fold on one spring, without a bounce. */
+private const val GOO_RESPONSE = 0.42f
+private const val GOO_DAMPING = 0.95f
+
+/** ColorOS's torch and camera against the capsule's height. */
+private const val COLOROS_SHORTCUT = 0.8f
+
+/** Room between ColorOS's capsule and its torch and camera, for the brackets, on top of the gap. */
+private const val COLOROS_BRACKET_ROOM_DP = 10f
+
+/** Let go past this much of the gesture's way, it runs on to the end; short of it, back. */
+private const val GOO_COMMIT_AT = 0.22f
+
+/** A fling either way decides, faster than this, in dp a second. */
+private const val GOO_FLING_DP = 900f
+
 
 /** The music's place in the row of islands, beside the notifications' keys. */
 private const val MUSIC_ISLAND = "\u0000music"

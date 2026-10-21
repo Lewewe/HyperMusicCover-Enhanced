@@ -165,6 +165,13 @@ internal class MiniCardMorph(
     private var lastFrame = 0L
     private var startedAt = 0L
 
+    /**
+     * A cover flight carried the picture in this morph: it lands on the pill's own slot, and the
+     * picture stays there - left to finish the morph from the card's artwork, it came out of the
+     * flight big and shrank again for half a second (filmed 2026-10-20).
+     */
+    private var artFlown = false
+
     /** Why it was last cut short, for `op mini`: the lock screen's guard, or no geometry. */
     var lastCancel = ""
         private set
@@ -196,11 +203,16 @@ internal class MiniCardMorph(
 
     /** Lays out the first frame now, in the same pass as the switch, so no frame shows either end bare. */
     fun start(): Boolean {
-        if (!measure()) return false
+        if (!measure()) {
+            lastCancel = "measure " + geometryWhy()
+            return false
+        }
         mini.beginMorph()
         running = true
+        artFlown = false
         startedAt = SystemClock.uptimeMillis()
         if (!apply()) {
+            lastCancel = "apply " + geometryWhy()
             restore()
             running = false
             return false
@@ -260,13 +272,13 @@ internal class MiniCardMorph(
      * Spread). Started as dragged, so its own frame only keeps the far end live when nothing has
      * posed it this frame.
      */
-    fun led(progress: Float) {
+    fun led(progress: Float, nudgePx: Float = 0f, nudgeXPx: Float = 0f) {
         if (!running) return
         motion.value = progress
         motion.velocity = 0f
-        nudge.value = 0f
+        nudge.value = nudgePx / NUDGE_UNIT
         nudge.velocity = 0f
-        nudgeX.value = 0f
+        nudgeX.value = nudgeXPx / NUDGE_UNIT
         nudgeX.velocity = 0f
         ledAt = SystemClock.uptimeMillis()
         apply()
@@ -469,6 +481,7 @@ internal class MiniCardMorph(
         val m = lerp(box.w / miniRest.w, box.w / laidW, round)
         val mix = pieceMix(c)
         val bridged = listener.artBridged()
+        if (bridged && !toNative) artFlown = true
         traced("MC m.pieces") {
             pieces.forEach { piece ->
                 val v = piece.view
@@ -484,13 +497,15 @@ internal class MiniCardMorph(
                 if (round > 0f && piece.art) {
                     // The small island's picture: its share of the circle, in the middle of it -
                     // growing with the container's height as the circle becomes the row.
+                    // One scale from its height: a shaped (ColorOS) picture keeps its own width.
                     val side = box.h * CIRCLE_ICON_SHARE
-                    kx = lerp(kx, side / max(1, v.width), round)
-                    ky = lerp(ky, side / max(1, v.height), round)
-                    tx = lerp(tx, (min(box.w, box.h) - side) / 2f, round)
+                    val k = side / max(1, v.height)
+                    kx = lerp(kx, k, round)
+                    ky = lerp(ky, k, round)
+                    tx = lerp(tx, (min(box.w, box.h) - v.width * k) / 2f, round)
                     ty = lerp(ty, (box.h - side) / 2f, round)
                 }
-                if (piece.paired) {
+                if (piece.paired && !(piece.art && artFlown)) {
                     val n = piece.native!!
                     val nx = (offsetIn(n, header, true) + anchorX(n, piece.text)) * s
                     val ny = (offsetIn(n, header, false) + anchorY(n, piece.text)) * s
@@ -547,6 +562,7 @@ internal class MiniCardMorph(
                 // showed sharp through it, and it was taken out.
                 v.alpha = when {
                     piece.art && bridged -> 0f
+                    piece.art && artFlown -> 1f
                     piece.art -> asPill
                     // Out of a circle, only the picture is there at first; the lines join it once
                     // the shape has room for them.
@@ -556,7 +572,7 @@ internal class MiniCardMorph(
                     artDrawn = CoverMorphMotion.Box(box.x + tx - ax * kx, box.y + ty - ay * ky,
                         v.width * kx, v.height * ky)
                     // Round in the card's own corner by the time it lies on the card's artwork.
-                    val landed = if (piece.paired) nativeArtRadius * s / max(0.01f, kx)
+                    val landed = if (piece.paired && !artFlown) nativeArtRadius * s / max(0.01f, kx)
                         else mini.artworkRestRadius()
                     // A small island's picture is round.
                     val home = lerp(mini.artworkRestRadius(), min(v.width, v.height) / 2f, round)
