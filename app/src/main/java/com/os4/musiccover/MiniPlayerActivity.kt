@@ -114,6 +114,11 @@ private fun MiniPlayerPage(blur: Boolean, refreshKey: Int, onBack: () -> Unit) {
                         checked = config.optBoolean(MiniPlayerConfig.LIST_WITHOUT_PLAYER),
                         enabled = alive && config.optBoolean(MiniPlayerConfig.ENABLED),
                         onCheckedChange = { push(MiniPlayerConfig.LIST_WITHOUT_PLAYER, it) })
+                    SwitchPreference(title = stringResource(R.string.mini_note_text_scroll),
+                        summary = stringResource(R.string.mini_note_text_scroll_summary),
+                        checked = config.optBoolean(MiniPlayerConfig.NOTE_TEXT_SCROLL, true),
+                        enabled = alive && config.optBoolean(MiniPlayerConfig.ENABLED),
+                        onCheckedChange = { push(MiniPlayerConfig.NOTE_TEXT_SCROLL, it) })
                     SwitchPreference(title = stringResource(R.string.mini_widen),
                         summary = stringResource(R.string.mini_widen_summary),
                         checked = config.optBoolean(MiniPlayerConfig.ADAPTIVE_WIDTH),

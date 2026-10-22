@@ -69,6 +69,8 @@ internal object LockIslands {
         val buttons: List<Button> = emptyList(),
         /** For `op mini`: where [icon] came from (focusPicture), "app" for the app's own. */
         val iconFrom: String = "",
+        /** The stack island's notifications, shown as "n+" at the pill's right end; 1 for any other. */
+        val count: Int = 1,
     )
 
     /**
@@ -1125,22 +1127,25 @@ internal object LockIslands {
         return Note(STACK_KEY, lead.pkg, lead.title, stackText(lead, n),
             icon, focus = false, time = lead.time, intent = lead.intent, group = null,
             summary = false, redacted = lead.redacted, since = members.maxOf { it.since },
-            iconFrom = if (apps.size > 1) "apps${apps.size}" else lead.iconFrom)
+            iconFrom = if (apps.size > 1) "apps${apps.size}" else lead.iconFrom,
+            count = if (hiddenLine(lead)) 1 else n)
     }
+
+    private fun hiddenLine(lead: Note) = lead.redacted && android.text.TextUtils.equals(lead.text, hiddenText())
 
     /** Preserve Chinese wording; use English for every other device language. */
     private fun stackText(lead: Note, n: Int): CharSequence {
-        val hidden = lead.redacted && android.text.TextUtils.equals(lead.text, hiddenText())
+        // The count is not in the line any more: "n+" at the pill's right end (Note.count). Read
+        // "16 notifications · ..." the line began with a number (the user, 2026-10-22).
+        if (!hiddenLine(lead)) return lead.text
         if (SystemUiLanguage.isChinese()) {
-            if (!hidden) return if (n > 1) "$n 条通知 · ${lead.text}" else lead.text
             return when {
                 n <= 1 -> lead.text
                 n > 5 -> "你有多条新消息"
                 else -> "你有${HIDDEN_COUNT[n]}条新消息"
             }
         }
-        if (hidden) return if (n <= 1) "New notification" else "$n new notifications"
-        return if (n > 1) "$n notifications · ${lead.text}" else lead.text
+        return if (n <= 1) "New notification" else "$n new notifications"
     }
 
     private val HIDDEN_COUNT = arrayOf("零", "一", "两", "三", "四", "五")

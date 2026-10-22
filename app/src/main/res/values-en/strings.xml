@@ -208,6 +208,8 @@
     <string name="mini_enabled_waiting">Waiting for a response from System UI…</string>
     <string name="mini_list_without_player">Open notifications without the player</string>
     <string name="mini_list_without_player_summary">Pulling up a notification island opens the list without the media player</string>
+    <string name="mini_note_text_scroll">Scroll notification text</string>
+    <string name="mini_note_text_scroll_summary">Long notification titles and text scroll in the island; off, they are cut with an ellipsis</string>
     <string name="mini_style">Island style</string>
     <string name="mini_style_summary">How multiple islands share the row</string>
     <string name="mini_style_coloros">ColorOS · one at a time, swipe to switch</string>

@@ -32,4 +32,10 @@ class MiniPlayerAutoEntryTest {
         assertTrue(JSONObject(MiniPlayerConfig.normalizedJson("""{"listWithoutPlayer":true}"""))
             .getBoolean(MiniPlayerConfig.LIST_WITHOUT_PLAYER))
     }
+
+    @Test fun noteTextScrollDefaultsOnAndSurvives() {
+        assertTrue(JSONObject(MiniPlayerConfig.defaultJson()).getBoolean(MiniPlayerConfig.NOTE_TEXT_SCROLL))
+        assertFalse(JSONObject(MiniPlayerConfig.normalizedJson("""{"noteTextScroll":false}"""))
+            .getBoolean(MiniPlayerConfig.NOTE_TEXT_SCROLL))
+    }
 }

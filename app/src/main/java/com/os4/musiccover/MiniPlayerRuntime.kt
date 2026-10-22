@@ -10292,6 +10292,7 @@ private class MiniPlayerController(
         view.setToggleFace(null)
         view.setSecondFace(null)
         view.skippable = true
+        view.setTextScrolls(true)
         showTimer(view, null)
         showFocusAnim(view, null, null)
         val metadata = metadataOf(current)
@@ -10332,13 +10333,24 @@ private class MiniPlayerController(
         // square, bigger, on a grey plate.
         view.setArtworkBare(true)
         view.skippable = false
+        view.setTextScrolls(config.optBoolean(MiniPlayerConfig.NOTE_TEXT_SCROLL, true))
         // Its buttons as its row has them: the last - its main one - in the play button's place,
         // the one before it beside it while the pill is the big island (setSecondShown).
         val buttons = if (template) note.buttons else emptyList()
         val primary = buttons.lastOrNull()
         val second = buttons.getOrNull(buttons.size - 2)
-        view.setToggleShown(primary != null)
-        view.setToggleFace(primary?.let { buttonFace(it, note.timer) })
+        // The stack island's count where a button would be: "n+", fixed at the right end.
+        val countFace = if (primary == null && note.count > 1) ActionFace(
+            key = "count|${note.count}",
+            icon = { TextFaceDrawable("${note.count}+", android.graphics.Color.WHITE,
+                13f * context.resources.displayMetrics.scaledDensity) },
+            background = { null },
+            label = SystemUiLanguage.text("${note.count} 条通知", "${note.count} notifications"),
+            onClick = { expandNote(note.key) },
+            wide = true,
+        ) else null
+        view.setToggleShown(primary != null || countFace != null)
+        view.setToggleFace(primary?.let { buttonFace(it, note.timer) } ?: countFace)
         view.setSecondFace(second?.let { buttonFace(it, note.timer) })
         // The template's own text, spans and all: a focus protocol writes colour into it and the
         // row shows it coloured, so flattening it here showed the pill the markup instead

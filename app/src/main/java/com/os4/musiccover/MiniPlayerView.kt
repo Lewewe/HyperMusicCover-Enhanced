@@ -505,6 +505,12 @@ internal class MiniPlayerView(context: Context) : FrameLayout(context) {
      */
     var skippable = true
 
+    /** Whether a line too long for the pill scrolls (marquee) or is cut with an ellipsis. */
+    fun setTextScrolls(scroll: Boolean) {
+        val mode = if (scroll) TextUtils.TruncateAt.MARQUEE else TextUtils.TruncateAt.END
+        for (line in listOf(title, artist)) if (line.ellipsize != mode) line.ellipsize = mode
+    }
+
     fun performSkip(next: Boolean) {
         if (!skippable) return
         if (next) onNext?.invoke() else onPrevious?.invoke()
