@@ -10872,6 +10872,11 @@ public class Main extends XposedModule {
         } else {
             bottom = sCardT > sScreenH / 3 ? sCardT : sScreenH * 0.62f;
         }
+        // Nor on a notification: with the media card hidden (the list opened without the player)
+        // the card's last place stood under the open list, and a tap on a row put the cover up
+        // behind it (filmed 2026-10-22).
+        float notes = MiniPlayerRuntime.stackContentTop();
+        if (!Float.isNaN(notes)) bottom = Math.min(bottom, notes);
         if (y < top || y > bottom) return;
         if (sCoverMode) {
             if (!sCloseLyriclessCover && LockLyrics.sEnabled && !LockLyrics.hasLyrics()) {
