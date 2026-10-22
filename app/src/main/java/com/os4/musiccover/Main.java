@@ -6979,6 +6979,7 @@ public class Main extends XposedModule {
     private static void exitCoverMode(boolean animate) {
         CoverCardLayer.leaving();
         sCoverMode = false;
+        LockLyrics.setPlayerChosen(false);
         // Hand the clock to Canvas before releasing the cover, avoiding an OEM exit and re-entry.
         CanvasHostBridge.sceneChanged();
         StatusBarArtwork.refresh();
@@ -8749,6 +8750,7 @@ public class Main extends XposedModule {
                 // otherwise send the tap the wrong way.
                 if (sCoverMode && LockLyrics.compactWithoutLyrics()) {
                     beginCompactArtworkMorph(true);
+                    LockLyrics.setPlayerChosen(false);
                     LockLyrics.setArtworkCompact(false);
                 } else if (sCoverMode && LockLyrics.wantsAttached()) {
                     beginCompactArtworkMorph(true);

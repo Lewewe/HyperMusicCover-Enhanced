@@ -52,6 +52,9 @@ object MiniPlayerConfig {
     @JvmStatic fun colorOs(config: JSONObject): Boolean =
         config.optInt(PILL_STYLE, STYLE_COLOROS) == STYLE_COLOROS
 
+    /** A notification island pulled up opens the list without the media player in it. */
+    const val LIST_WITHOUT_PLAYER = "listWithoutPlayer"
+
     const val COMPACT_NOTIFICATIONS = "compactNotifications"
     const val NOTIFICATION_SIZE = "notificationSizePercent"
     const val NOTIFICATION_DROP = "notificationDropDp"
@@ -71,6 +74,7 @@ object MiniPlayerConfig {
         ADAPTIVE_WIDTH to false,
         STATUS_AT_DATE to true,
         PILL_STYLE to STYLE_COLOROS,
+        LIST_WITHOUT_PLAYER to false,
         COMPACT_NOTIFICATIONS to false,
         NOTIFICATION_SIZE to 80f,
         NOTIFICATION_DROP to 16f,
@@ -109,7 +113,8 @@ object MiniPlayerConfig {
         val input = runCatching { JSONObject(raw.orEmpty()) }.getOrDefault(JSONObject())
         val out = JSONObject()
         defaults.forEach { (key, fallback) ->
-            out.put(key, if (key == ENABLED || key == MEDIA_COLLAPSED_DEFAULT || key == ADAPTIVE_WIDTH || key == BACKGROUND_BLUR || key == STATUS_AT_DATE || key == COMPACT_NOTIFICATIONS) {
+            out.put(key, if (key == ENABLED || key == MEDIA_COLLAPSED_DEFAULT || key == ADAPTIVE_WIDTH || key == BACKGROUND_BLUR || key == STATUS_AT_DATE || key == COMPACT_NOTIFICATIONS ||
+                key == LIST_WITHOUT_PLAYER) {
                 runCatching { input.getBoolean(key) }.getOrDefault(fallback)
             } else if (key == PILL_STYLE) {
                 input.optInt(key, STYLE_COLOROS).coerceIn(STYLE_COLOROS, STYLE_HYPEROS)

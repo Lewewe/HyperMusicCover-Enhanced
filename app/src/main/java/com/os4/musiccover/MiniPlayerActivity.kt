@@ -109,6 +109,11 @@ private fun MiniPlayerPage(blur: Boolean, refreshKey: Int, onBack: () -> Unit) {
                             MiniPlayerConfig.STYLE_COLOROS).coerceIn(0, 1),
                         enabled = alive && config.optBoolean(MiniPlayerConfig.ENABLED),
                         onSelectedIndexChange = { push(MiniPlayerConfig.PILL_STYLE, it) })
+                    SwitchPreference(title = stringResource(R.string.mini_list_without_player),
+                        summary = stringResource(R.string.mini_list_without_player_summary),
+                        checked = config.optBoolean(MiniPlayerConfig.LIST_WITHOUT_PLAYER),
+                        enabled = alive && config.optBoolean(MiniPlayerConfig.ENABLED),
+                        onCheckedChange = { push(MiniPlayerConfig.LIST_WITHOUT_PLAYER, it) })
                     SwitchPreference(title = stringResource(R.string.mini_widen),
                         summary = stringResource(R.string.mini_widen_summary),
                         checked = config.optBoolean(MiniPlayerConfig.ADAPTIVE_WIDTH),

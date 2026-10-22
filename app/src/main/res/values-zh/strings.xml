@@ -199,6 +199,8 @@
     <string name="mini_page_title">锁屏超级岛</string>
     <string name="mini_enabled">启用锁屏超级岛</string>
     <string name="mini_enabled_waiting">等待 SystemUI 模块响应</string>
+    <string name="mini_list_without_player">打开通知时不显示播放器</string>
+    <string name="mini_list_without_player_summary">上滑通知岛时，通知列表中不显示媒体播放器</string>
     <string name="mini_style">岛样式</string>
     <string name="mini_style_summary">多个岛如何共用一行</string>
     <string name="mini_style_coloros">ColorOS · 一次一个，滑动切换</string>

@@ -26,4 +26,10 @@ class MiniPlayerAutoEntryTest {
         assertTrue(normalized.getBoolean(MiniPlayerConfig.BACKGROUND_BLUR))
         org.junit.Assert.assertEquals(24.0, normalized.getDouble(MiniPlayerConfig.NOTIFICATION_DROP), 0.0)
     }
+
+    @Test fun listWithoutPlayerDefaultsOffAndSurvives() {
+        assertFalse(JSONObject(MiniPlayerConfig.defaultJson()).getBoolean(MiniPlayerConfig.LIST_WITHOUT_PLAYER))
+        assertTrue(JSONObject(MiniPlayerConfig.normalizedJson("""{"listWithoutPlayer":true}"""))
+            .getBoolean(MiniPlayerConfig.LIST_WITHOUT_PLAYER))
+    }
 }

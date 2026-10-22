@@ -610,7 +610,8 @@ final class LockLyrics {
 
     /** Whether the view belongs in the keyguard right now. */
     static boolean wantsAttached() {
-        return !Main.aodClockArtworkCompact() && !Main.aodArtworkExpanded() && !sNotificationCompact && wanted() && Main.coverModeOn()
+        return !Main.aodClockArtworkCompact() && !Main.aodArtworkExpanded() && !sNotificationCompact && !sPlayerChosen
+                && wanted() && Main.coverModeOn()
                 && hasDisplayContent();
     }
 
@@ -753,7 +754,19 @@ final class LockLyrics {
     static boolean compactWithoutLyricsOnEntry() {
         if (Main.aodClockArtworkCompact()) return true;
         return !Main.aodArtworkExpanded()
-                && (sNotificationCompact || sArtworkPage.compactWithoutLyrics(sEnabled, hasLyrics()));
+                && (sNotificationCompact || sPlayerChosen
+                    || sArtworkPage.compactWithoutLyrics(sEnabled, hasLyrics()));
+    }
+
+    /**
+     * The media player pulled up out of the pill: the player alone over the cover's blurred
+     * artwork, not the big cover and not the lyrics. Until the artwork is tapped open or the
+     * cover is left; the next tap on the pill opens the cover as before.
+     */
+    private static boolean sPlayerChosen;
+
+    static void setPlayerChosen(boolean chosen) {
+        sPlayerChosen = chosen;
     }
 
     // Notification expansion is temporary and never changes the chosen artwork page.

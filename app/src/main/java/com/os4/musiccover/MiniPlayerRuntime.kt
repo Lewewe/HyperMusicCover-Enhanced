@@ -7109,7 +7109,10 @@ private class MiniPlayerController(
         val out = LockIslands.releasedKeys().filter {
             it != STACK_ISLAND && it !in islandKeys && rowFor(it) != null
         }
-        val items = islandKeys.filter { it != STACK_ISLAND }.map { SpreadItem(it, seatOf(it)) } +
+        // Pulled up from a notification island, the list can open without the media player in it.
+        val noPlayer = big != MUSIC_ISLAND && config.optBoolean(MiniPlayerConfig.LIST_WITHOUT_PLAYER)
+        val items = islandKeys.filter { it != STACK_ISLAND && !(noPlayer && it == MUSIC_ISLAND) }
+            .map { SpreadItem(it, seatOf(it)) } +
             out.map { SpreadItem(it, SEAT_HIDDEN, wasOut = true) }
         val s = Spread(items, if (STACK_ISLAND in islandKeys) seatOf(STACK_ISLAND) else SEAT_NONE)
         // Before the list moves the row: open, the capsule's rest rode up with the notifications,
@@ -8507,6 +8510,16 @@ private class MiniPlayerController(
         if (view.visibility != View.VISIBLE) return false
         if (fromSmall && key != smallKey) return false
         if (!fromSmall && selectedIsland != key) return false
+        // Pulled up, the music opens on the cover's way in: back into the scene it came down
+        // from, or else the player alone over the cover's blurred artwork. As the bare card it
+        // stood over the plain wallpaper (the user, 2026-10-22). Canvas keeps its own player.
+        if (key == MUSIC_ISLAND && !CanvasHostBridge.hasBackgroundScene() && Main.miniPlayerCanShow()) {
+            player?.springNudgeBack(0f, 0f)
+            springSmallNudgeBack(0f, 0f)
+            if (!MiniPlayerRuntime.restoreScenePending()) LockLyrics.setPlayerChosen(true)
+            openCover()
+            return true
+        }
         // Another island out as its card: the pull opens this one in its stead, the two
         // exchanged on their own spring (not under the finger, which only asked for it).
         if (expandedKey()?.let { it != key } == true) {
@@ -9897,7 +9910,10 @@ private class MiniPlayerController(
             return
         }
         val token = controller?.sessionToken
-        val backIntoScene = toNative && MiniPlayerRuntime.takeRestoreScene()
+        // Pulled up with no scene to go back to: the player alone, over the cover's blurred
+        // artwork - as the native card it stood on the plain wallpaper (the user, 2026-10-22).
+        val backIntoScene = toNative && (MiniPlayerRuntime.takeRestoreScene() ||
+            Main.miniPlayerCanShow().also { if (it) LockLyrics.setPlayerChosen(true) })
         if (!backIntoScene && token != null) {
             if (toNative) MiniPlayerRuntime.chooseNative(token) else MiniPlayerRuntime.chooseMini(token)
         }
