@@ -10352,8 +10352,12 @@ public class Main extends XposedModule {
         Runnable r = new Runnable() {
             @Override
             public void run() {
-                if (on) enterCoverMode(animate && screenOn());
-                else exitCoverMode(animate && screenOn());
+                // Only where it can be seen: entered from an unlocked phone, the walk never ran,
+                // and the AOD that followed froze its first frame - small artwork over the player
+                // until the wake (filmed 2026-10-22). Off the lock screen it is put in place.
+                boolean seen = animate && screenOn() && onKeyguardNow();
+                if (on) enterCoverMode(seen);
+                else exitCoverMode(seen);
             }
         };
         if (Looper.myLooper() == Looper.getMainLooper()) r.run();
