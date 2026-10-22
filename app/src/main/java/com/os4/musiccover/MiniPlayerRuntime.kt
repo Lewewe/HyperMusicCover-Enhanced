@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 btm_m
+// Portions (the ColorOS-style capsule: its update, the notification list spread and fold) are
+// Copyright (C) 2026 Lewewe (HyperMusicCover-Enhanced, https://github.com/Lewewe/HyperMusicCover-Enhanced),
+// modelled on the behaviour and parameter values of ColorOS 16 (OPPO); no ColorOS code is included.
 package com.os4.musiccover
 
 import android.content.Context
@@ -7279,6 +7282,7 @@ private class MiniPlayerController(
         }
         pill.visibility = View.VISIBLE
         pill.alpha = 1f
+        unholdFolded(row)
         showRow(row)
         val home = s.home
         val m = MiniCardMorph(pill, row, toCards, spreadListener, rowLanding(row),
@@ -7317,7 +7321,13 @@ private class MiniPlayerController(
         // The morph leaves the first card's text in the capsule: its own back at once, not a
         // pipeline run later (the summary popped in 0.15 s after it had landed, 2026-10-21).
         if (had) handler.post { if (spread == null || spread?.phase == SPREAD_OPEN) refresh() }
-        s.leadRow?.let(::showRow)
+        val row = s.leadRow
+        if (had && row != null && s.phase == SPREAD_CLOSING) {
+            // Folded into the capsule: the cancelled morph gives the first card its alpha back while
+            // the stack still lays it out above the capsule - it flashed there for 0.1 s (filmed
+            // 2026-10-22). Hidden till the stack has put it away; a new spread's lead shows it.
+            holdFolded(row)
+        } else row?.let(::showRow)
         s.leadRow = null
     }
 
@@ -7379,6 +7389,9 @@ private class MiniPlayerController(
     /** The capsule going (1) as the list comes out of it, back (0) as it folds, with no lead. */
     private val spreadPillGone = Jelly(0.3f, 0.89f)
 
+    /** The rear cards' blur, 1 full: on ColorOS's own blur spring, not the list's progress. */
+    private val spreadBlur = Jelly(0.3f, 0.89f).also { it.value = 1f; it.target = 1f }
+
     /**
      * ColorOS's list out of its capsule (filmed on ColorOS 16, file3.mp4; CapsuleCardControl
      * handleStackViewForCapsule): folded, every card stands behind the capsule at the capsule's
@@ -7402,6 +7415,11 @@ private class MiniPlayerController(
         spreadPillGone.target = if (opening) 1f else 0f
         spreadPillGone.step(dt)
         val gone = spreadPillGone.value.coerceIn(0f, 1f)
+        // ColorOS CapsuleToStack / StackToCapsule blur (bounce 0.11, response 0.3 out, 0.4 back):
+        // tied to the progress, the list stood blurred till it had landed (the user, 2026-10-22).
+        spreadBlur.response = if (opening) 0.3f else 0.4f
+        spreadBlur.target = if (opening) 0f else 1f
+        spreadBlur.step(dt)
         // The capsule morphing into the first card is that card; without a lead it fades.
         val led = s.lead?.active == true
         if (!led) {
@@ -7419,7 +7437,9 @@ private class MiniPlayerController(
             (row.parent as? View)?.getLocationOnScreen(xy)
             xy[1] + row.top + row.translationY
         }
-        spreadCardsTo(p, anchor, refTop, skip, if (opening) null else s.closeFrom, pill)
+        spreadCardsTo(p, anchor, refTop, skip, if (opening) null else s.closeFrom, pill, spreadBlur.value.coerceIn(0f, 1f))
+        // The first card on the same blur as the rest: all of them clear together.
+        s.leadRow?.takeIf { led }?.let { blurSpreadRow(it, spreadBlurRadius(spreadBlur.value.coerceIn(0f, 1f))) }
     }
 
     /**
@@ -7432,17 +7452,17 @@ private class MiniPlayerController(
      * they came apart from it and bounced in after it (the user, 2026-10-21).
      */
     private fun spreadCardsTo(p: Float, anchor: CoverMorphMotion.Box, refTop: Float?, morphing: Set<View>,
-                              closeFrom: Map<View, FloatArray>? = null, home: CoverMorphMotion.Box = anchor) {
+                              closeFrom: Map<View, FloatArray>? = null, home: CoverMorphMotion.Box = anchor,
+                              blurred: Float = 1f - p) {
         val stack = notificationStack() ?: return
-        // In whole steps: a new blur effect per row per frame is a new offscreen pass each time.
-        val blur = if (Main.sPerfOff.contains("spreadblur")) 0f
-            else kotlin.math.round((1f - p).coerceIn(0f, 1f) * SPREAD_BLUR_PX * density() / COLOROS_DENSITY / 2f) * 2f
+        val blur = spreadBlurRadius(blurred)
         val xy = IntArray(2)
         val rows = ArrayList<View>()
         for (i in 0 until stack.childCount) {
             val row = stack.getChildAt(i)
             if (row.visibility != View.VISIBLE || row.height <= 0 || row in morphing) continue
             if (!row.javaClass.name.endsWith("ExpandableNotificationRow")) continue
+            unholdFolded(row)
             rows += row
         }
         val tops = rows.associateWith { row ->
@@ -7490,17 +7510,52 @@ private class MiniPlayerController(
                     else MiniCardMorph.smooth(0f, SPREAD_REAR_FADE, p)
                 if (kotlin.math.abs(row.transitionAlpha - a) > 0.002f) row.transitionAlpha = a
             }
-            if (spreadBlurOf[row] != blur) {
-                spreadBlurOf[row] = blur
-                row.setRenderEffect(if (blur < 0.5f) null
-                    else android.graphics.RenderEffect.createBlurEffect(blur, blur, android.graphics.Shader.TileMode.DECAL))
-            }
+            blurSpreadRow(row, blur)
             spreadCards[row] = true
         }
     }
 
+    // In whole steps: a new blur effect per row per frame is a new offscreen pass each time.
+    private fun spreadBlurRadius(blurred: Float) = if (Main.sPerfOff.contains("spreadblur")) 0f
+        else kotlin.math.round(blurred * SPREAD_BLUR_PX * density() / COLOROS_DENSITY / 2f) * 2f
+
+    private fun blurSpreadRow(row: View, blur: Float) {
+        if (spreadBlurOf[row] == blur) return
+        spreadBlurOf[row] = blur
+        row.setRenderEffect(if (blur < 0.5f) null
+            else android.graphics.RenderEffect.createBlurEffect(blur, blur, android.graphics.Shader.TileMode.DECAL))
+    }
+
     /** At the spread's end the cards are where it left them (an end): given back. */
-    private fun settleColorOsSpread(@Suppress("UNUSED_PARAMETER") opened: Boolean) = clearColorOsSpread()
+    private fun settleColorOsSpread(opened: Boolean) {
+        val rows = spreadCards.keys.toList()
+        clearColorOsSpread()
+        if (opened) return
+        // Folded: given their alpha back while the stack still laid them out above the capsule,
+        // the cards behind flashed there (the second one, filmed 2026-10-22). Hidden till the
+        // stack has put them away; a new spread takes them back at once (spreadCardsTo).
+        for (row in rows) if (row !in hiddenRows) holdFolded(row)
+    }
+
+    /** Cards hidden by a fold till the stack has put them away. */
+    private val foldHidden = java.util.Collections.newSetFromMap(java.util.WeakHashMap<View, Boolean>())
+
+    /** The stack opened (its own pull, say) before they were given back: given back now. */
+    private val showFoldedOnOpen: (Boolean) -> Unit = { folded ->
+        // Not in a spread of our own: spreadCardsTo gives them back on its frame there.
+        if (!folded) handler.post { if (spread == null) foldHidden.toList().forEach(::unholdFolded) }
+    }
+
+    private fun holdFolded(row: View) {
+        hideRow(row)
+        foldHidden += row
+        NumState.addListener(showFoldedOnOpen)
+        handler.postDelayed({ unholdFolded(row) }, ROW_GONE_MS)
+    }
+
+    private fun unholdFolded(row: View) {
+        if (foldHidden.remove(row)) showRow(row)
+    }
 
     private fun clearColorOsSpread() {
         for (row in spreadCards.keys.toList()) {
@@ -7509,11 +7564,15 @@ private class MiniPlayerController(
             if (row !in hiddenRows) row.transitionAlpha = 1f
             spreadZOf[row]?.let { row.translationZ = it }
         }
+        // The first card too, blurred with them but never one of spreadCards.
+        for (row in spreadBlurOf.keys) row.setRenderEffect(null)
         spreadZOf.clear()
         spreadCards.clear()
         spreadBlurOf.clear()
         spreadLast = 0L
         spreadPillGone.value = 0f
+        spreadBlur.value = 1f
+        spreadBlur.velocity = 0f
         player?.setContentBlur(0f)
     }
 
@@ -9900,7 +9959,14 @@ private class MiniPlayerController(
         // done at once and the pull is the capsule's. Refused, it went to the stack itself and
         // the list came up HyperOS's way, the capsule a blurred empty glass (2026-10-21).
         spread?.takeIf { colorOs() && it.phase == SPREAD_CLOSING && it.fold != null }?.let {
+            // The stack folded at once too: left to its own folme scroll, HyperOS's pile stood
+            // there for up to a second with no island in the pill, and a light pull found nothing
+            // to open (filmed 2026-10-22).
+            if (NumState.inNumber != true) NumState.goTo("NUMBER", anim = false, why = "touched while folding")
             endSpread(folded = true, why = "touched while folding")
+            // The row is not put back till the stack reads folded (~0.3 s on), and refresh left
+            // the pill shut till then: the pull went to swipe-to-unlock (filmed 2026-10-22).
+            if (canShow() && !MiniPlayerScene.aodActive) view.setInteractionsEnabled(true)
         }
         val refused = when {
             view.visibility != View.VISIBLE -> "hidden"
