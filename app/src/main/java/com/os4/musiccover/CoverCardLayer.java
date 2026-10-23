@@ -668,7 +668,7 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
         previous = current;
         current = p;
         boolean newTrack = previous != null && !Main.sameTrack(previous.trackKey, p.trackKey);
-        boolean flip = Main.sCoverFlip && newTrack && scale.value < CardSpring.PLAYING - 0.001f;
+        boolean flip = Main.sCoverFlip && newTrack;
         if (flip) startFlip(CoverPush.recentSkipDir());
         // Reveal ready artwork promptly, but fade out the treatment rather than cutting it.
         // Turning over, the old art is kept till the turn is edge-on (doFrame lets it go).
@@ -1313,11 +1313,12 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
     private long trackFadeMs = TRACK_FADE_MS;
 
     /**
-     * A new song's art arriving while the square is shrunk turns it over as the media card's
-     * thumbnail does - HyperOS's own flip (MiuiMediaAlbumAnimationUtils + miuix FlipAnimation,
-     * as HyperImmersive's MusicPage): half a turn about the vertical axis on a Folme spring
-     * (damping 0.72, response 0.5s), forwards for next and backwards for previous, the new art
-     * taking the face as it passes edge-on. Grown, it still crossfades.
+     * A new song's art turns the square over as the media card's thumbnail does - HyperOS's own
+     * flip (MiuiMediaAlbumAnimationUtils + miuix FlipAnimation, as HyperImmersive's MusicPage):
+     * half a turn about the vertical axis on a Folme spring (damping 0.72, response 0.5s),
+     * forwards for next and backwards for previous, the new art taking the face as it passes
+     * edge-on. Shrunk by a skip or grown through a song ending on its own, alike: grown it only
+     * crossfaded, and a song ending showed no turn at all (the maintainer, 2026-10-24).
      */
     private static final float FLIP_DAMPING = 0.72f;
     private static final float FLIP_RESPONSE = 0.5f;
