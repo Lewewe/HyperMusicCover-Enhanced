@@ -7284,7 +7284,13 @@ private class MiniPlayerController(
         s.lead?.cancel()
         s.lead = null
         val pill = player ?: return
-        val row = spreadRows(s).firstOrNull()
+        // The card of the notification the capsule shows (the stack island's newest), so the
+        // capsule never changes text on the way: the list's top card is not always the newest,
+        // and folding from it the capsule came home with that card's text, then swapped to the
+        // newest's (the user, 2026-10-23). The top card only when that row is not out.
+        val rows = spreadRows(s)
+        val shown = findRow(STACK_ISLAND)?.second
+        val row = rows.firstOrNull { it === shown } ?: rows.firstOrNull()
         if (row == null) {
             if (!s.leadWhyLogged) { s.leadWhyLogged = true; spreadTrace("spread lead: no row (stack children=${notificationStack()?.childCount})") }
             return
