@@ -1,5 +1,8 @@
 package com.os4.musiccover;
 
+import android.media.AudioAttributes;
+import android.media.AudioManager;
+import android.media.AudioPlaybackConfiguration;
 import android.media.audiofx.Visualizer;
 import android.media.session.MediaController;
 import android.os.PowerManager;
@@ -23,6 +26,8 @@ final class AudioSpectrumCapture {
     private static MediaController stateController;
     private static PlaybackState liveState;
     private static boolean liveRemote;
+    /** Since when the session has said playing with nothing playing on the phone, or 0. */
+    private static long silentSince;
     private static long stateCheckedAt;
     /** How long the capture outlives its last client once local music stops. */
     private static final long LINGER_MS = 30_000L;
@@ -53,8 +58,30 @@ final class AudioSpectrumCapture {
         stateCheckedAt = now;
         try { liveState = controller.getPlaybackState(); }
         catch (Throwable ignored) { liveState = null; }
-        try { liveRemote = controller.getPlaybackInfo().getPlaybackType() == MediaController.PlaybackInfo.PLAYBACK_TYPE_REMOTE; }
-        catch (Throwable ignored) { liveRemote = false; }
+        boolean remote;
+        try { remote = controller.getPlaybackInfo().getPlaybackType() == MediaController.PlaybackInfo.PLAYBACK_TYPE_REMOTE; }
+        catch (Throwable ignored) { remote = false; }
+        // Spotify Connect keeps a local session that says playing while the audio plays on
+        // another device: nothing plays on the phone. A track change has the same gap briefly.
+        boolean silent = !remote && liveState != null
+                && liveState.getState() == PlaybackState.STATE_PLAYING && !mediaPlayingHere();
+        if (!silent) silentSince = 0L;
+        else if (silentSince == 0L) silentSince = now;
+        liveRemote = remote || (silentSince != 0L && now - silentSince >= 1500L);
+    }
+
+    /** Whether any media player is playing on this phone right now. */
+    private static boolean mediaPlayingHere() {
+        try {
+            AudioManager audio = Main.appContext().getSystemService(AudioManager.class);
+            for (AudioPlaybackConfiguration config : audio.getActivePlaybackConfigurations()) {
+                if (config.getAudioAttributes().getUsage() == AudioAttributes.USAGE_MEDIA
+                        && (int) Xp.callMethod(config, "getPlayerState") == 2) return true;
+            }
+            return false;
+        } catch (Throwable ignored) {
+            return true; // Unknown: keep our waves rather than hide them.
+        }
     }
 
     static final class Lease {
