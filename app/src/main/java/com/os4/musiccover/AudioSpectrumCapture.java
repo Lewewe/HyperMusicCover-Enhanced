@@ -22,6 +22,7 @@ final class AudioSpectrumCapture {
     private static boolean activeMedia;
     private static MediaController stateController;
     private static PlaybackState liveState;
+    private static boolean liveRemote;
     private static long stateCheckedAt;
     /** How long the capture outlives its last client once local music stops. */
     private static final long LINGER_MS = 30_000L;
@@ -36,6 +37,14 @@ final class AudioSpectrumCapture {
         return liveState == null ? fallback : liveState.getState() == PlaybackState.STATE_PLAYING;
     }
 
+    /** Playback sent to another device (Spotify Connect, Cast): nothing local to show, so the native waves stay. */
+    static boolean casting() {
+        MediaController controller = Main.miniPlayerSession();
+        if (controller == null) return false;
+        pollState(controller);
+        return liveRemote;
+    }
+
     private static void pollState(MediaController controller) {
         long now = SystemClock.uptimeMillis();
         // All display consumers call this on the UI thread. Avoid a Binder query per frame.
@@ -44,6 +53,8 @@ final class AudioSpectrumCapture {
         stateCheckedAt = now;
         try { liveState = controller.getPlaybackState(); }
         catch (Throwable ignored) { liveState = null; }
+        try { liveRemote = controller.getPlaybackInfo().getPlaybackType() == MediaController.PlaybackInfo.PLAYBACK_TYPE_REMOTE; }
+        catch (Throwable ignored) { liveRemote = false; }
     }
 
     static final class Lease {

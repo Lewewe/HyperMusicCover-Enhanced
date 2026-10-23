@@ -296,7 +296,7 @@ object IslandAudioVisualizer {
             val pic = field(holder.get(), "picInfo") ?: return false
             val name = runCatching { Xp.callMethod(pic, "getPic") as? String }.getOrNull()
             if ((name != "musicWave" && name != "musicPause") ||
-                !AudioSpectrumCapture.mediaPlaying(null, name == "musicWave") || !v.isAttachedToWindow || !v.isShown || v.width <= 0 || v.height <= 0 || v.windowVisibility != View.VISIBLE) return false
+                !AudioSpectrumCapture.mediaPlaying(null, name == "musicWave") || AudioSpectrumCapture.casting() || !v.isAttachedToWindow || !v.isShown || v.width <= 0 || v.height <= 0 || v.windowVisibility != View.VISIBLE) return false
             var parent: View? = v
             while (parent != null) { if (parent.alpha < .01f) return false; parent = parent.parent as? View }
             return v.getGlobalVisibleRect(visibleBounds)

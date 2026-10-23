@@ -354,7 +354,7 @@ object MediaCardRuntime {
                 outputWaveTracked = true
                 val weak = WeakReference(this)
                 MediaOutputVisualizer.track(outputIcon, outputButton, album, scope == "notification",
-                    { weak.get()?.let { !it.disposed && outputWaveSelected(it.scope) } == true },
+                    { weak.get()?.let { !it.disposed && outputWaveSelected(it.scope) && !AudioSpectrumCapture.casting() } == true },
                     { weak.get()?.let { !it.disposed && AudioSpectrumCapture.mediaPlaying(
                         field(it.media, "packageName") as? String, it.playing()) } == true })
             }
