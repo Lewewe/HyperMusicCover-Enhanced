@@ -5,7 +5,7 @@ import static org.junit.Assert.*;
 
 public class CompanionLayoutTest {
     @Test public void tallClockLeavesReadableRoomInsteadOfHidingTheCompanion() {
-        assertEquals(1449f, CompanionLayout.clockRoom(1635f, 1709f, 3.25f), .001f);
+        assertEquals(1371f, CompanionLayout.clockRoom(1635f, 1709f, 3.25f), .001f);
     }
     @Test public void shorterClockAndNotificationLimitsRemainUnchanged() {
         assertEquals(1200f, CompanionLayout.clockRoom(1200f, 1709f, 3.25f), .001f);

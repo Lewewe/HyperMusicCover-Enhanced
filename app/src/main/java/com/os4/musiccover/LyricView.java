@@ -2285,18 +2285,28 @@ final class LyricView extends View {
     private final Paint.FontMetrics companionMetrics = new Paint.FontMetrics();
     private static final Typeface COMPANION_TYPEFACE = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL);
 
+    /** The face the companion dozes off to when the beat stops for a while. */
+    private static final String CALM_FACE = "(˘ω˘)";
+    private static final long CALM_AFTER_MS = 4000L;
+    private float calm;
+    private long calmAt;
+
     private void drawBpmCompanion(Canvas canvas) {
         if (!bandOk || bandBottom <= bandTop) return;
-        int bpm = LockLyrics.bpm();
         long beatAt = LockLyrics.bpmBeatAt();
-        long sinceBeat = beatAt == 0L ? Long.MAX_VALUE : Math.max(0L, now() - beatAt);
+        long now = now();
+        long sinceBeat = beatAt == 0L ? Long.MAX_VALUE : Math.max(0L, now - beatAt);
         boolean searchingLyrics = LockLyrics.bpmSearchingLyrics();
-        boolean showBpm = !searchingLyrics && bpm >= 40;
         float pulse = searchingLyrics || sinceBeat == Long.MAX_VALUE
                 ? 0f : (float) Math.exp(-sinceBeat / 190f);
+        // A quiet stretch (a breakdown, an intro) eases into the calm face; the next hit wakes it.
+        float calmWant = !searchingLyrics && beatAt != 0L && sinceBeat > CALM_AFTER_MS ? 1f : 0f;
+        // Eased only while frames keep coming; a still or paused face shows its state outright.
+        calm = !LockLyrics.companionAnimating() ? calmWant
+                : calm + (calmWant - calm) * Math.min(1f, Math.max(0L, now - calmAt) / 350f);
+        calmAt = now;
         String face = searchingLyrics ? LockLyrics.bpmSearchingFace() : LockLyrics.bpmFace();
         String label = searchingLyrics ? LockLyrics.bpmSearchingMessage() : LockLyrics.bpmMessage();
-        String bpmLabel = showBpm ? bpm + " BPM" : "";
         TextPaint p = companionPaint;
         p.set(paint);
         p.setTypeface(COMPANION_TYPEFACE);
@@ -2305,18 +2315,17 @@ final class LyricView extends View {
         float faceTop = companionMetrics.top, faceBottom = companionMetrics.bottom;
         float faceHeight = faceBottom - faceTop;
         float faceWidth = p.measureText(face);
+        float calmWidth = p.measureText(CALM_FACE);
         // Reserve the peak beat size so pulses never enter the clock or the media card.
         float peak = 1.09f;
         p.setTextSize(textPx * .48f);
         p.getFontMetrics(companionMetrics);
-        float labelHeight = companionMetrics.bottom - companionMetrics.top;
         float lineGap = textPx * .22f;
         float faceCenterY = faceHeight * peak * .5f;
         float faceBaseline = faceCenterY - (faceTop + faceBottom) * .5f;
         float labelBaseline = faceHeight * peak + lineGap - companionMetrics.top;
-        float bpmBaseline = labelBaseline + labelHeight + lineGap;
-        float contentHeight = (showBpm ? bpmBaseline : labelBaseline) + companionMetrics.bottom;
-        float contentWidth = Math.max(faceWidth * peak, Math.max(p.measureText(label), p.measureText(bpmLabel)));
+        float contentHeight = labelBaseline + companionMetrics.bottom;
+        float contentWidth = Math.max(Math.max(faceWidth, calmWidth) * peak, p.measureText(label));
         float fit = CompanionLayout.fitScale(getWidth() - 2f * CoverCardStyle.GAP_DP * density,
                 bandBottom - bandTop, contentWidth, contentHeight);
         if (!(fit > 0f)) return;
@@ -2328,24 +2337,24 @@ final class LyricView extends View {
         canvas.translate(cx, top);
         canvas.scale(fit, fit);
         p.setTextSize(textPx * 1.18f);
-        p.setAlpha((int) (255 * show * .82f));
+        float faceAlpha = 255 * show * .82f;
         float mirror = searchingLyrics ? 1f
                 : (LockLyrics.bpmBeatDirection() < 0 ? -1f : 1f);
         float scale = 1f + pulse * .09f;
         int faceSave = canvas.save();
         canvas.scale(mirror * scale, scale, 0f, faceCenterY);
-        canvas.drawText(face, -faceWidth * .5f, faceBaseline, p);
+        if (calm < .999f) {
+            p.setAlpha((int) (faceAlpha * (1f - calm)));
+            canvas.drawText(face, -faceWidth * .5f, faceBaseline, p);
+        }
+        if (calm > .001f) {
+            p.setAlpha((int) (faceAlpha * calm));
+            canvas.drawText(CALM_FACE, -calmWidth * .5f, faceBaseline, p);
+        }
         canvas.restoreToCount(faceSave);
         p.setTextSize(textPx * .48f);
         p.setAlpha((int) (255 * show * .72f));
         canvas.drawText(label, -p.measureText(label) * .5f, labelBaseline, p);
-        if (showBpm) {
-            long foundAt = LockLyrics.bpmFoundAt();
-            float bpmFade = foundAt == 0L ? 0f
-                    : Math.min(1f, Math.max(0L, now() - foundAt) / 900f);
-            p.setAlpha((int) (255 * show * .72f * bpmFade));
-            canvas.drawText(bpmLabel, -p.measureText(bpmLabel) * .5f, bpmBaseline, p);
-        }
         canvas.restoreToCount(blockSave);
     }
 

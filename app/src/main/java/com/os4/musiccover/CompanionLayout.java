@@ -7,7 +7,8 @@ final class CompanionLayout {
     /** Leave a small readable block plus both cover-sized gaps below an oversized clock. */
     static float clockRoom(float currentRoom, float mediaTop, float density) {
         if (!Float.isFinite(mediaTop) || !Float.isFinite(density) || density <= 0f) return currentRoom;
-        float limit = mediaTop - (48f + 2f * CoverCardStyle.GAP_DP) * density;
+        // Room for the face and its line at full size; the clock shrinks to make it.
+        float limit = mediaTop - (72f + 2f * CoverCardStyle.GAP_DP) * density;
         return Float.isFinite(currentRoom) ? Math.min(currentRoom, limit) : limit;
     }
 
