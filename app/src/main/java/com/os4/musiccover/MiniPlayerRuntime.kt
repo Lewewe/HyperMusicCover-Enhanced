@@ -7875,7 +7875,10 @@ private class MiniPlayerController(
         val y = NumState.position() ?: return
         val islandsY = NumState.scrollTo("NUMBER") ?: return
         s.lastY = y
-        val toward = if (s.cardsY >= islandsY) s.cardsY - y else y - s.cardsY
+        // Measured from the list's top, not from where it was scrolled to: scrolled on down the
+        // list and pulled back, the scroll coming back up it is no pull toward the fold (2026-10-24).
+        val listY = NumState.listScroll() ?: s.cardsY
+        val toward = if (s.cardsY >= islandsY) minOf(s.cardsY, listY) - y else y - maxOf(s.cardsY, listY)
         val folded = NumState.inNumber == true
         // The stack folding on its own (a let-go, a wake to its default) counts as soon as it is
         // on its way, not once it is folded: noticed only at the end, the cards folded the
