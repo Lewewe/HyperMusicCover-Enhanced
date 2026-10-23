@@ -3,7 +3,6 @@ package com.os4.musiccover;
 import android.media.session.PlaybackState;
 
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 
 /** Local, low-fidelity tempo estimate from the system output mix. It never records audio to disk. */
@@ -52,8 +51,9 @@ final class BpmEstimator {
     private static int challengerObservations;
     private static boolean publishedTempo;
     private static final String[] FACES = {
-            "(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧", "( •̀ ω •́ )✧", "(づ｡◕‿‿◕｡)づ",
-            "(≧▽≦)", "(っ˘ω˘ς )", "(ง •̀_•́)ง"
+            // Lopsided on purpose: the face mirrors on every beat, and that should show.
+            "(•ω•)ﾉ♪", "(っ•ω•)っ", "ヾ(◕ω◕)", "(๑•ω•)ﾉ",
+            "(◕ω◕✿)", "♡(•ω•)", "(ﾉ˘ω˘)ﾉ", "(•ω•)ﾉ✧"
     };
     private static final String[] MESSAGES_EN = {
             "we have no lyrics, but here's a friend",
@@ -70,7 +70,7 @@ final class BpmEstimator {
             "没有歌词.."
     };
     private static final String[] SEARCH_FACES = {
-            "(｡•́‿•̀｡)", "(๑•́ ₃ •̀๑)", "(｡･ω･｡)ﾉ♡", "(´• ω •`)", "( •ω• )?"
+            "(•ω•)?", "(◕ω◕)?", "(๑•ω•)…", "(｡•ω•｡)"
     };
     private static final String[] SEARCH_MESSAGES_EN = {
             "looking for your lyrics…", "checking for lyrics…", "searching for lyrics…"
@@ -84,7 +84,7 @@ final class BpmEstimator {
     }
 
     static String presentationMessage(int seed) {
-        String[] messages = Locale.getDefault().getLanguage().startsWith("zh")
+        String[] messages = SystemUiLanguage.isChinese()
                 ? MESSAGES_ZH : MESSAGES_EN;
         return messages[Math.floorMod(seed, messages.length)];
     }
@@ -94,7 +94,7 @@ final class BpmEstimator {
     }
 
     static String searchingMessage(int seed) {
-        String[] messages = Locale.getDefault().getLanguage().startsWith("zh")
+        String[] messages = SystemUiLanguage.isChinese()
                 ? SEARCH_MESSAGES_ZH : SEARCH_MESSAGES_EN;
         return messages[Math.floorMod(seed, messages.length)];
     }
