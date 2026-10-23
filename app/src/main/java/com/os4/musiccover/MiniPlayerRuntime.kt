@@ -1514,6 +1514,9 @@ object MiniPlayerRuntime {
 
     @JvmStatic fun canvasPlayerInPill(): Boolean = live().any { it.canvasPlayerInPill() }
 
+    /** The lock screen row is ColorOS's capsule, not the super island. */
+    @JvmStatic fun colorOsStyle(): Boolean = live().any { it.colorOsStyle() }
+
     @JvmStatic fun nativeHeaderHidden(): Boolean = synchronized(controllers) {
         controllers.values.any { it.controller.nativeHeaderHidden() }
     }
@@ -4856,6 +4859,8 @@ private class MiniPlayerController(
     /** MiniPlayerConfig.PILL_STYLE: ColorOS's capsule, or HyperOS's big and small islands. */
     private fun colorOs(): Boolean = MiniPlayerConfig.colorOs(config)
 
+    fun colorOsStyle(): Boolean = colorOs()
+
     /**
      * The torch and the camera, circle and glyph, against the capsule's height: ColorOS draws
      * them smaller than the capsule, which balances the row (the user's request, 2026-10-18).
@@ -7179,7 +7184,7 @@ private class MiniPlayerController(
             // stack's own scroll over ours and it can stop on the pile for a moment - that left
             // an empty space and then HyperOS's pile instead of the capsule (recording
             // 2026-10-23 09:42). foldColorOs asks again instead.
-            if (s.fold == null && LockIslands.keepsCoverStack() && NumState.state() == "STACK"
+            if (s.fold == null && LockIslands.keepsPileOnFold() && NumState.state() == "STACK"
                 && !NumState.busy() && !stackDragged()
                 && (s.phase == SPREAD_OPEN || s.phase == SPREAD_CLOSING)) {
                 endSpread(folded = false, why = "native pile")
@@ -7691,7 +7696,7 @@ private class MiniPlayerController(
         // Let go on the way home: sent there now. A fling never reaches the hands-up (NumState),
         // and a fling let go at 0.67 came to rest as the pile (filmed and logged 2026-09-30).
         val dragged = stackDragged()
-        if (s.phase == SPREAD_CLOSING && !LockIslands.keepsCoverStack()
+        if (s.phase == SPREAD_CLOSING && !LockIslands.keepsPileOnFold()
             && s.wasDragged && !dragged && p < SPREAD_FOLD_BELOW && !s.letGoSent) {
             s.letGoSent = true
             NumState.goTo("NUMBER", why = "spread let go folding at ${"%.2f".format(p)}")

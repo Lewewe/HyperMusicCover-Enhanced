@@ -872,6 +872,12 @@ internal object LockIslands {
     /** Keep HyperOS's intermediate pile while the cover owns the media scene. */
     fun keepsCoverStack(): Boolean = Main.coverModeOn() && stackMembers.size > 1
 
+    /**
+     * Folding stops at that pile first (HyperOS's two steps). ColorOS's capsule has none: the
+     * list and the pile go down into it in one (the maintainer, 2026-10-24).
+     */
+    fun keepsPileOnFold(): Boolean = keepsCoverStack() && !MiniPlayerRuntime.colorOsStyle()
+
     fun notificationArtworkExpanded(): Boolean {
         if (stackMembers.size <= 1) return false
         val state = NumState.state()
