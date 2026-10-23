@@ -3,6 +3,7 @@ package com.os4.musiccover;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class BpmEstimatorTest {
@@ -72,4 +73,22 @@ public class BpmEstimatorTest {
         assertEquals(99, BpmEstimator.estimateTempo(onset, rate), 8);
     }
 
+    @Test
+    public void beatGateDropsWeakHitsAndFastRolls() {
+        // 97 BPM: a beat is ~619 ms, so hits closer than ~278 ms are a roll.
+        assertTrue(BpmEstimator.showsBeat(1f, .1f, 1f, 300L, 97));
+        assertFalse(BpmEstimator.showsBeat(.4f, .1f, 1f, 300L, 97));
+        assertFalse(BpmEstimator.showsBeat(1f, .1f, 1f, 200L, 97));
+        assertFalse(BpmEstimator.showsBeat(1f, .1f, 1f, 200L, 0));
+        assertFalse(BpmEstimator.showsBeat(.05f, .1f, .05f, 600L, 97));
+    }
+
+    @Test
+    public void quickHitsBounceInsteadOfTurning() {
+        // 97 BPM: 3/4 of a beat is ~464 ms.
+        assertTrue(BpmEstimator.flips(470L, 97));
+        assertFalse(BpmEstimator.flips(300L, 97));
+        assertFalse(BpmEstimator.flips(300L, 0));
+        assertTrue(BpmEstimator.flips(400L, 0));
+    }
 }
