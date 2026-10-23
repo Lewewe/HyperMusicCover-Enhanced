@@ -11,7 +11,7 @@ import android.os.HandlerThread;
 import android.os.SystemClock;
 import java.util.List;
 
-/** Estimates Bluetooth display delay without changing audio routing or delaying BPM analysis. */
+/** Estimates Bluetooth display delay without changing audio routing. */
 final class AudioWaveSync {
     private static volatile AudioWaveSync instance;
     private static volatile boolean enabled = true;
@@ -19,7 +19,7 @@ final class AudioWaveSync {
     private final AudioManager manager;
     private final HandlerThread thread = new HandlerThread("MCWaveTiming");
     private final Handler handler;
-    private final SpectrumDelayBuffer<AudioSpectrumCapture.Lease[]> queue = new SpectrumDelayBuffer<>(64);
+    private final SpectrumDelayBuffer<Void> queue = new SpectrumDelayBuffer<>(64);
     private volatile boolean running = true;
     private volatile int delayMs, reportedMs;
     private volatile boolean bluetooth;
@@ -49,6 +49,8 @@ final class AudioWaveSync {
         thread.start(); handler = new Handler(thread.getLooper());
         try { manager.registerAudioDeviceCallback(devices, handler); } catch (Throwable ignored) { }
         try { manager.registerAudioPlaybackCallback(playback, handler); } catch (Throwable ignored) { }
+        // The callback reports only changes; seed what is already playing.
+        handler.post(() -> playback.onPlaybackConfigChanged(manager.getActivePlaybackConfigurations()));
         handler.post(refresh);
         handler.postDelayed(health, 1000L);
     }
@@ -62,12 +64,12 @@ final class AudioWaveSync {
         AudioWaveSync current = instance;
         if (current != null) current.requestRefresh();
     }
-    static boolean enqueue(Object source, byte[] data, int rate, float[] power, AudioSpectrumCapture.Lease[] targets) {
+    static boolean enqueue(Object source, byte[] data, int rate, float[] power) {
         AudioWaveSync current = instance;
         if (current == null || !current.running || current.delayMs == 0) return false;
         synchronized (current.queue) {
             if (!current.running || current.delayMs == 0) return false;
-            current.queue.offer(source, data, rate, power, SystemClock.uptimeMillis() + current.delayMs, targets);
+            current.queue.offer(source, data, rate, power, SystemClock.uptimeMillis() + current.delayMs, null);
             current.schedule();
         }
         return true;
@@ -82,13 +84,13 @@ final class AudioWaveSync {
     private final Runnable pump = new Runnable() {
         @Override public void run() {
             while (running) {
-                SpectrumDelayBuffer.Frame<AudioSpectrumCapture.Lease[]> frame;
+                SpectrumDelayBuffer.Frame<Void> frame;
                 synchronized (queue) {
                     frame = queue.poll(SystemClock.uptimeMillis());
                     if (frame == null) { scheduled = false; schedule(); return; }
                 }
                 // Never call the capture owner while holding the queue lock.
-                AudioSpectrumCapture.deliverDelayed(frame.source, frame.data, frame.rate, frame.power, frame.targets);
+                AudioSpectrumCapture.deliverDelayed(frame.source, frame.data, frame.rate, frame.power);
             }
         }
     };

@@ -2,6 +2,7 @@ package com.os4.musiccover;
 
 import android.media.audiofx.Visualizer;
 import android.media.session.MediaController;
+import android.os.PowerManager;
 import android.media.session.PlaybackState;
 import android.os.SystemClock;
 import java.util.ArrayList;
@@ -22,21 +23,27 @@ final class AudioSpectrumCapture {
     private static MediaController stateController;
     private static PlaybackState liveState;
     private static long stateCheckedAt;
+    /** How long the capture outlives its last client once local music stops. */
+    private static final long LINGER_MS = 30_000L;
+    private static long idleSince;
 
     /** Native island/media data can retain PAUSED across an automatic track change. */
     static boolean mediaPlaying(String packageName, boolean fallback) {
         MediaController controller = Main.miniPlayerSession();
         if (controller == null || (packageName != null && !packageName.equals(controller.getPackageName())))
             return fallback;
+        pollState(controller);
+        return liveState == null ? fallback : liveState.getState() == PlaybackState.STATE_PLAYING;
+    }
+
+    private static void pollState(MediaController controller) {
         long now = SystemClock.uptimeMillis();
         // All display consumers call this on the UI thread. Avoid a Binder query per frame.
-        if (controller != stateController || now - stateCheckedAt >= 200L) {
-            stateController = controller;
-            stateCheckedAt = now;
-            try { liveState = controller.getPlaybackState(); }
-            catch (Throwable ignored) { liveState = null; }
-        }
-        return liveState == null ? fallback : liveState.getState() == PlaybackState.STATE_PLAYING;
+        if (controller == stateController && now - stateCheckedAt < 200L) return;
+        stateController = controller;
+        stateCheckedAt = now;
+        try { liveState = controller.getPlaybackState(); }
+        catch (Throwable ignored) { liveState = null; }
     }
 
     static final class Lease {
@@ -49,21 +56,32 @@ final class AudioSpectrumCapture {
                 if (closed) return;
                 closed = true;
                 clients.remove(this);
-                if (clients.stream().noneMatch(client -> client.visual)) AudioWaveSync.stop();
-                if (clients.isEmpty()) {
-                    InternalAudioCapture oldPlayback = playback;
-                    playback = null;
-                    if (oldPlayback != null) oldPlayback.stop();
-                    Visualizer old = effect;
-                    effect = null;
-                    if (old != null) {
-                        try { old.setEnabled(false); } catch (Throwable ignored) { }
-                        try { old.release(); } catch (Throwable ignored) { }
-                    }
-                    fftPeak = 0;
-                }
+                // The capture outlives its last client while music plays on the lit screen:
+                // registering it again re-routes media, which hitches screen recordings.
+                // checkHealth() closes it once the music stops.
+                if (clients.isEmpty() && !interactive()) shutdown();
             }
         }
+    }
+
+    private static void shutdown() {
+        InternalAudioCapture oldPlayback = playback;
+        playback = null;
+        if (oldPlayback != null) oldPlayback.stop();
+        Visualizer old = effect;
+        effect = null;
+        if (old != null) {
+            try { old.setEnabled(false); } catch (Throwable ignored) { }
+            try { old.release(); } catch (Throwable ignored) { }
+        }
+        fftPeak = 0;
+        idleSince = 0L;
+        AudioWaveSync.stop();
+    }
+
+    private static boolean interactive() {
+        PowerManager power = Main.appContext() == null ? null : Main.appContext().getSystemService(PowerManager.class);
+        return power != null && power.isInteractive();
     }
 
     /** Call off the UI thread; samples are ephemeral and never recorded to disk. */
@@ -79,6 +97,7 @@ final class AudioSpectrumCapture {
             lastFftMs = lastSignalMs = SystemClock.uptimeMillis();
             playbackSignature = Long.MIN_VALUE;
         }
+        idleSince = 0L;
         Lease client = new Lease(visual, listener);
         clients.add(client);
         if (visual) AudioWaveSync.start(Main.appContext());
@@ -117,15 +136,20 @@ final class AudioSpectrumCapture {
             }
             targets = clients.toArray(new Lease[0]);
         }
-        boolean delayed = internal && AudioWaveSync.enqueue(source, data, rate, power, targets);
+        boolean delayed = internal && AudioWaveSync.enqueue(source, data, rate, power);
         for (Lease client : targets) if (!client.closed && (!delayed || !client.visual)) {
             try { client.listener.onFft(client, data, rate, power); }
             catch (Throwable t) { Xp.w("Audio spectrum consumer failed: " + t); }
         }
     }
 
-    static void deliverDelayed(Object source, byte[] data, int rate, float[] power, Lease[] targets) {
-        synchronized (AudioSpectrumCapture.class) { if (source != playback) return; }
+    static void deliverDelayed(Object source, byte[] data, int rate, float[] power) {
+        Lease[] targets;
+        // Current clients, so one that joined after the frame was queued is fed at once.
+        synchronized (AudioSpectrumCapture.class) {
+            if (source != playback) return;
+            targets = clients.toArray(new Lease[0]);
+        }
         for (Lease client : targets) if (!client.closed && client.visual) {
             try { client.listener.onFft(client, data, rate, power); }
             catch (Throwable t) { Xp.w("Delayed spectrum consumer failed: " + t); }
@@ -139,8 +163,17 @@ final class AudioSpectrumCapture {
     }
 
     static synchronized void checkHealth() {
-        if (clients.isEmpty() || playback == null) return;
+        if (playback == null && effect == null) return;
         long now = SystemClock.uptimeMillis();
+        if (clients.isEmpty()) {
+            boolean screenOn = interactive();
+            if (screenOn && activeMedia) idleSince = 0L;
+            else if (idleSince == 0L) idleSince = now;
+            if (idleSince != 0L && (!screenOn || now - idleSince >= LINGER_MS)) shutdown();
+            return;
+        }
+        idleSince = 0L;
+        if (playback == null) return;
         if (now - lastRestartMs < 3000L) return;
         boolean stalled = !playback.isRunning() || now - lastFftMs > 1500L;
         boolean lostAfterTransition = epoch != lastSignalEpoch && now - lastSignalMs > 2500L;
