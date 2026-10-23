@@ -6999,6 +6999,8 @@ private class MiniPlayerController(
          */
         var fold: Jelly? = null
         var foldLast = 0L
+        /** When the fold last asked the stack for NUMBER (see foldColorOs). */
+        var foldAskedAt = 0L
         /** Folding: each card's place in the list as the fold began, centre x and top (closeFrom). */
         var closeFrom: Map<View, FloatArray>? = null
     }
@@ -7142,7 +7144,11 @@ private class MiniPlayerController(
                 return
             }
             // A first downward swipe can land on the native pile; only the next folds to the pill.
-            if (LockIslands.keepsCoverStack() && NumState.state() == "STACK"
+            // Not once our own fold has asked for NUMBER: a quick swipe down on the list runs the
+            // stack's own scroll over ours and it can stop on the pile for a moment - that left
+            // an empty space and then HyperOS's pile instead of the capsule (recording
+            // 2026-10-23 09:42). foldColorOs asks again instead.
+            if (s.fold == null && LockIslands.keepsCoverStack() && NumState.state() == "STACK"
                 && !NumState.busy() && !stackDragged()
                 && (s.phase == SPREAD_OPEN || s.phase == SPREAD_CLOSING)) {
                 endSpread(folded = false, why = "native pile")
@@ -7699,10 +7705,26 @@ private class MiniPlayerController(
             it.target = 0f
             s.fold = it
             s.foldLast = now
+            s.foldAskedAt = now
             if (NumState.inNumber != true) NumState.goTo("NUMBER", why = "colorOS fold")
         }
         f.step(((now - s.foldLast) / 1000f).coerceIn(1f / 240f, 0.05f))
         s.foldLast = now
+        // The stack's scroll tied to the fold, frame by frame, as followFinger ties it to the
+        // finger. Left to its own folme scroll to NUMBER it was two motions: HyperOS's state
+        // machine restarts that scroll from rest as it passes the pile (~scrollY 310), so the
+        // media card dropped, stood, then crept the last 47px for 0.2s (recording 2026-10-23
+        // 09:52) - and a quick swipe could leave it on the pile altogether. Set every frame,
+        // nothing else gets to move it; never while a finger has the stack.
+        if (!stackDragged()) {
+            val k = f.value.coerceIn(0f, 1f)
+            NumState.setScroll(s.islandsY + ((s.cardsY - s.islandsY) * k).roundToInt())
+        }
+        // Landed with the stack not counted folded: its own scroll asked to finish the job.
+        if (f.atRest() && NumState.inNumber != true && now - s.foldAskedAt > FOLD_FINISH_MS) {
+            s.foldAskedAt = now
+            NumState.goTo("NUMBER", why = "colorOS fold finish")
+        }
         applySpread(s, f.value.coerceAtLeast(-0.05f))
         // Landed, and the stack folded under it (or long enough waiting for it).
         if (f.atRest() && (NumState.inNumber == true || now - s.since > SPREAD_GIVE_UP_MS)) {
@@ -11884,6 +11906,9 @@ private const val SPREAD_STILL_FRAMES = 3
 
 /** A spread still between its ends this long after it set out is sent to the nearer one for good. */
 private const val SPREAD_GIVE_UP_MS = 3000L
+
+/** A fold landed this long without the stack counting itself folded asks it to finish. */
+private const val FOLD_FINISH_MS = 150L
 
 /** A finger pulling the open list this far toward the fold takes the cards home with it. */
 private const val SPREAD_PULL_DP = 8f
