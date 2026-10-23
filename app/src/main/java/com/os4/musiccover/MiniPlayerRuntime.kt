@@ -121,6 +121,7 @@ object MiniPlayerRuntime {
                 val result = chain.proceed()
                 val event = chain.args.firstOrNull() as? MotionEvent
                 val stack = chain.thisObject as? View
+                if (event != null && stack != null) noteStackSwipe(event, stack)
                 if (event?.actionMasked == MotionEvent.ACTION_MOVE && stack != null &&
                     runCatching { Xp.getObjectField(stack, "mIsBeingDragged") == true }.getOrDefault(false)) {
                     live().forEach { it.onNativeListScroll(stack) }
@@ -1519,6 +1520,36 @@ object MiniPlayerRuntime {
 
     private fun live(): List<MiniPlayerController> =
         synchronized(controllers) { controllers.values.map { it.controller } }
+
+    private var stackDownY = Float.NaN
+
+    /** The last finger on the lock screen's list: -1 went up, 1 down, past the slop; 0 not yet. */
+    private var stackSwipe = 0
+
+    /**
+     * A swipe up the list, never a pull toward the fold however the stack's scroll moves under
+     * it (filmed 2026-10-24).
+     */
+    val stackSwipedUp get() = stackSwipe < 0
+
+    /**
+     * The finger has gone down the list. A touch catching the list still scrolling reads as the
+     * stack's drag at once, before it moves either way: that folded a list swiped up (2026-10-24).
+     */
+    val stackPulledDown get() = stackSwipe > 0
+
+    private fun noteStackSwipe(ev: MotionEvent, stack: View) {
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> { stackDownY = ev.rawY; stackSwipe = 0 }
+            MotionEvent.ACTION_MOVE -> {
+                if (stackDownY.isNaN()) stackDownY = ev.rawY
+                val dy = ev.rawY - stackDownY
+                val slop = ViewConfiguration.get(stack.context).scaledTouchSlop
+                if (dy < -slop) stackSwipe = -1 else if (dy > slop) stackSwipe = 1
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> stackDownY = Float.NaN
+        }
+    }
 
     /** Where the music's island is drawn, for the lyrics to grow out of; null when it is not up. */
     @JvmStatic fun musicIslandCentreOnScreen(): FloatArray? =
@@ -7613,7 +7644,7 @@ private class MiniPlayerController(
         }
         // ColorOS: pulled back down while still opening, it folds the same way as from open.
         if (colorOs() && s.phase == SPREAD_OPENING && s.finger?.ended != false && s.lead != null &&
-            s.items.none { it.morph != null } && stackDragged()) {
+            s.items.none { it.morph != null } && stackDragged() && MiniPlayerRuntime.stackPulledDown) {
             s.closeFrom = spreadRows(s).associateWith { row ->
                 val xy = IntArray(2)
                 (row.parent as? View)?.getLocationOnScreen(xy)
@@ -7852,8 +7883,11 @@ private class MiniPlayerController(
         // ColorOS: the list follows the finger down (HyperOS's own pull) until dragMaxAction
         // (DraggerParams stack 60dp), then goes into the capsule on its own.
         val pullAt = if (colorOs()) dp(SPREAD_LIST_DRAG_ACTION_DP).toFloat() else dp(SPREAD_PULL_DP).toFloat()
-        val pulledFar = colorOs() && kotlin.math.abs(NumState.overScroll()) >= pullAt
-        if (folded || pulledFar || (listPulled() || NumState.busy()) && toward > pullAt) {
+        // Only the pull at the top (positive) heads for the fold: a quick swipe up running the
+        // list into its end overscrolls the other way and folded it back (filmed 2026-10-24).
+        val pulledFar = colorOs() && NumState.overScroll() >= pullAt
+        val pulled = (listPulled() || NumState.busy()) && toward > pullAt && !MiniPlayerRuntime.stackSwipedUp
+        if (folded || pulledFar || pulled) {
             s.islandsY = islandsY
             // The list's places now, before the stack piles them at its foot as it folds.
             s.closeFrom = if (colorOs()) spreadRows(s).associateWith { row ->
@@ -7871,7 +7905,7 @@ private class MiniPlayerController(
             s.fold = null
             s.lastY = Int.MIN_VALUE
             applySpread(s, spreadProgress(s, y))
-            spreadTrace("spread closing (${if (folded) "folded" else "pulled"}): " + describeSpread())
+            spreadTrace("spread closing (${if (folded) "folded" else "pulled"} over=${NumState.overScrollParts()} toward=$toward): " + describeSpread())
             return
         }
         if (!listPulled() && !NumState.busy()) s.cardsY = y
