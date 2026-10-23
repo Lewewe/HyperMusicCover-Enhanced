@@ -26,6 +26,7 @@ object SettingsBackup {
     private const val KEY_CARD_TITLE_TAP = "cardTitleTap"
     private const val KEY_HIDE_FINGERPRINT = "hideFingerprint"
     private const val KEY_FOD_AFTER_FACE = "fingerprintAfterFace"
+    private const val KEY_DEPTH_OPEN = "depthLimitRemoved"
     private const val KEY_FORCE_COLON = "forceClockColon"
     private const val KEY_MEDIA_BAR_GLOW = "mediaBarGlow"
     private const val KEY_LYRICS_KEEP_ON = "lyricsKeepOn"
@@ -99,6 +100,7 @@ object SettingsBackup {
             json.put(KEY_HIDE_FINGERPRINT, module.hideFingerprint)
             json.put(KEY_FOD_AFTER_FACE, module.fodAfterFace)
             json.put(KEY_FORCE_COLON, module.forceColon)
+            json.put(KEY_DEPTH_OPEN, module.depthOpen)
             json.put(KEY_MEDIA_BAR_GLOW, module.mediaBarGlow)
             json.put(KEY_LYRICS_KEEP_ON, module.lyricsKeepOn)
             json.put(KEY_LYRICS_HDR, module.lyricsHdr)
@@ -163,6 +165,9 @@ object SettingsBackup {
             }
             if (obj.has(KEY_FORCE_COLON)) {
                 ModuleBridge.setForceColon(context, obj.getBoolean(KEY_FORCE_COLON))
+            }
+            if (obj.has(KEY_DEPTH_OPEN)) {
+                ModuleBridge.setDepthOpen(context, obj.getBoolean(KEY_DEPTH_OPEN))
             }
             if (obj.has(KEY_MEDIA_BAR_GLOW)) {
                 ModuleBridge.setMediaBarGlow(context, obj.getBoolean(KEY_MEDIA_BAR_GLOW))

@@ -122,6 +122,11 @@
 
         <activity android:name=".MediaCardActivity" android:exported="false" />
         <activity
+            android:name=".TweaksActivity"
+            android:exported="false"
+            android:label="@string/features_tweaks_title"
+            android:theme="@style/Theme.HyperMusicCover" />
+        <activity
             android:name=".DictionaryActivity"
             android:exported="false"
             android:label="@string/lyrics_dictionaries"

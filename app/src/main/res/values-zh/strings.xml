@@ -307,6 +307,12 @@
     <string name="lyrics_offline_cache">保留歌词以供离线播放</string>
     <string name="lyrics_offline_cache_summary">将歌词和在线翻译保存在此设备上。网络信号较差或不稳定时很有用。找到更好的歌词时会更新缓存。关闭此选项将清除缓存。</string>
     <string name="extras_summary">歌词显示、翻译、动效与来源设置</string>
+    <string name="features_tweaks_title">更多功能</string>
+    <string name="features_tweaks_summary">音乐锁屏以外的系统调整</string>
+    <string name="tweaks_lock_screen">锁屏</string>
+    <string name="depth_open">去除景深限制</string>
+    <string name="depth_open_summary">任意锁屏壁纸（包括第三方壁纸）均可使用景深效果，时钟遮挡主体时也保留景深</string>
+    <string name="depth_open_restart_hint">请重启系统界面和锁屏编辑器以应用此更改。</string>
     <string name="lyrics_search_section">歌词搜索</string>
     <string name="lyrics_search_mode">搜索模式</string>
     <string name="lyrics_search_original">原版</string>

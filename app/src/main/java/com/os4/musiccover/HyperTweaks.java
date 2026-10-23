@@ -20,9 +20,11 @@ import java.lang.reflect.Method;
  * most wallpapers, the editor stops at ten saved lock screens, the big clock drops its colon, and
  * a global theme switches the soft glass off under everything.
  *
- * Three of the four are unconditional - there is no setting, because a restriction that only
- * exists to be worked around is not a preference. The colon is the exception: it changes what the
- * clock looks like, so it is a switch on the cover and clock page.
+ * The template ceiling and the soft glass are unconditional - there is no setting, because a
+ * restriction that only exists to be worked around is not a preference. The colon changes what
+ * the clock looks like, so it is a switch on the cover and clock page. The depth limits were
+ * unconditional too until users asked to keep the stock rule (2026-10-23): the Extras page's
+ * switch, on by default, read by every depth hook through depthOpen().
  *
  * Every hook stands alone. These classes are OEM internals that get renamed between HyperOS
  * builds, and a lookup that throws must cost its own feature and nothing else - see the module's
@@ -465,18 +467,23 @@ final class HyperTweaks {
             ctor.setAccessible(true);
             Xp.hook(ctor, chain -> {
                 Object[] args = chain.getArgs().toArray();
-                if (args.length == 1 && args[0] instanceof Double
+                if (depthOpen() && args.length == 1 && args[0] instanceof Double
                         && (Double) args[0] == DEPTH_THRESHOLD_STOCK) {
                     args[0] = DEPTH_THRESHOLD_OPEN;
                 }
                 return chain.proceed(args);
             });
-            Field image = evaluatorCls.getDeclaredField("IMAGE_THRESHOLD");
-            image.setAccessible(true);
-            Object threshold = image.get(null);
-            Field rate = thresholdCls.getDeclaredField("rate");
-            rate.setAccessible(true);
-            rate.setDouble(threshold, DEPTH_THRESHOLD_OPEN);
+            // Only on a real answer: this early the process usually has no application to read
+            // the switch with, and the initialiser this read would run is then left to happen
+            // later, under the constructor hook, when it can be asked.
+            if (depthKnown() && depthOpen()) {
+                Field image = evaluatorCls.getDeclaredField("IMAGE_THRESHOLD");
+                image.setAccessible(true);
+                Object threshold = image.get(null);
+                Field rate = thresholdCls.getDeclaredField("rate");
+                rate.setAccessible(true);
+                rate.setDouble(threshold, DEPTH_THRESHOLD_OPEN);
+            }
             ok("depth-threshold:" + where);
         } catch (Throwable t) {
             failed("depth-threshold:" + where, t);
@@ -495,11 +502,11 @@ final class HyperTweaks {
             Class<?> controller = Xp.findClass(CLS_HIERARCHY_AVOID, cl);
             Xp.hookAll(controller, "isHierarchyEnable", chain -> {
                 Object result = chain.proceed();
-                return userOpenedHierarchy(chain.getThisObject()) ? Boolean.TRUE : result;
+                return depthOpen() && userOpenedHierarchy(chain.getThisObject()) ? Boolean.TRUE : result;
             });
             Xp.hookAll(controller, "onHierarchyEnableChange", chain -> {
                 Object[] args = chain.getArgs().toArray();
-                if (args.length == 2 && userOpenedHierarchy(chain.getThisObject())) {
+                if (depthOpen() && args.length == 2 && userOpenedHierarchy(chain.getThisObject())) {
                     args[0] = Boolean.TRUE;
                 }
                 return chain.proceed(args);
@@ -532,6 +539,7 @@ final class HyperTweaks {
         }
         try {
             Xp.hookAll(interactorCls, "updateAvoidStatus", chain -> {
+                if (!depthOpen()) return chain.proceed();
                 clearAvoidState(chain.getThisObject());
                 // Not proceeded with: the OEM's own recomputation is exactly what puts the
                 // avoidance back, so it is replaced rather than followed.
@@ -548,7 +556,7 @@ final class HyperTweaks {
                 }
                 m.setAccessible(true);
                 Xp.hook(m, chain -> {
-                    clearAvoidState(chain.getThisObject());
+                    if (depthOpen()) clearAvoidState(chain.getThisObject());
                     return chain.proceed();
                 });
                 ok("depth-alpha");
@@ -573,6 +581,7 @@ final class HyperTweaks {
             Xp.hookAll(panelCls, "updateShowDepthState", chain -> {
                 Object panel = chain.getThisObject();
                 sKgPanel = panel;
+                if (!depthOpen()) return chain.proceed();
                 Object interactor = interactorField.get(panel);
                 if (videoEnable.getBoolean(interactor)) {
                     // A depth VIDEO is left to the OEM. Its subject is the video's own cut-out
@@ -616,7 +625,7 @@ final class HyperTweaks {
                 Object result = chain.proceed();
                 Object interactor = chain.getThisObject();
                 Object panel = sKgPanel;
-                if (panel != null && videoEnable.getBoolean(interactor)
+                if (depthOpen() && panel != null && videoEnable.getBoolean(interactor)
                         && enableInner.getBoolean(interactor)) {
                     new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
                         try {
@@ -659,7 +668,7 @@ final class HyperTweaks {
     private static void thirdPartyWallpaperDepth(ClassLoader cl) {
         try {
             Class<?> infoCls = Xp.findClass(CLS_WALLPAPER_INFO, cl);
-            Xp.hookAll(infoCls, "getSupportSubject", chain -> Boolean.TRUE);
+            Xp.hookAll(infoCls, "getSupportSubject", chain -> depthOpen() ? Boolean.TRUE : chain.proceed());
             Class<?> hierarchyCls = Xp.findClass(CLS_HIERARCHY_ENABLE, cl);
             // Nine booleans, one per layout, and all of them yes. Built once: the getter is
             // called per frame in places, and a new instance each time would be litter.
@@ -670,7 +679,7 @@ final class HyperTweaks {
             ctor.setAccessible(true);
             final Object all = ctor.newInstance(
                     true, true, true, true, true, true, true, true, true);
-            Xp.hookAll(infoCls, "getLargeScreenHierarchyEnable", chain -> all);
+            Xp.hookAll(infoCls, "getLargeScreenHierarchyEnable", chain -> depthOpen() ? all : chain.proceed());
             ok("depth-wallpaper:systemui");
         } catch (Throwable t) {
             failed("depth-wallpaper:systemui", t);
@@ -681,12 +690,12 @@ final class HyperTweaks {
     private static void aodWallpaperDepth(ClassLoader cl) {
         try {
             Class<?> infoCls = Xp.findClass(CLS_AOD_WALLPAPER_INFO, cl);
-            Xp.hookAll(infoCls, "getSupportSubject", chain -> Boolean.TRUE);
+            Xp.hookAll(infoCls, "getSupportSubject", chain -> depthOpen() ? Boolean.TRUE : chain.proceed());
             Class<?> hierarchyCls = Xp.findClass(CLS_AOD_HIERARCHY_ENABLE, cl);
             Constructor<?> ctor = hierarchyCls.getDeclaredConstructor();
             ctor.setAccessible(true);
             final Object all = ctor.newInstance();
-            Xp.hookAll(infoCls, "getLargeScreenHierarchyEnable", chain -> all);
+            Xp.hookAll(infoCls, "getLargeScreenHierarchyEnable", chain -> depthOpen() ? all : chain.proceed());
             ok("depth-wallpaper:aod");
         } catch (Throwable t) {
             failed("depth-wallpaper:aod", t);
@@ -831,6 +840,78 @@ final class HyperTweaks {
             return on;
         } catch (Throwable t) {
             Xp.log(TAG + "could not read the colon flag: " + t);
+            return false;
+        }
+    }
+
+    // ------------------------------------------------------------------ the depth switch
+
+    /**
+     * Whether the depth effect's limits are lifted - the Extras switch, on unless turned off.
+     *
+     * In Settings.Global for the same reason as the colon: SystemUI and the editor both need it
+     * and only SystemUI can be told. Unlike the colon, SystemUI reads it from there too, rather
+     * than from its state file: the depth hooks are consulted while the keyguard is first built,
+     * before the state file has been loaded, and a value that arrived late would have the first
+     * lock screen after a restart judged under the wrong rule.
+     */
+    private static final String GLOBAL_DEPTH = "hypermusiccover_depth_open";
+
+    /** Stores the switch where both processes read it. Called from SystemUI, which may write it. */
+    static void publishDepthOpen(android.content.Context ctx, boolean on) {
+        if (ctx == null) return;
+        try {
+            android.provider.Settings.Global.putInt(ctx.getContentResolver(), GLOBAL_DEPTH, on ? 1 : 0);
+            sDepthOpen = on;
+        } catch (Throwable t) {
+            Xp.log(TAG + "could not publish the depth flag: " + t);
+        }
+    }
+
+    /** null until read once; kept current by the observer depthOpen() registers. */
+    private static volatile Boolean sDepthOpen;
+
+    /**
+     * The switch, read once and then watched (see aodColonWanted). Before the process has an
+     * application to ask with, the default - on - is answered without being cached.
+     */
+    static boolean depthOpen() {
+        Boolean cached = sDepthOpen;
+        if (cached != null) return cached;
+        try {
+            android.content.Context ctx = (android.content.Context) Class
+                    .forName("android.app.ActivityThread")
+                    .getMethod("currentApplication")
+                    .invoke(null);
+            if (ctx == null) return true;
+            final android.content.ContentResolver cr = ctx.getContentResolver();
+            boolean on = android.provider.Settings.Global.getInt(cr, GLOBAL_DEPTH, 1) != 0;
+            sDepthOpen = on;
+            cr.registerContentObserver(
+                    android.provider.Settings.Global.getUriFor(GLOBAL_DEPTH),
+                    false,
+                    new android.database.ContentObserver(
+                            new android.os.Handler(android.os.Looper.getMainLooper())) {
+                        @Override
+                        public void onChange(boolean selfChange) {
+                            sDepthOpen = android.provider.Settings.Global
+                                    .getInt(cr, GLOBAL_DEPTH, 1) != 0;
+                        }
+                    });
+            return on;
+        } catch (Throwable t) {
+            Xp.log(TAG + "could not read the depth flag: " + t);
+            return true;
+        }
+    }
+
+    /** Whether the process has an application yet, i.e. whether depthOpen() is a real answer. */
+    private static boolean depthKnown() {
+        if (sDepthOpen != null) return true;
+        try {
+            return Class.forName("android.app.ActivityThread")
+                    .getMethod("currentApplication").invoke(null) != null;
+        } catch (Throwable t) {
             return false;
         }
     }

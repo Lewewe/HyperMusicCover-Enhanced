@@ -274,6 +274,12 @@
     <string name="lyrics_online_target_hint">Target language (default: en)</string>
     <string name="extras_section">Lyrics settings</string>
     <string name="extras_summary">Lyrics, translations, effects and lyric sources</string>
+    <string name="features_tweaks_title">Extras</string>
+    <string name="features_tweaks_summary">System tweaks beyond the music lock screen</string>
+    <string name="tweaks_lock_screen">Lock screen</string>
+    <string name="depth_open">Remove depth effect limit</string>
+    <string name="depth_open_summary">Let any lock screen wallpaper use the depth effect, including third-party ones, and keep it when the clock covers the subject</string>
+    <string name="depth_open_restart_hint">Restart System UI and the lock screen editor to apply this change.</string>
     <string name="lyrics_search_section">Lyric search</string>
     <string name="lyrics_search_mode">Search mode</string>
     <string name="lyrics_search_original">Original</string>

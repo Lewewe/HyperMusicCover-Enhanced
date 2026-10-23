@@ -40,6 +40,7 @@ import com.os4.musiccover.TranslationProvider
 import com.os4.musiccover.ModuleBridge
 import com.os4.musiccover.R
 import com.os4.musiccover.ShadeActivity
+import com.os4.musiccover.TweaksActivity
 import com.os4.musiccover.MiniPlayerActivity
 import com.os4.musiccover.ui.util.PageScaffold
 import kotlinx.coroutines.delay
@@ -157,6 +158,96 @@ private fun FeatureList(
                         summary = stringResource(R.string.extras_summary),
                         onClick = { onOpen(ExtrasActivity::class.java) },
                     )
+                }
+                Card(
+                    modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)
+                ) {
+                    ArrowPreference(
+                        title = stringResource(R.string.features_tweaks_title),
+                        summary = stringResource(R.string.features_tweaks_summary),
+                        onClick = { onOpen(TweaksActivity::class.java) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Extras: HyperOS tweaks that have nothing to do with the cover. (The page called "extras" in the
+ * code is the lyrics page; it predates this one.)
+ *
+ * The depth effect's limits (HyperTweaks, adapted from HyperChanger) were lifted unconditionally;
+ * users asked for HyperChanger's switch, so it is one here, on by default as it has always been.
+ * Its threshold is built once per process, hence the restart offered after a change - SystemUI
+ * and the lock screen editor both.
+ */
+@Composable
+internal fun TweaksPageView(
+    isBlurEnabled: Boolean,
+    refreshKey: Int,
+    onBack: () -> Unit,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var module by remember { mutableStateOf(ModuleBridge.State()) }
+    LaunchedEffect(refreshKey) { module = ModuleBridge.queryAlive(context) }
+    var restartPending by rememberSaveable { mutableStateOf(false) }
+    var restarting by remember { mutableStateOf(false) }
+    var restartFailed by remember { mutableStateOf(false) }
+    PageScaffold(
+        title = stringResource(R.string.features_tweaks_title),
+        isBlurEnabled = isBlurEnabled,
+        onBack = onBack,
+    ) {
+        item {
+            Column {
+                SmallTitle(text = stringResource(R.string.tweaks_lock_screen))
+                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    SwitchPreference(
+                        title = stringResource(R.string.depth_open),
+                        summary = stringResource(R.string.depth_open_summary),
+                        checked = module.depthOpen,
+                        enabled = module.alive,
+                        onCheckedChange = {
+                            module = module.copy(depthOpen = it)
+                            ModuleBridge.setDepthOpen(context, it)
+                            restartPending = true
+                            restartFailed = false
+                        },
+                    )
+                    if (restartPending) {
+                        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
+                            MiuixText(
+                                text = stringResource(
+                                    if (restartFailed) R.string.fp_sink_restart_failed
+                                    else R.string.depth_open_restart_hint,
+                                ),
+                                fontSize = 13.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                modifier = Modifier.padding(bottom = 12.dp),
+                            )
+                            TextButton(
+                                text = stringResource(R.string.restart_systemui),
+                                enabled = module.alive && !restarting,
+                                modifier = Modifier.fillMaxWidth(),
+                                onClick = {
+                                    restarting = true
+                                    scope.launch {
+                                        try {
+                                            val restarted = withContext(Dispatchers.IO) {
+                                                ModuleBridge.restartDepthProcesses()
+                                            }
+                                            restartFailed = !restarted
+                                            if (restarted) restartPending = false
+                                        } finally {
+                                            restarting = false
+                                        }
+                                    }
+                                },
+                            )
+                        }
+                    }
                 }
             }
         }

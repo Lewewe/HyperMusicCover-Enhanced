@@ -2911,6 +2911,13 @@ public class Main extends XposedModule {
                         // Over the probe rather than the log because the module's INFO lines are
                         // not readable on this device - LSPosed keeps error level only.
                         setResultData(HyperTweaks.describe());
+                    } else if ("depthopen".equals(op)) {
+                        // Kept in Settings.Global rather than the state file: the editor process
+                        // reads it too, and SystemUI's own hooks need it before the file loads.
+                        boolean on = i.getBooleanExtra("on", !HyperTweaks.depthOpen());
+                        HyperTweaks.publishDepthOpen(sAppCtx != null ? sAppCtx : c, on);
+                        Xp.log(TAG + "depth limits " + (on ? "lifted" : "kept")
+                                + " (fully applies after SystemUI and the editor restart)");
                     } else if ("colon".equals(op)) {
                         HyperTweaks.sForceColon = i.getBooleanExtra("on",
                                 !HyperTweaks.sForceColon);
@@ -3196,6 +3203,7 @@ public class Main extends XposedModule {
                         out.putBoolean("fodface", sFodFace);
                         out.putBoolean("aodsmall", sAodSmall);
                         out.putBoolean("colon", HyperTweaks.sForceColon);
+                        out.putBoolean("depthopen", HyperTweaks.depthOpen());
                         out.putBoolean("seekglow", HyperTweaks.sBarGlow);
                         out.putBoolean("lyrics", LockLyrics.sEnabled);
                         // Where the lock screen's words came from right now, and whether there is

@@ -119,6 +119,8 @@ object ModuleBridge {
         val aodSmall: Boolean = true,
         /** Draw the big clock's colon on the styles that drop it. */
         val forceColon: Boolean = false,
+        /** The depth effect's limits lifted (Extras). On by default. See HyperTweaks.depthOpen. */
+        val depthOpen: Boolean = true,
         /** Light the media card's progress bar the way the island's is lit (#49). On by default. */
         val mediaBarGlow: Boolean = true,
         /**
@@ -507,6 +509,9 @@ object ModuleBridge {
 
     fun setForceColon(context: Context, on: Boolean) =
         send(context, "colon") { putExtra("on", on) }
+
+    fun setDepthOpen(context: Context, on: Boolean) =
+        send(context, "depthopen") { putExtra("on", on) }
 
     fun setMediaCardStyle(context: Context, key: String, value: Int) =
         send(context, "mediastyle") { putExtra("key", key); putExtra("v", value) }
@@ -926,6 +931,7 @@ object ModuleBridge {
             fodAfterFace = b.getBoolean("fodface", false),
             aodSmall = b.getBoolean("aodsmall", true),
             forceColon = b.getBoolean("colon", false),
+            depthOpen = b.getBoolean("depthopen", true),
             mediaBarGlow = b.getBoolean("seekglow", true),
             lyrics = b.getBoolean("lyrics", true),
             lyricsKeepOn = b.getBoolean("lyrickeep", false),
@@ -1022,6 +1028,15 @@ object ModuleBridge {
     fun restartSystemUi(): Boolean {
         restartingSince = SystemClock.elapsedRealtime()
         return kill("com.android.systemui")
+    }
+
+    /**
+     * SystemUI and the lock screen editor, which judge a wallpaper's depth each with their own
+     * copy of the threshold, built once per process (HyperTweaks.openDepthThreshold).
+     */
+    fun restartDepthProcesses(): Boolean {
+        val editor = killTree("com.miui.aod")
+        return restartSystemUi() && editor
     }
 
     /**
