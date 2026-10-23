@@ -94,6 +94,16 @@ public class Main extends XposedModule {
      */
     private static final String CLS_FOD_ANIM_VIEW =
             "com.miui.keyguard.biometrics.fod.MiuiGxzwAnimationView";
+    /** Decides whether the print's windows are up at all. See the sFodFace hook. */
+    private static final String CLS_FOD_MANAGER =
+            "com.miui.keyguard.biometrics.fod.MiuiGxzwManager";
+    /** Where a face unlock lands (sets mFaceUnlockMode), and where that mode is reset. */
+    private static final String CLS_BIO_INJECTOR =
+            "com.android.keyguard.injector.BiometricUnlockControllerInjector";
+    private static final String CLS_BIO_UNLOCK =
+            "com.android.systemui.statusbar.phone.BiometricUnlockController";
+    private static final String CLS_NSSL =
+            "com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout";
     /**
      * Where the lock screen's notification stack is allowed to end.
      *
@@ -570,6 +580,14 @@ public class Main extends XposedModule {
      * would read as a glitch rather than as a setting.
      */
     private static volatile boolean sHideFp;
+    /**
+     * Take the print away, touch window and all, once a face has unlocked and HyperOS keeps the
+     * lock screen up for a swipe - the way ColorOS does it. Its spot then takes touches like the
+     * rest of the screen. Separate from sHideFp, which only stops the print being painted.
+     */
+    private static volatile boolean sFodFace;
+    /** The OEM's MiuiGxzwManager, caught on its first updateGxzwState. */
+    private static volatile Object sFodManager;
     /**
      * Keep cover mode's small clock in the always-on display instead of handing it back to the
      * OEM's, which is what it does by default.
@@ -1461,6 +1479,73 @@ public class Main extends XposedModule {
             Xp.w(TAG + "fingerprint print view hook failed: " + t);
         }
 
+        // The print gone after a face unlock (sFodFace). Through the OEM's own switch for it:
+        // mDisableLockScreenFod, which lock screen themes set with their disableFod command and
+        // which makes updateGxzwState dismiss the print's windows on the lock screen - not in the
+        // bouncer, not in an app's prompt. Held only for the length of each call, so a theme's
+        // own value is never overwritten, and the state is asked again whenever a face unlock
+        // lands or is reset, since nothing else in that class would notice.
+        try {
+            Xp.hookAll(Xp.findClass(CLS_FOD_MANAGER, cl), "updateGxzwState", chain -> {
+                Object mgr = chain.getThisObject();
+                sFodManager = mgr;
+                if (!faceSinkNow(mgr.getClass().getClassLoader())) {
+                    return chain.proceed();
+                }
+                boolean was = Boolean.TRUE.equals(Xp.getObjectField(mgr, "mDisableLockScreenFod"));
+                Xp.setBooleanField(mgr, "mDisableLockScreenFod", true);
+                try {
+                    return chain.proceed();
+                } finally {
+                    Xp.setBooleanField(mgr, "mDisableLockScreenFod", was);
+                }
+            });
+            // The doze has a branch of its own in updateGxzwState that shows the print without
+            // reading mDisableLockScreenFod, so while the face layout is held over the doze's
+            // start (sFaceHeld) the show itself is turned into a dismiss.
+            Xp.hookAll(Xp.findClass(CLS_FOD_MANAGER, cl), "dismissGxzwIconView", chain -> {
+                java.util.List<Object> a = chain.getArgs();
+                boolean hold = sFaceHeld
+                        || android.os.SystemClock.uptimeMillis() < sFodBackAt;
+                if (hold && a.size() == 1 && Boolean.FALSE.equals(a.get(0))) {
+                    return chain.proceed(new Object[] {true});
+                }
+                return chain.proceed();
+            });
+            XposedInterface.Hooker refresh = chain -> {
+                Object result = chain.proceed();
+                if (sFodFace) refreshFod();
+                return result;
+            };
+            // R8 suffixes both names ($1); hookAllLambdas takes the plain one or any suffix.
+            Xp.hookAllLambdas(Xp.findClass(CLS_BIO_INJECTOR, cl), "onBiometricAuthenticated", refresh);
+            Xp.hookAllLambdas(Xp.findClass(CLS_BIO_UNLOCK, cl), "resetMode", refresh);
+            // The stack moving to its new bound, animated rather than jumped: for a short while
+            // after the bound is recombined (nudgeAvoidCombine), every children update of the
+            // stack is asked to animate everything - the flags SystemUI itself sets for the
+            // shade-locked to keyguard change, under the same two conditions. A window rather
+            // than one update, because the new bound reaches the stack a frame or two later
+            // through flows; an update in between animates nothing and costs nothing.
+            Xp.hookAll(Xp.findClass(CLS_NSSL, cl), "requestChildrenUpdate", chain -> {
+                if (android.os.SystemClock.uptimeMillis() < sStackAnimateUntil) {
+                    try {
+                        Object stack = chain.getThisObject();
+                        if (Boolean.TRUE.equals(Xp.getObjectField(stack, "mIsExpanded"))
+                                && Boolean.TRUE.equals(Xp.getObjectField(stack, "mAnimationsEnabled"))) {
+                            Xp.setBooleanField(stack, "mEverythingNeedsAnimation", true);
+                            Xp.setBooleanField(stack, "mNeedsAnimation", true);
+                        }
+                    } catch (Throwable ignored) {
+                        // No animation is the stack moving the way it always did.
+                    }
+                }
+                return chain.proceed();
+            });
+            Xp.log(TAG + "fingerprint after face unlock hooked");
+        } catch (Throwable t) {
+            Xp.w(TAG + "fingerprint after face unlock hook failed, the print stays: " + t);
+        }
+
         // Whether the notifications keep clear of that icon. Installed whatever the setting is,
         // and the mode is read per call, but unlike everything else here a change does not show
         // up immediately: this value is not one of the seven flows, so the bound is only
@@ -1482,7 +1567,10 @@ public class Main extends XposedModule {
                     // has run: the mode has to come out of the file here or that first value -
                     // which stays until one of the seven flows moves - is the OEM's.
                     peekHideFp();
-                    if (sFpAvoid != 0) {
+                    // With the print taken away after a face unlock (sFodFace) there is nothing
+                    // left to keep clear of, so the stack sinks as with "always sink".
+                    boolean faceSink = faceSinkNow(invoke.getDeclaringClass().getClassLoader());
+                    if (sFpAvoid != 0 || faceSink) {
                         try {
                             java.util.List<Object> a = chain.getArgs();
                             Object second = a.size() > 1 ? a.get(1) : null;
@@ -1495,9 +1583,10 @@ public class Main extends XposedModule {
                                 // values overwritten.
                                 if ((vals.length == 7 || vals.length == 8)
                                         && vals[5] instanceof Boolean && vals[6] instanceof Boolean) {
-                                    Boolean forced = sFpAvoid == 2;
-                                    if (sFpAvoidLogged++ < 2) Xp.log(TAG + "fingerprint avoidance"
-                                            + " mode=" + sFpAvoid + " was " + vals[5] + "/"
+                                    Boolean forced = !faceSink && sFpAvoid == 2;
+                                    if (faceSink || sFpAvoidLogged++ < 2) Xp.log(TAG
+                                            + "fingerprint avoidance mode=" + sFpAvoid
+                                            + (faceSink ? " face" : "") + " was " + vals[5] + "/"
                                             + vals[6] + " -> " + forced);
                                     // 5 is "fingerprint unlock is on", 6 is "a print is
                                     // enrolled". Written in place: the array is the one the
@@ -1511,6 +1600,7 @@ public class Main extends XposedModule {
                     }
                     return chain.proceed();
                 });
+                sAvoidCombine = combine;
                 Xp.log(TAG + "fingerprint avoidance hooked on " + combine.getName()
                         + " in " + (android.os.SystemClock.uptimeMillis() - t0) + "ms");
             }
@@ -1954,6 +2044,7 @@ public class Main extends XposedModule {
                     + "\nwallpaperdim=" + sWallpaperDim
                     + "\nhideplayerbackground=" + (sHidePlayerBackground ? 1 : 0)
                     + "\nhidefp=" + (sHideFp ? 1 : 0)
+                    + "\nfodface=" + (sFodFace ? 1 : 0)
                     // aodsmall and lyrics are not written: both are fixed on, and loadState does
                     // not read them. lyrichidden still is - the two-finger tap is the one way the
                     // lock screen can be asked for the cover instead, and it has to survive.
@@ -2104,6 +2195,7 @@ public class Main extends XposedModule {
                         else if ("wallpaperdim".equals(k)) sWallpaperDim = Math.max(0, Math.min(80, Integer.parseInt(v)));
                         else if ("hideplayerbackground".equals(k)) sHidePlayerBackground = "1".equals(v);
                         else if ("hidefp".equals(k)) sHideFp = "1".equals(v);
+                        else if ("fodface".equals(k)) sFodFace = "1".equals(v);
                         else if ("colon".equals(k)) HyperTweaks.sForceColon = "1".equals(v);
                         else if ("seekglow".equals(k)) HyperTweaks.sBarGlow = "1".equals(v);
                         // aodsmall and lyrics are not read: cover mode keeps its small clock in
@@ -2860,6 +2952,11 @@ public class Main extends XposedModule {
                         saveState();
                         Xp.log(TAG + "hide fingerprint " + (sHideFp ? "on" : "off"));
                         applyHideFp();
+                    } else if ("fodface".equals(op)) {
+                        sFodFace = i.getBooleanExtra("on", !sFodFace);
+                        saveState();
+                        Xp.log(TAG + "fingerprint after face unlock " + (sFodFace ? "hidden" : "kept"));
+                        refreshFod();
                     } else if ("aodclock".equals(op)) {
                         sAodSmall = i.getBooleanExtra("small", !sAodSmall);
                         saveState();
@@ -3096,6 +3193,7 @@ public class Main extends XposedModule {
                         out.putInt("fsmode2", sFadeMode);
                         out.putBoolean("vcfade", sVideoFade);
                         out.putBoolean("hidefp", sHideFp);
+                        out.putBoolean("fodface", sFodFace);
                         out.putBoolean("aodsmall", sAodSmall);
                         out.putBoolean("colon", HyperTweaks.sForceColon);
                         out.putBoolean("seekglow", HyperTweaks.sBarGlow);
@@ -7859,6 +7957,229 @@ public class Main extends XposedModule {
         }
         if (dozing == null && authen == null) return keyguardShowing();
         return Boolean.TRUE.equals(dozing) || Boolean.TRUE.equals(authen);
+    }
+
+    /**
+     * Whether a face has unlocked and the lock screen is being kept for a swipe - the OEM's own
+     * answer (MiuiFaceUnlockManager: face unlock mode AND "stay on lock screen" on).
+     */
+    private static boolean faceStayed(ClassLoader cl) {
+        try {
+            Class<?> iface = Class.forName(
+                    "com.miui.interfaces.keyguard.IMiuiFaceUnlockManager", false, cl);
+            Class<?> iim = Class.forName(
+                    "com.miui.systemui.interfacesmanager.InterfacesImplManager", false, cl);
+            Object face = iim.getMethod("getImpl", Class.class).invoke(null, iface);
+            return face != null
+                    && Boolean.TRUE.equals(Xp.callMethod(face, "isFaceUnlockSuccessAndStayScreen"));
+        } catch (Throwable t) {
+            // No answer keeps the print: a missing fingerprint is worse than a visible one.
+            return false;
+        }
+    }
+
+    /** The print taken away and the stack sunk: a face unlock kept, or held over the doze. */
+    private static boolean faceSinkNow(ClassLoader cl) {
+        return sFodFace && (sFaceHeld || faceStayed(cl));
+    }
+
+    /**
+     * Keeps the face layout - print away, stack sunk - over the start of a doze. Falling asleep
+     * resets the face mode at once, but the screen then stands still for about a second
+     * (recordings 2026-10-23: the same frame for 1.1s, then the AOD), so anything that moves
+     * there is never seen, and a print brought back there sat on the sunk card for that second.
+     * Held until the doze draws (holdFaceOverDoze), then let go - the stack glides up in the AOD.
+     */
+    private static volatile boolean sFaceHeld;
+    /** Uptime until which the print stays dismissed after the hold is let go. */
+    private static volatile long sFodBackAt;
+    /** One hold per face unlock: the release's own refresh must not hold again. */
+    private static boolean sFaceHoldSpent;
+
+    /**
+     * Has the OEM re-decide whether the print is up, on the main thread where it decides it, and
+     * the stack's bound with it when the face state moved - see nudgeAvoidCombine().
+     */
+    private static void refreshFod() {
+        Object mgr = sFodManager;
+        if (mgr == null) return;
+        Runnable r = () -> {
+            ClassLoader cl = mgr.getClass().getClassLoader();
+            // Read live, not screenOn(): its 150ms cache still says lit as the sleep starts.
+            if (sFaceSinkLast && !sFaceHeld && !sFaceHoldSpent && sFodFace && !readInteractive()
+                    && !faceStayed(cl)) {
+                sFaceHoldSpent = true;
+                sFaceHeld = true;
+                holdFaceOverDoze();
+                return;
+            }
+            try {
+                Xp.callMethod(mgr, "updateGxzwState");
+            } catch (Throwable t) {
+                Xp.w(TAG + "updateGxzwState failed: " + t);
+            }
+            boolean sink = faceSinkNow(cl);
+            if (sink != sFaceSinkLast) {
+                sFaceSinkLast = sink;
+                if (sink) sFaceHoldSpent = false;
+                Xp.log(TAG + "stack bound recombined, face sink=" + sink);
+                glideStackJump();
+                nudgeAvoidCombine();
+            }
+        };
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) r.run();
+        else new android.os.Handler(android.os.Looper.getMainLooper()).post(r);
+    }
+
+    /** A gap between two draws this long is the doze's stand-still ending. */
+    private static final long DOZE_STILL_MS = 300;
+    /** Drawing on past this without a stand-still means the doze is already up. */
+    private static final long DOZE_DRAWN_MS = 600;
+    /** Let go regardless after this long: a screen that goes fully dark draws nothing at all. */
+    private static final long FACE_HOLD_MAX_MS = 3000;
+
+    /**
+     * Lets go of sFaceHeld at the first draw after the doze's stand-still, as soon as the screen
+     * comes back on, or at FACE_HOLD_MAX_MS, whichever is first.
+     */
+    private static void holdFaceOverDoze() {
+        final long start = android.os.SystemClock.uptimeMillis();
+        final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
+        final Runnable release = new Runnable() {
+            boolean done;
+            @Override public void run() {
+                if (done) return;
+                done = true;
+                // The print comes back once the stack has glided off its place, not across it.
+                sFodBackAt = android.os.SystemClock.uptimeMillis() + STACK_GLIDE_MS;
+                sFaceHeld = false;
+                Xp.log(TAG + "face layout let go after "
+                        + (android.os.SystemClock.uptimeMillis() - start) + "ms");
+                refreshFod();
+                main.postDelayed(Main::refreshFod, STACK_GLIDE_MS + 16);
+            }
+        };
+        main.postDelayed(release, FACE_HOLD_MAX_MS);
+        View stack = stackView();
+        if (stack == null) return;
+        final android.view.ViewTreeObserver vto = stack.getViewTreeObserver();
+        vto.addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
+            long last = start;
+            @Override public boolean onPreDraw() {
+                long now = android.os.SystemClock.uptimeMillis();
+                // Some sleeps have no stand-still at all and draw the doze straight away: those
+                // let go at the first draw past DOZE_DRAWN_MS. A stand-still draws nothing, so
+                // that cannot fire inside one.
+                if (now - last >= DOZE_STILL_MS || now - start >= DOZE_DRAWN_MS || !sFaceHeld
+                        || readInteractive()) {
+                    if (vto.isAlive()) vto.removeOnPreDrawListener(this);
+                    main.removeCallbacks(release);
+                    // Out of the draw pass: the release moves the stack and the print.
+                    main.post(release);
+                }
+                last = now;
+                return true;
+            }
+        });
+    }
+
+    /** SystemUI's notification stack, found from the keyguard's own window. */
+    private static View stackView() {
+        View c = sContainer;
+        if (c == null) return null;
+        int id = c.getResources().getIdentifier("notification_stack_scroller", "id",
+                "com.android.systemui");
+        return id == 0 ? null : c.getRootView().findViewById(id);
+    }
+
+    /** The nsslLockYPosition combine, once findAvoidCombine has found it. */
+    private static volatile Class<?> sAvoidCombine;
+    /** The face part of the stack's bound as it was last pushed. */
+    private static boolean sFaceSinkLast;
+    /** Uptime until which the stack's children updates animate. See requestChildrenUpdate. */
+    private static volatile long sStackAnimateUntil;
+
+    /**
+     * Makes the stack's bound be combined again. The combine only runs when one of its flows
+     * moves, and a face unlock moves none of them. Its eighth flow, sinkSettingFlow, exists only
+     * to trigger it: the combine reads the sink setting itself (isLockscreenNotificationSinkEnabled
+     * goes to Settings) and nothing else reads the flow's value, so flipping it reruns the
+     * combine with the same real inputs. The settings observer puts the true value back on the
+     * next change of the setting. Builds without that flow (seven, up to OS4.0.1) are left alone.
+     */
+    private static void nudgeAvoidCombine() {
+        Class<?> combine = sAvoidCombine;
+        if (combine == null) return;
+        try {
+            java.lang.reflect.Method m = combine.getDeclaredMethod("getLockscreenNotificationSinkFlow");
+            m.setAccessible(true);
+            Object flow = m.invoke(null);
+            if (flow == null) return;
+            Object v = Xp.callMethod(flow, "getValue");
+            sStackAnimateUntil = android.os.SystemClock.uptimeMillis() + 600;
+            Xp.callMethod(flow, "setValue", (Object) !Boolean.TRUE.equals(v));
+        } catch (Throwable t) {
+            Xp.log(TAG + "the stack's bound could not be recombined: " + t);
+        }
+    }
+
+    /**
+     * How far a row has to move between two draws to count as a jump rather than the stack's
+     * own glide, whose first frame was measured at 48px.
+     */
+    private static final int STACK_JUMP_PX = 150;
+    private static final long STACK_GLIDE_MS = 360;
+
+    /**
+     * Glides the stack over a jump to its new bound. Lit, the bound change is animated by the
+     * stack itself (requestChildrenUpdate above). Falling asleep it is not: the doze moves the
+     * rows in one frame by a transform that is not their translation (measured: a row's screen y
+     * 1709 -> 1271 with its translationY still 1709), and the flags do nothing there. So the jump
+     * is undone on the stack view's own translation, which nothing else on this path sets, and
+     * eased back to zero.
+     *
+     * Checked before each draw, so the jump is undone before it is ever drawn, and animated by
+     * View.animate() with no listener, which runs a translation on the RenderThread: the main
+     * thread is blocked for about a second as the doze starts, and an animator on it stood still
+     * there and then snapped (recording, 2026-10-23). Watched for up to 600ms.
+     */
+    private static void glideStackJump() {
+        View found = stackView();
+        if (!(found instanceof ViewGroup)) return;
+        ViewGroup stack = (ViewGroup) found;
+        View row = null;
+        for (int i = 0; i < stack.getChildCount() && row == null; i++) {
+            View ch = stack.getChildAt(i);
+            if (ch.getVisibility() == View.VISIBLE && ch.getHeight() > 0) row = ch;
+        }
+        if (row == null) return;
+        final View watched = row;
+        final long until = android.os.SystemClock.uptimeMillis() + 600;
+        final int[] loc = new int[2];
+        watched.getLocationOnScreen(loc);
+        final int[] last = {loc[1]};
+        final android.view.ViewTreeObserver vto = stack.getViewTreeObserver();
+        vto.addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
+            @Override public boolean onPreDraw() {
+                watched.getLocationOnScreen(loc);
+                int jump = loc[1] - last[0];
+                last[0] = loc[1];
+                boolean done = android.os.SystemClock.uptimeMillis() >= until;
+                if (Math.abs(jump) >= STACK_JUMP_PX) {
+                    float from = stack.getTranslationY() - jump;
+                    stack.animate().cancel();
+                    stack.setTranslationY(from);
+                    stack.animate().translationY(0f).setDuration(STACK_GLIDE_MS)
+                            .setInterpolator(new android.view.animation.PathInterpolator(
+                                    0.4f, 0f, 0.2f, 1f))
+                            .start();
+                    Xp.log(TAG + "stack jump of " + jump + "px glided");
+                    done = true;
+                }
+                if (done && vto.isAlive()) vto.removeOnPreDrawListener(this);
+                return true;
+            }
+        });
     }
 
     /** MiuiGxzwFrameAnimation's view, which carries the state its frames are drawn for. */

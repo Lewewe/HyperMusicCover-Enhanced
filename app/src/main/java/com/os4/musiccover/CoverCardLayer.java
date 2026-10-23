@@ -834,6 +834,8 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
      * gaps came out 158/131 instead of equal (2026-09-24).
      */
     private static final long AOD_SETTLE_NS = 1_500_000_000L;
+    /** The gap kept above and below a held place shrunk to fit the doze. ~50px lit on the 17 Pro. */
+    private static final float AOD_FIT_GAP_DP = 16f;
     /** When the current doze began, 0 outside one. */
     private long aodSince;
 
@@ -871,8 +873,20 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
         float artHeight = held.side * Math.min(1f, 1f / shownAspect());
         float room = bottom - top - artHeight;
         if (room < 0f) {
-            aodPlaceNote = "no room clock=" + clock + " media=" + media;
-            return held;
+            // The card came up after the place was held - the stack un-sinking as the print
+            // comes back for the doze (Main.sFodFace). Shrunk to the room left, with the lit
+            // screen's gap on each side, rather than drawn across the card.
+            float gap = AOD_FIT_GAP_DP * getResources().getDisplayMetrics().density / k;
+            float fit = bottom - top - 2f * gap;
+            if (fit <= 0f) {
+                aodPlaceNote = "no room clock=" + clock + " media=" + media;
+                return held;
+            }
+            float side = fit / Math.min(1f, 1f / shownAspect());
+            aodPlaceNote = "shrunk clock=" + clock + " media=" + media + " side="
+                    + Math.round(held.side) + "->" + Math.round(side);
+            return new CoverCardStyle.Rect(held.x + (held.side - side) / 2f, top + gap
+                    - (side - fit) / 2f, side);
         }
         float y = top + room / 2f - (held.side - artHeight) / 2f;
         aodPlaceNote = "centred clock=" + clock + " media=" + media + " k=" + k

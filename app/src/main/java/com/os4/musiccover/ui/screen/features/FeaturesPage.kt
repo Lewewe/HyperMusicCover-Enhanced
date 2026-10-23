@@ -1204,6 +1204,16 @@ private fun CardGroup(
                 ModuleBridge.setHideFingerprint(context, it)
             },
         )
+        SwitchPreference(
+            title = stringResource(R.string.fod_after_face),
+            summary = stringResource(R.string.fod_after_face_summary),
+            checked = module.fodAfterFace,
+            enabled = enabled,
+            onCheckedChange = {
+                onChange(module.copy(fodAfterFace = it))
+                ModuleBridge.setFodAfterFace(context, it)
+            },
+        )
         // Three states rather than a switch: "off" would have to mean both "stop reserving the
         // space" and "reserve it even with no print enrolled", which are opposite requests.
         //

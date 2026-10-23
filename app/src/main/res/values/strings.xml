@@ -174,6 +174,8 @@
     <string name="lyrics_close_without_lyrics">Close cover when lyrics are unavailable</string>
     <string name="lyrics_close_without_lyrics_summary">When enabled, tapping the cover exits cover mode for tracks without lyrics.</string>
     <string name="hide_fingerprint">Hide lock screen fingerprint icon</string>
+    <string name="fod_after_face">Remove fingerprint after face unlock</string>
+    <string name="fod_after_face_summary">When the face is recognised and the lock screen stays, the fingerprint area disappears and can be touched like the rest of the screen, and notifications sink down. Swipe up to unlock. Needs face unlock set to stay on the lock screen</string>
     <!-- See the default strings for how the items map onto the module's fpavoid values. -->
     <string name="fp_sink">Notification sink</string>
     <string name="fp_sink_system">Follow system</string>

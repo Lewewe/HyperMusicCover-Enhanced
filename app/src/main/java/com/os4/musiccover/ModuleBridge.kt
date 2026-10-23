@@ -110,6 +110,8 @@ object ModuleBridge {
         val mcArtInLyrics: Boolean = true,
         val mcTitleTap: Boolean = false,
         val hideFingerprint: Boolean = false,
+        /** Take the fingerprint away (touch area included) after a face unlock. See Main.sFodFace. */
+        val fodAfterFace: Boolean = false,
         /**
          * Keep cover mode's small clock in the full-screen always-on display, instead of letting
          * it grow back into the OEM's own AOD clock. On, and not a setting.
@@ -495,6 +497,9 @@ object ModuleBridge {
     // wire would make moving it later a protocol change.
     fun setHideFingerprint(context: Context, on: Boolean) =
         send(context, "hidefp") { putExtra("on", on) }
+
+    fun setFodAfterFace(context: Context, on: Boolean) =
+        send(context, "fodface") { putExtra("on", on) }
 
     /** See the note above [setClockHeight]: no row offers this any more, the op still works. */
     fun setAodSmall(context: Context, on: Boolean) =
@@ -918,6 +923,7 @@ object ModuleBridge {
             mcArtInLyrics = b.getBoolean("mclyricart", true),
             mcTitleTap = b.getBoolean("mctap", false),
             hideFingerprint = b.getBoolean("hidefp", false),
+            fodAfterFace = b.getBoolean("fodface", false),
             aodSmall = b.getBoolean("aodsmall", true),
             forceColon = b.getBoolean("colon", false),
             mediaBarGlow = b.getBoolean("seekglow", true),
