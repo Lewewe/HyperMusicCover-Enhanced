@@ -15,13 +15,15 @@ import android.widget.TextView;
 final class LyricsButton {
     private static ViewGroup host;
     private static ImageView button;
-    private static MiuixNotesDrawable notesDrawable;
+    private static LyricsSheetDrawable notesDrawable;
     private static ValueAnimator animator;
     private static float progress;
     private static boolean requested, canvasControls;
     private static int tint;
     private static final float SIZE_DP = 40f;
     private static final float GAP_DP = 6f;
+    private static final float APPEAR_SCALE = 0.6f;
+    private static final float BLUR_DP = 8f;
 
     private LyricsButton() {}
 
@@ -33,7 +35,7 @@ final class LyricsButton {
             host = (ViewGroup) card;
             button = new ImageView(card.getContext());
             button.setId(View.generateViewId());
-            notesDrawable = new MiuixNotesDrawable();
+            notesDrawable = new LyricsSheetDrawable();
             button.setImageDrawable(notesDrawable);
             button.setScaleType(ImageView.ScaleType.FIT_CENTER);
             float density = card.getResources().getDisplayMetrics().density;
@@ -43,6 +45,8 @@ final class LyricsButton {
             button.setContentDescription("zh".equals(language) ? "显示歌词" : "Show lyrics");
             button.setOnClickListener(v -> { if (canvasControls) Main.toggleCanvasLyrics(); else Main.openLyricsFromButton(); });
             button.setAlpha(0f);
+            button.setScaleX(APPEAR_SCALE);
+            button.setScaleY(APPEAR_SCALE);
             button.setVisibility(View.INVISIBLE);
             int size = Math.round(SIZE_DP * density);
             host.addView(button, new ViewGroup.LayoutParams(size, size));
@@ -58,17 +62,22 @@ final class LyricsButton {
             if (animator != null) animator.cancel();
             button.setVisibility(View.VISIBLE);
             animator = ValueAnimator.ofFloat(progress, show ? 1f : 0f);
-            animator.setDuration(show ? 150L : 110L);
+            animator.setDuration(show ? 260L : 200L);
             animator.setInterpolator(new DecelerateInterpolator());
             animator.addUpdateListener(a -> {
                 progress = (float) a.getAnimatedValue();
                 ImageView view = button;
                 if (view == null) return;
+                // Grows out of its own centre where it rests (place keeps it there), blurred and
+                // faded in; going, the same way back.
                 view.setAlpha(progress);
-                float radius = requested ? (1f - progress) * 5f
-                        * view.getResources().getDisplayMetrics().density : 0f;
+                float scale = APPEAR_SCALE + (1f - APPEAR_SCALE) * progress;
+                view.setScaleX(scale);
+                view.setScaleY(scale);
+                float radius = (1f - progress) * BLUR_DP
+                        * view.getResources().getDisplayMetrics().density;
                 view.setRenderEffect(radius < 0.5f ? null : RenderEffect.createBlurEffect(
-                        radius, radius, Shader.TileMode.CLAMP));
+                        radius, radius, Shader.TileMode.DECAL));
                 if (!requested && progress == 0f) view.setVisibility(View.GONE);
                 if (host != null) host.postInvalidateOnAnimation();
             });
@@ -94,7 +103,9 @@ final class LyricsButton {
         float bottom = artist != null && artist.isShown()
                 ? position(card, artist, false) + artist.getHeight() : top + title.getHeight();
         if (!Float.isFinite(titleX) || !Float.isFinite(top) || !Float.isFinite(bottom)) return;
-        int left = Math.round(titleX - (SIZE_DP + GAP_DP) * density);
+        // Where it rests whatever the progress: the title is pushed right by the inset update()
+        // returns (its share of the progress), and following the title it slid in from the left.
+        int left = Math.round(titleX - (SIZE_DP + GAP_DP) * density * progress);
         int y = Math.round((top + bottom - size) / 2f);
         if (canvasControls) {
             float artLeft = artwork == null ? 16f * density : position(card, artwork, true);

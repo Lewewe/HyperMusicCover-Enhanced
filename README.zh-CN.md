@@ -57,5 +57,6 @@ cd HyperMusicCover-Enhanced
 - [zyl6932](https://github.com/zyl6932/HyperMusicCover)：原始 HyperMusicCover 项目
 - [juren233 / HyperLyrics-Enhanced](https://github.com/juren233/HyperLyrics-Enhanced)：播放器外观功能基础（[详情](docs/media-card-customization.md)）
 - [miuix](https://github.com/compose-miuix-ui/miuix) 及应用内致谢页列出的其他库
+- [Material Design Icons](https://github.com/google/material-design-icons)：歌词按钮图标中的音符（Apache-2.0）
 
 [支持开发](https://afdian.com/a/yzc26623) · 许可证：[AGPL-3.0](LICENSE)
