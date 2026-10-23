@@ -586,6 +586,8 @@ public class Main extends XposedModule {
      * rest of the screen. Separate from sHideFp, which only stops the print being painted.
      */
     private static volatile boolean sFodFace;
+    /** The big cover art turns over on a track change while it is shrunk (CoverCardLayer). */
+    static volatile boolean sCoverFlip;
     /** The OEM's MiuiGxzwManager, caught on its first updateGxzwState. */
     private static volatile Object sFodManager;
     /**
@@ -2045,6 +2047,7 @@ public class Main extends XposedModule {
                     + "\nhideplayerbackground=" + (sHidePlayerBackground ? 1 : 0)
                     + "\nhidefp=" + (sHideFp ? 1 : 0)
                     + "\nfodface=" + (sFodFace ? 1 : 0)
+                    + "\ncoverflip=" + (sCoverFlip ? 1 : 0)
                     // aodsmall and lyrics are not written: both are fixed on, and loadState does
                     // not read them. lyrichidden still is - the two-finger tap is the one way the
                     // lock screen can be asked for the cover instead, and it has to survive.
@@ -2196,6 +2199,7 @@ public class Main extends XposedModule {
                         else if ("hideplayerbackground".equals(k)) sHidePlayerBackground = "1".equals(v);
                         else if ("hidefp".equals(k)) sHideFp = "1".equals(v);
                         else if ("fodface".equals(k)) sFodFace = "1".equals(v);
+                        else if ("coverflip".equals(k)) sCoverFlip = "1".equals(v);
                         else if ("colon".equals(k)) HyperTweaks.sForceColon = "1".equals(v);
                         else if ("seekglow".equals(k)) HyperTweaks.sBarGlow = "1".equals(v);
                         // aodsmall and lyrics are not read: cover mode keeps its small clock in
@@ -2964,6 +2968,10 @@ public class Main extends XposedModule {
                         saveState();
                         Xp.log(TAG + "fingerprint after face unlock " + (sFodFace ? "hidden" : "kept"));
                         refreshFod();
+                    } else if ("coverflip".equals(op)) {
+                        sCoverFlip = i.getBooleanExtra("on", !sCoverFlip);
+                        saveState();
+                        Xp.log(TAG + "cover flip " + (sCoverFlip ? "on" : "off"));
                     } else if ("aodclock".equals(op)) {
                         sAodSmall = i.getBooleanExtra("small", !sAodSmall);
                         saveState();
@@ -3201,6 +3209,7 @@ public class Main extends XposedModule {
                         out.putBoolean("vcfade", sVideoFade);
                         out.putBoolean("hidefp", sHideFp);
                         out.putBoolean("fodface", sFodFace);
+                        out.putBoolean("coverflip", sCoverFlip);
                         out.putBoolean("aodsmall", sAodSmall);
                         out.putBoolean("colon", HyperTweaks.sForceColon);
                         out.putBoolean("depthopen", HyperTweaks.depthOpen());

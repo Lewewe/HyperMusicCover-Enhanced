@@ -1351,6 +1351,11 @@ final class CoverPush {
     /** When a skip was last asked for, and which way. See the TransportControls hook. */
     private static volatile long sSkipAt;
     private static volatile int sSkipDir;
+
+    /** -1 when a skip back was pressed in the last few seconds, else 1 (next, or the song ending). */
+    static int recentSkipDir() {
+        return sSkipDir < 0 && android.os.SystemClock.uptimeMillis() - sSkipAt < 4000L ? -1 : 1;
+    }
     private static volatile String sDeferredPreviousKey;
     private static volatile String sPredictedArtworkKey;
     private static volatile int sPredictedArtworkGen = -1;

@@ -667,10 +667,15 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
         if (previous != null) previous.recycle();
         previous = current;
         current = p;
+        boolean newTrack = previous != null && !Main.sameTrack(previous.trackKey, p.trackKey);
+        boolean flip = Main.sCoverFlip && newTrack && scale.value < CardSpring.PLAYING - 0.001f;
+        if (flip) startFlip(CoverPush.recentSkipDir());
         // Reveal ready artwork promptly, but fade out the treatment rather than cutting it.
-        trackFadeMs = revealReady ? 120L : TRACK_FADE_MS;
+        // Turning over, the old art is kept till the turn is edge-on (doFrame lets it go).
+        trackFadeMs = flip ? FLIP_HOLD_MS : revealReady ? 120L : TRACK_FADE_MS;
+        flipSwap = flip;
         // The treatment follows the cover scale across the artwork swap, not its crossfade.
-        if (previous != null && !Main.sameTrack(previous.trackKey, p.trackKey)) {
+        if (newTrack) {
             endSkipWait();
         }
         ClockCollapse.refreshArtworkSize();
@@ -1028,7 +1033,13 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
         boolean treating = followSkipTreatment(dt);
         boolean placing = followPlace(phase, dt, response, target);
         boolean checkingClock = avoidAodClock(nowNs, phase, compactArtwork);
+        if (phase == ClockCollapse.Phase.AOD) {
+            flipAngle = flipTarget;
+            flipVelocity = 0f;
+        }
+        boolean turning = stepFlip(dt);
         if (previous != null && (phase == ClockCollapse.Phase.AOD
+                || (flipSwap && !flipShowsPrevious())
                 || SystemClock.uptimeMillis() - changedAt > trackFadeMs)) {
             previous.recycle();
             previous = null;
@@ -1041,7 +1052,7 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
         int visibility = opacity > 0f || target > 0f ? VISIBLE : GONE;
         if (getVisibility() != visibility) setVisibility(visibility);
         if (visibility == VISIBLE) invalidate();
-        boolean settling = checkingClock || blurring || treating || Math.abs(target - opacity) > 0.001f
+        boolean settling = checkingClock || blurring || treating || turning || Math.abs(target - opacity) > 0.001f
                 || (phase != ClockCollapse.Phase.AOD && !scale.atRest(scaleTarget))
                 || previous != null || placing || (rise < 1f && opacity > 0f)
                 || (aodSince != 0L && nowNs - aodSince < AOD_SETTLE_NS)
@@ -1072,6 +1083,8 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
                 drawSide, scale.value * (RISE_FROM + (1f - RISE_FROM) * rise), shownAspect());
         square.set(actual.x, actual.y, actual.x + actual.w, actual.y + actual.h);
         float radius = style.radius(Math.min(actual.w, actual.h));
+        int turned = canvas.save();
+        applyFlip(canvas, square.centerX(), square.centerY());
         // The shadow is keyed on the corner at the RESTING side, not the moving one - see
         // CoverCardStyle.cornerShare, and the note on shadowTile below.
         drawShadow(canvas, square, style.cornerShare(drawSide), opacity, paint);
@@ -1079,8 +1092,15 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
         clipPath.reset();
         clipPath.addRoundRect(square, radius, radius, Path.Direction.CW);
         canvas.clipPath(clipPath);
-        drawWaitingArt(canvas, previous, 1f, skipTreatment, outgoingWaitNode);
-        drawWaitingArt(canvas, current, fadeFraction(), skipTreatment, currentWaitNode);
+        if (flipSwap) {
+            // One side at a time: the old art till it is edge-on, the new one after.
+            boolean old = flipShowsPrevious();
+            drawWaitingArt(canvas, old ? previous : current, 1f, skipTreatment,
+                    old ? outgoingWaitNode : currentWaitNode);
+        } else {
+            drawWaitingArt(canvas, previous, 1f, skipTreatment, outgoingWaitNode);
+            drawWaitingArt(canvas, current, fadeFraction(), skipTreatment, currentWaitNode);
+        }
         canvas.restoreToCount(save);
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(density);
@@ -1088,6 +1108,7 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
         paint.setAlpha(Math.round(opacity * 64f));
         canvas.drawRoundRect(square, radius, radius, paint);
         paint.setStyle(Paint.Style.FILL);
+        canvas.restoreToCount(turned);
     }
 
     /**
@@ -1290,6 +1311,77 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
      */
     private static final long TRACK_FADE_MS = 180L;
     private long trackFadeMs = TRACK_FADE_MS;
+
+    /**
+     * A new song's art arriving while the square is shrunk turns it over as the media card's
+     * thumbnail does - HyperOS's own flip (MiuiMediaAlbumAnimationUtils + miuix FlipAnimation,
+     * as HyperImmersive's MusicPage): half a turn about the vertical axis on a Folme spring
+     * (damping 0.72, response 0.5s), forwards for next and backwards for previous, the new art
+     * taking the face as it passes edge-on. Grown, it still crossfades.
+     */
+    private static final float FLIP_DAMPING = 0.72f;
+    private static final float FLIP_RESPONSE = 0.5f;
+    /** The old art held until this long at most, should the spring never get edge-on. */
+    private static final long FLIP_HOLD_MS = 600L;
+    private float flipAngle;
+    private float flipTarget;
+    private float flipVelocity;
+    /** Where the turn began: the old art shows until it is 90 degrees on from here. */
+    private float flipFromAngle;
+    /** This swap turns over rather than crossfading. */
+    private boolean flipSwap;
+    private final android.graphics.Camera flipCamera = new android.graphics.Camera();
+    private final android.graphics.Matrix flipMatrix = new android.graphics.Matrix();
+
+    private void startFlip(int dir) {
+        // Land on the next multiple of 180 in the direction of travel, like FlipAnimation.
+        flipTarget = (Math.round(flipTarget / 180f) + dir) * 180f;
+        flipFromAngle = flipAngle;
+    }
+
+    /** @return whether the turn is still moving */
+    private boolean stepFlip(float dt) {
+        if (flipAngle == flipTarget && flipVelocity == 0f) return false;
+        float k = (float) Math.pow(2.0 * Math.PI / FLIP_RESPONSE, 2.0);
+        float damp = (float) (4.0 * Math.PI * FLIP_DAMPING / FLIP_RESPONSE);
+        float t = 0f;
+        float total = Math.min(Math.max(dt, 0f), 1f / 30f);
+        while (t < total) {
+            float h = Math.min(1f / 480f, total - t);
+            flipVelocity += (-k * (flipAngle - flipTarget) - damp * flipVelocity) * h;
+            flipAngle += flipVelocity * h;
+            t += h;
+        }
+        if (Math.abs(flipAngle - flipTarget) < 0.05f && Math.abs(flipVelocity) < 1f) {
+            flipAngle = flipTarget;
+            flipVelocity = 0f;
+        }
+        return true;
+    }
+
+    /** The old art still has the face: the turn has not yet gone edge-on. */
+    private boolean flipShowsPrevious() {
+        return previous != null && Math.abs(flipAngle - flipFromAngle) < 90f;
+    }
+
+    private boolean applyFlip(Canvas canvas, float cx, float cy) {
+        float a = flipAngle % 360f;
+        if (a == 0f) return false;
+        float density = getResources().getDisplayMetrics().density;
+        flipCamera.save();
+        // View's default camera distance: 1280dp, in Camera's 72-per-inch units.
+        flipCamera.setLocation(0f, 0f, -1280f * density / 72f);
+        flipCamera.rotateY(-a);
+        flipCamera.getMatrix(flipMatrix);
+        flipCamera.restore();
+        float norm = ((a % 360f) + 360f) % 360f;
+        // Past edge-on the back is facing: mirror it back (FlipAnimation's scaleX = -1).
+        if (norm > 90f && norm < 270f) flipMatrix.preScale(-1f, 1f);
+        flipMatrix.preTranslate(-cx, -cy);
+        flipMatrix.postTranslate(cx, cy);
+        canvas.concat(flipMatrix);
+        return true;
+    }
 
     private float fadeFraction() {
         if (previous == null) return 1f;

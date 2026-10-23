@@ -451,6 +451,16 @@ private fun CoverGroup(
                 ModuleBridge.setCoverStyle(context, "mode", it.toFloat())
             },
         )
+        SwitchPreference(
+            title = stringResource(R.string.cover_flip),
+            summary = stringResource(R.string.cover_flip_summary),
+            checked = module.coverFlip,
+            enabled = enabled,
+            onCheckedChange = {
+                onChange(module.copy(coverFlip = it))
+                ModuleBridge.setCoverFlip(context, it)
+            },
+        )
         val miniConfig = JSONObject(module.miniConfig)
         SwitchPreference(
             title = stringResource(R.string.mini_media_collapsed),

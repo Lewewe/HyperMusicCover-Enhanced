@@ -10,6 +10,8 @@
     <string name="cover_style">封面展现形式</string>
     <string name="cover_style_full">全屏封面</string>
     <string name="cover_style_card">方形卡片</string>
+    <string name="cover_flip">切歌时翻转封面</string>
+    <string name="cover_flip_summary">切歌时大封面缩小后，会像媒体卡片一样翻转到新封面，然后恢复原大小</string>
     <string name="cover_clock_section">封面与时钟</string>
     <string name="clock_size">大封面时的时钟大小</string>
     <string name="clock_force_colon">时钟强制显示冒号</string>
