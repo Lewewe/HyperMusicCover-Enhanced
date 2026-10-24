@@ -437,6 +437,11 @@ final class ClockCollapse {
             sWaking = false;
             Main.noteAwake();
         }
+        // The page the entry lands on decides the clock's size: the player alone pulled back up
+        // out of the pill asks for the native clock, and read only from the next frame, the
+        // entry walked the OEM to its floor - its widest glyphs - and the pre-draw blew those up
+        // to the native height, wider than the screen (2026-10-24, `op state`: holdY = floor).
+        refreshArtworkSize();
         float natural = naturalY();
         float floor = floorY(natural);
         sFullUnit = Float.NaN;
@@ -866,6 +871,10 @@ final class ClockCollapse {
         prepareGlass();
         // A new size can mean a different y: the OEM draws its own glyphs at that height.
         if (sPhase == Phase.ON && !Float.isNaN(sFloor)) hold(targetY(sFloor, naturalY()));
+        // Mid-entry, the flight's end moves with it: it lands where the new size wants the OEM.
+        else if (sPhase == Phase.ENTER && !Float.isNaN(sFloor) && !Float.isNaN(sYTo)) {
+            sYTo = targetY(sFloor, naturalY());
+        }
         invalidate();
     }
 
