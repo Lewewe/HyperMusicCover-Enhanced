@@ -2789,6 +2789,8 @@ public class Main extends XposedModule {
                                 + (ps == null ? "none" : ps.getState())
                                 + " playing=" + sCoverCardPlaying + " "
                                 + CoverCardLayer.describe());
+                    } else if ("lbtn".equals(op)) {
+                        setResultData(sLyricsButtonWhy);
                     } else if ("tail".equals(op)) {
                         // This process's own recent log lines, the only way to read Xp.log on a
                         // phone whose logd keeps nothing below error level. --es grep x filters,
@@ -8634,6 +8636,12 @@ public class Main extends XposedModule {
                     || LockLyrics.wantsAttached())
                 && LockLyrics.sEnabled && LockLyrics.hasDisplayContent()
                 && coverMorphEligible() && sCardShowing && card.isShown();
+        sLyricsButtonWhy = "show=" + lyricsButton + " onKeyguard=" + onKeyguard + " forced=" + sCardForced
+                + " cover=" + sCoverMode + " fullScreenLyrics=" + fullScreenLyrics
+                + " compactArt=" + LockLyrics.wantsCompactArtwork() + " playerChosen=" + LockLyrics.playerChosen()
+                + " attached=" + LockLyrics.wantsAttached() + " enabled=" + LockLyrics.sEnabled
+                + " content=" + LockLyrics.hasDisplayContent() + " morphOk=" + coverMorphEligible()
+                + " cardShowing=" + sCardShowing + " cardShown=" + card.isShown();
         boolean canvasLyrics = CanvasHostBridge.active() && onKeyguard && !sCardForced
                 && LockLyrics.sEnabled && LockLyrics.hasLyrics() && sCardShowing && card.isShown();
         // With the thumbnail on the card (the player alone, the lyrics), the button stands under it
@@ -11055,6 +11063,9 @@ public class Main extends XposedModule {
         }
         applyMediaCard();
     }
+
+    /** Each condition of the lyrics button as last decided, for the lbtn probe. */
+    private static volatile String sLyricsButtonWhy = "never decided";
 
     /** When the lyrics button last switched; see openLyricsFromButton. */
     private static long sLyricsButtonAt;
