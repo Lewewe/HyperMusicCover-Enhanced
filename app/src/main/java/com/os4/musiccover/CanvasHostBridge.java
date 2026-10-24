@@ -146,7 +146,19 @@ final class CanvasHostBridge {
                 verified = context.getPackageManager().checkSignatures("com.yzc26623.HyperMusicCoverEnhanced", "com.yzc26623.HyperCanvas") == android.content.pm.PackageManager.SIGNATURE_MATCH;
                 if (!verified) return out;
             }
-            if (ready && (Main.miniPlayerSession() == null || !"com.spotify.music".equals(Main.miniPlayerSession().getPackageName()))) return out;
+            if (ready && (Main.miniPlayerSession() == null || !"com.spotify.music".equals(Main.miniPlayerSession().getPackageName()))) {
+                // Said outright: the extension reads a missing answer as visible, and showed the
+                // video under the depth subject this side never hid for it.
+                out.putBoolean("canvasVisible", false);
+                return out;
+            }
+            // A hidden layer with no frame yet, asking whether to show: nothing here changes.
+            if (intent.getBooleanExtra("visibilityOnly", false)) {
+                out.putBoolean("canvasBouncer", Main.bouncerShown());
+                out.putBoolean("canvasVisible", showInPill || !MiniPlayerRuntime.canvasPlayerInPill());
+                out.putBoolean("canvasLarge", Main.coverModeOn() && (!LockLyrics.wantsCompactArtwork() || LockLyrics.wantsWindow()));
+                return out;
+            }
             sceneContext = context.getApplicationContext();
             // "temporary" means the session may come back - buffering between tracks. On the awake
             // lock screen one that stays away has ended, and treating it as temporary forever kept
