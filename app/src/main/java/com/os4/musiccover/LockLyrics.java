@@ -763,6 +763,20 @@ final class LockLyrics {
         sPlayerChosen = chosen;
     }
 
+    static boolean playerChosen() {
+        return sPlayerChosen;
+    }
+
+    /**
+     * The big cover tapped on a song whose lyrics are hidden: the player alone over the blurred
+     * artwork, its lyrics button there to show them, rather than out of the cover altogether.
+     */
+    static void choosePlayer() {
+        sPlayerChosen = true;
+        Main.refreshMediaCardForMorph();
+        refresh();
+    }
+
     // Notification expansion is temporary and never changes the chosen artwork page.
     private static boolean sNotificationCompact;
 

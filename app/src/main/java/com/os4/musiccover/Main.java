@@ -8626,12 +8626,16 @@ public class Main extends XposedModule {
         }
         if (!onKeyguard) LyricsButton.release();
         boolean lyricsButton = onKeyguard && !sCardForced && sCoverMode
-                && (fullScreenLyrics || !LockLyrics.wantsCompactArtwork())
+                && (fullScreenLyrics || !LockLyrics.wantsCompactArtwork() || LockLyrics.playerChosen()
+                    || LockLyrics.wantsAttached())
                 && LockLyrics.sEnabled && LockLyrics.hasDisplayContent()
                 && coverMorphEligible() && sCardShowing && card.isShown();
         boolean canvasLyrics = CanvasHostBridge.active() && onKeyguard && !sCardForced
                 && LockLyrics.sEnabled && LockLyrics.hasLyrics() && sCardShowing && card.isShown();
-        float lyricsInset = LyricsButton.update(card, lyricsButton || canvasLyrics, canvasLyrics, fullScreenLyrics);
+        // With the thumbnail on the card (the player alone, the lyrics), the button stands under it
+        // beside the controls, as Canvas has it; over the big cover it leads the title.
+        float lyricsInset = LyricsButton.update(card, lyricsButton || canvasLyrics, canvasLyrics,
+                lyricsButton && LockLyrics.wantsCompactArtwork());
         alignCardTextLeft(card, (TextView) sCardTitle, hideP, lyricsInset);
         alignCardTextLeft(card, (TextView) sCardArtist, hideP, lyricsInset);
         LyricsButton.place(card, (TextView) sCardTitle, (TextView) sCardArtist, sCardArt);
@@ -11047,9 +11051,16 @@ public class Main extends XposedModule {
     }
 
     static void openLyricsFromButton() {
-        if (!sCoverMode || coverMorphCardMode() && LockLyrics.wantsCompactArtwork()
+        boolean fromPlayer = LockLyrics.playerChosen();
+        boolean showing = LockLyrics.wantsAttached();
+        if (!sCoverMode || coverMorphCardMode() && LockLyrics.wantsCompactArtwork() && !fromPlayer && !showing
                 || !LockLyrics.sEnabled || !LockLyrics.hasDisplayContent()) return;
-        onTwoFingerTap();
+        // A switch both ways, as with Canvas: the player alone gives way to the lyrics, and the
+        // lyrics go back to the player alone - its button still there to show them again.
+        // Only the big cover itself has to fold into the thumbnail; between the player and the
+        // lyrics the thumbnail is already on the card, so there is nothing to morph.
+        LockLyrics.setPlayerChosen(showing);
+        onTwoFingerTap(!fromPlayer && !showing);
         applyMediaCard();
     }
 
@@ -11062,7 +11073,9 @@ public class Main extends XposedModule {
      * It is a view and not a setting: the app's switch and the state file are left alone, and
      * with the switch off the tap does nothing at all. See LockLyrics.toggleByTap.
      */
-    private static void onTwoFingerTap() {
+    private static void onTwoFingerTap() { onTwoFingerTap(true); }
+
+    private static void onTwoFingerTap(boolean morph) {
         View c = sContainer;
         String no = !screenOn() ? "the screen is off"
                 : !keyguardShowing() ? "the keyguard is not showing"
@@ -11093,7 +11106,7 @@ public class Main extends XposedModule {
             return;
         }
         long t0 = android.os.SystemClock.uptimeMillis();
-        if (sCoverMode) {
+        if (sCoverMode && morph) {
             int from = LockLyrics.wantsAttached()
                     ? CoverMorphRoute.LYRICS : CoverMorphRoute.COVER;
             int to = LockLyrics.willAttachAfterTapToggle()
@@ -11224,6 +11237,13 @@ public class Main extends XposedModule {
                     beginCompactArtworkMorph(false);
                     LockLyrics.setArtworkCompact(true);
                 }
+            } else if (LockLyrics.sEnabled && LockLyrics.hasDisplayContent() && !LockLyrics.wantsAttached()
+                    && !LockLyrics.compactWithoutLyrics()) {
+                // Lyrics there but hidden: into the player over the blurred artwork, its lyrics
+                // button beside the thumbnail, not out of the cover (the maintainer, 2026-10-24).
+                Xp.log(TAG + "tap at y=" + y + ": into the player");
+                beginCompactArtworkMorph(false);
+                LockLyrics.choosePlayer();
             } else {
                 exitFromTap("tap at y=" + y);
             }

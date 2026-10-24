@@ -8586,16 +8586,6 @@ private class MiniPlayerController(
         if (view.visibility != View.VISIBLE) return false
         if (fromSmall && key != smallKey) return false
         if (!fromSmall && selectedIsland != key) return false
-        // Pulled up, the music opens on the cover's way in: back into the scene it came down
-        // from, or else the player alone over the cover's blurred artwork. As the bare card it
-        // stood over the plain wallpaper (the user, 2026-10-22). Canvas keeps its own player.
-        if (key == MUSIC_ISLAND && !CanvasHostBridge.hasBackgroundScene() && Main.miniPlayerCanShow()) {
-            player?.springNudgeBack(0f, 0f)
-            springSmallNudgeBack(0f, 0f)
-            if (!MiniPlayerRuntime.restoreScenePending()) LockLyrics.setPlayerChosen(true)
-            openCover()
-            return true
-        }
         // Another island out as its card: the pull opens this one in its stead, the two
         // exchanged on their own spring (not under the finger, which only asked for it).
         if (expandedKey()?.let { it != key } == true) {
@@ -8651,6 +8641,16 @@ private class MiniPlayerController(
             spanOf(drag), cancelled)
         drag.toRow = toRow
         drag.speed = if (drag.pulled() > drag.threshold) speed else 0f
+        // Pulled up, the music opens on the cover's way in: back into the scene it came down
+        // from, or else the player alone over the cover's blurred artwork - as the bare card it
+        // stood over the plain wallpaper (the user, 2026-10-22). Decided at the let-go, as the
+        // super island's releaseDrag does: entered as the pull began, the card jumped up with
+        // the finger still on it (2026-10-24). Canvas keeps its own player.
+        if (toRow && drag.opening && drag.key == MUSIC_ISLAND && !CanvasHostBridge.hasBackgroundScene() &&
+            Main.miniPlayerCanShow()) {
+            if (!MiniPlayerRuntime.restoreScenePending()) LockLyrics.setPlayerChosen(true)
+            handler.post { Main.miniPlayerEnterCover() }
+        }
         // Flung open short of the threshold: the list now, not once the card is there.
         if (toRow && drag.opening && drag.key == STACK_ISLAND && !drag.listAsked) {
             drag.listAsked = true
