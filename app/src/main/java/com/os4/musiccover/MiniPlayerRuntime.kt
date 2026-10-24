@@ -936,13 +936,26 @@ object MiniPlayerRuntime {
      */
     @Volatile private var restoreScene = false
 
-    @JvmStatic fun rememberScene() { restoreScene = true }
+    /** The scene left was the player alone: pulled back up, it is that page again, not the cover. */
+    @Volatile private var restorePlayer = false
 
-    @JvmStatic fun forgetRestoreScene() { restoreScene = false }
+    @JvmStatic fun rememberScene() {
+        restoreScene = true
+        restorePlayer = LockLyrics.playerChosen()
+    }
+
+    @JvmStatic fun forgetRestoreScene() {
+        restoreScene = false
+        restorePlayer = false
+    }
 
     internal fun restoreScenePending(): Boolean = restoreScene
 
-    internal fun takeRestoreScene(): Boolean = restoreScene.also { restoreScene = false }
+    internal fun takeRestoreScene(): Boolean = restoreScene.also {
+        if (it && restorePlayer) LockLyrics.setPlayerChosen(true)
+        restoreScene = false
+        restorePlayer = false
+    }
 
     private var routed: WeakReference<MiniPlayerView>? = null
 
@@ -1290,6 +1303,16 @@ object MiniPlayerRuntime {
         dragTracker?.recycle()
         dragTracker = VelocityTracker.obtain().also { it.addMovement(ev) }
         return true
+    }
+
+    /**
+     * The card pulled down out of the cover, the player or the lyrics: the scene's exit has just
+     * started, and the finger takes it from its first frame, as it would one caught moving - so
+     * the card follows it down and back up rather than flying into the pill on its own.
+     */
+    @JvmStatic fun catchSceneExit(ev: MotionEvent): Boolean {
+        val owner = live().firstOrNull { it.morphIsScene() } ?: return false
+        return catchDrag(owner, ev)
     }
 
     private fun caughtProgress(y: Float) = caughtBase + caughtUp * (dragStartY - y) / dragSpan
@@ -3336,8 +3359,7 @@ private class MiniPlayerController(
         view.setInteractionsEnabled(false)
         // At the pill's own content size: ColorOS's shorter capsule (shortcutScale) drew the
         // stand-in's picture and lines a quarter bigger than the pill's (filmed 2026-10-18).
-        view.setCompactScale(compactScale() * shortcutScale())
-        view.setFitArtwork(colorOs())
+        stylePillFace(view)
         view.visibility = View.VISIBLE
         view.alpha = 1f
         // Laid out now, as the flight is: new, it showed an empty frame until the next pass. Also
@@ -4865,6 +4887,17 @@ private class MiniPlayerController(
     private fun colorOs(): Boolean = MiniPlayerConfig.colorOs(config)
 
     fun colorOsStyle(): Boolean = colorOs()
+
+    /**
+     * The pill's own face, on every view that wears it - the pill, a switch's stand-in, a
+     * flight: ColorOS's capsule picture and content size, or the super island's. A flight left
+     * at the view's defaults wore HyperOS's round picture and bigger lines in a ColorOS row, and
+     * a pull held part way showed a HyperOS island growing out of the capsule (2026-10-24).
+     */
+    private fun stylePillFace(view: MiniPlayerView) {
+        view.setCompactScale(compactScale() * shortcutScale())
+        view.setFitArtwork(colorOs())
+    }
 
     /**
      * The torch and the camera, circle and glyph, against the capsule's height: ColorOS draws
@@ -8258,6 +8291,7 @@ private class MiniPlayerController(
             view.layoutParams = view.layoutParams.apply { width = w; height = h }
         }
         traced("MC pf.bind") { if (music != null) bindMusic(view, music, config) else bindNote(view, note!!, config) }
+        stylePillFace(view)
         // Laid out here and now, not on the next pass: a flight is a new view each time, and
         // its morph waited for that pass - the row stood still under a finger already pulling
         // it down, and the flight then jumped to where the finger had got to (filmed 2026-09-25).
@@ -8648,7 +8682,7 @@ private class MiniPlayerController(
         // the finger still on it (2026-10-24). Canvas keeps its own player.
         if (toRow && drag.opening && drag.key == MUSIC_ISLAND && !CanvasHostBridge.hasBackgroundScene() &&
             Main.miniPlayerCanShow()) {
-            if (!MiniPlayerRuntime.restoreScenePending()) LockLyrics.setPlayerChosen(true)
+            if (!MiniPlayerRuntime.takeRestoreScene()) LockLyrics.setPlayerChosen(true)
             handler.post { Main.miniPlayerEnterCover() }
         }
         // Flung open short of the threshold: the list now, not once the card is there.
@@ -11656,8 +11690,7 @@ private class MiniPlayerController(
         if (view.visibility != View.VISIBLE || spread != null) return
         val small = smallKey != null
         val rest = pillRest(small) ?: return
-        view.setCompactScale(compactScale() * shortcutScale())
-        view.setFitArtwork(colorOs())
+        stylePillFace(view)
         val pillWidth = rest.width
         val height = rest.height
         val centerY = rest.centerY

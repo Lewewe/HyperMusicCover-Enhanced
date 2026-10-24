@@ -9267,6 +9267,8 @@ public class Main extends XposedModule {
                     // The lyrics go the same way, shrinking into the island's place.
                     LockLyrics.notePopTarget(MiniPlayerRuntime.musicIslandHomeOnScreen());
                     exitFromTap("media card swiped down");
+                    // Under the finger from here, both ways, as the pull up out of the pill is.
+                    MiniPlayerRuntime.catchSceneExit(ev);
                 } else if (!MiniPlayerRuntime.beginDrag(true, ev)) {
                     // No geometry to pull: the switch still happens, on its own spring.
                     MiniPlayerRuntime.onNativeCardSwipeDown();
