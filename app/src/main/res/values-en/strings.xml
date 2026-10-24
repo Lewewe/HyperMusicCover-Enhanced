@@ -325,7 +325,10 @@
     <string name="fp_sink_restart_hint">Restart System UI to apply this change.</string>
     <string name="fp_sink_restart_failed">Could not restart System UI. Check root access and try again.</string>
     <string name="credits_original_author">Original author of HyperMusicCover, who built the lock screen music interface and the module foundation this Enhanced version is based on.</string>
-    <string name="donate_afdian">Afdian</string>
+    <string name="donate_afdian">Afdian (China)</string>
+    <string name="donate_kofi">Ko-fi (International)</string>
+    <string name="donate_open_kofi">Open Ko-fi</string>
+    <string name="donate_scan_hint_kofi">Scan the QR code or save it to support HyperMusicCover-Enhanced on Ko-fi, with PayPal or a card.</string>
     <string name="donate_open_afdian">Open Afdian</string>
     <string name="clock_size_summary">Size of the reduced clock while big cover art is open, up to 55% of its original size.</string>
     <string name="lyrics_bpm_companion">Kaomoji companion</string>

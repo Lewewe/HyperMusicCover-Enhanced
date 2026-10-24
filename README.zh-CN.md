@@ -59,4 +59,4 @@ cd HyperMusicCover-Enhanced
 - [miuix](https://github.com/compose-miuix-ui/miuix) 及应用内致谢页列出的其他库
 - [Material Design Icons](https://github.com/google/material-design-icons)：歌词按钮图标中的音符（Apache-2.0）
 
-[支持开发](https://afdian.com/a/yzc26623) · 许可证：[AGPL-3.0](LICENSE)
+支持开发：[Ko-fi](https://ko-fi.com/yzc26623)（国际）· [爱发电](https://afdian.com/a/yzc26623)（中国大陆）· 许可证：[AGPL-3.0](LICENSE)

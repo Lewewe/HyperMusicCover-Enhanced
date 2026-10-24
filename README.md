@@ -59,4 +59,4 @@ Needs Android SDK 37. HyperMusicCover-Enhanced and HyperCanvas must be signed wi
 - [miuix](https://github.com/compose-miuix-ui/miuix) and the other libraries listed in the app's Credits page
 - [Material Design Icons](https://github.com/google/material-design-icons): the music note in the lyrics button's icon (Apache-2.0)
 
-[Support development](https://afdian.com/a/yzc26623) · License: [AGPL-3.0](LICENSE)
+Support development: [Ko-fi](https://ko-fi.com/yzc26623) (international) · [Afdian](https://afdian.com/a/yzc26623) (mainland China) · License: [AGPL-3.0](LICENSE)

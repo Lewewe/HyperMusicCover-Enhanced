@@ -8,6 +8,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -23,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -41,13 +44,23 @@ import top.yukonga.miuix.kmp.squircle.squircleClip
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
 
-/** Afdian support poster with an option to save the original image to the album. */
+/**
+ * A place to support the project: its tab, the pictures shown (a banner above the code, for
+ * Ko-fi), the code saved to the album as it is, and the page the button opens.
+ */
 private data class DonateChannel(
     val name: String,
+    val banner: Int?,
     val image: Int,
     val fileName: String,
     val mimeType: String,
+    val url: String,
+    val hint: String,
+    val open: String,
 )
+
+/** Corner of every picture on the page. */
+private val PictureCorner = 20.dp
 
 @Composable
 fun DonatePageContent(
@@ -58,11 +71,19 @@ fun DonatePageContent(
     val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
 
-    val afdian = stringResource(R.string.donate_afdian)
-    val channel = remember(afdian) {
-        DonateChannel(afdian, R.drawable.donate_afdian,
-            "HyperMusicCover-Enhanced-Afdian.jpg", "image/jpeg")
-    }
+    // Ko-fi for everyone (PayPal, cards), Afdian for mainland China (WeChat Pay, Alipay).
+    val channels = listOf(
+        DonateChannel(stringResource(R.string.donate_kofi), R.drawable.donate_kofi_banner,
+            R.drawable.donate_kofi, "HyperMusicCover-Enhanced-Ko-fi.png", "image/png",
+            "https://ko-fi.com/yzc26623", stringResource(R.string.donate_scan_hint_kofi),
+            stringResource(R.string.donate_open_kofi)),
+        DonateChannel(stringResource(R.string.donate_afdian), null,
+            R.drawable.donate_afdian, "HyperMusicCover-Enhanced-Afdian.jpg", "image/jpeg",
+            "https://afdian.com/a/yzc26623", stringResource(R.string.donate_scan_hint),
+            stringResource(R.string.donate_open_afdian)),
+    )
+    var selected by remember { mutableIntStateOf(0) }
+    val channel = channels[selected]
 
     // null while nothing has been saved; true/false is the outcome of the last attempt, and it is
     // the button's own label that reports it. A Toast is not a channel this app has - they are
@@ -104,9 +125,12 @@ fun DonatePageContent(
 
         item {
             TabRow(
-                tabs = listOf(channel.name),
-                selectedTabIndex = 0,
-                onTabSelected = {},
+                tabs = channels.map { it.name },
+                selectedTabIndex = selected,
+                onTabSelected = {
+                    selected = it
+                    saveResult = null
+                },
                 modifier = Modifier
                     .padding(horizontal = 12.dp)
                     .padding(top = 12.dp),
@@ -126,17 +150,11 @@ fun DonatePageContent(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    Image(
-                        modifier = Modifier
-                            .widthIn(max = 280.dp)
-                            .fillMaxWidth()
-                            .squircleClip(cornerRadius = 16.dp),
-                        painter = painterResource(channel.image),
-                        contentDescription = channel.name,
-                    )
+                    channel.banner?.let { Picture(it, channel.name) }
+                    Picture(channel.image, channel.name)
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         MiuixText(
-                            text = stringResource(R.string.donate_scan_hint),
+                            text = channel.hint,
                             fontSize = 13.sp,
                             textAlign = TextAlign.Center,
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
@@ -144,8 +162,8 @@ fun DonatePageContent(
                     }
                     TextButton(
                         modifier = Modifier.fillMaxWidth(),
-                        text = stringResource(R.string.donate_open_afdian),
-                        onClick = { uriHandler.openUri("https://afdian.com/a/yzc26623") },
+                        text = channel.open,
+                        onClick = { uriHandler.openUri(channel.url) },
                     )
                     TextButton(
                         modifier = Modifier.fillMaxWidth(),
@@ -171,9 +189,30 @@ fun DonatePageContent(
 }
 
 /**
- * Copies the poster into the user's album.
+ * A picture filling the column's width, its corners rounded. Sized to its own proportions: left
+ * to its intrinsic size, an image smaller than the column (Ko-fi's 820px code) was drawn inside a
+ * wider box and the box's rounded corners missed it.
+ */
+@Composable
+private fun Picture(image: Int, description: String) {
+    val painter = painterResource(image)
+    val size = painter.intrinsicSize
+    Image(
+        modifier = Modifier
+            .widthIn(max = 280.dp)
+            .fillMaxWidth()
+            .aspectRatio(size.width / size.height)
+            .squircleClip(cornerRadius = PictureCorner),
+        painter = painter,
+        contentDescription = description,
+        contentScale = ContentScale.Fit,
+    )
+}
+
+/**
+ * Copies the channel's code into the user's album (Ko-fi's banner stays on the page).
  *
- * Copy the original JPEG without re-encoding so the saved QR code retains its image quality.
+ * Copy the original file without re-encoding so the saved QR code retains its image quality.
  *
  * No permission is asked for. Since Android 10 an app owns what it inserts into MediaStore, and
  * this app's minimum is well past that.
