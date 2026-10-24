@@ -718,7 +718,7 @@ final class ClockCollapse {
             float aspect = CoverCardStyle.aspect(art.getWidth(), art.getHeight());
             // Rectangular artwork already using the native clock needs no additional AOD zoom.
             if (Math.abs(aspect - 1f) > 0.01f
-                    && (sNativeClockSizeTarget || sNativeClockSize >= 0.999f)) return;
+                    && ClockPageSize.nativeOrHeaded()) return;
         }
         android.animation.ValueAnimator animator = android.animation.ValueAnimator.ofFloat(1f, 1.50f);
         sAodCoverZoomAnimator = animator;
@@ -734,16 +734,6 @@ final class ClockCollapse {
         });
         animator.start();
     }
-
-    private static float sNativeClockSize;
-    private static boolean sNativeClockSizeTarget;
-    private static float sArtworkClockScale = 1f;
-    private static float sArtworkClockScaleTarget = 1f;
-    private static float sCompactTop = Float.NaN;
-    private static float sCompactDate = Float.NaN;
-    private static android.animation.ValueAnimator sNativeClockSizeAnimator;
-    private static float sArtworkSizeFromUnit = Float.NaN;
-    private static float sArtworkSizeProgress = 1f;
 
     private static final Live ARTWORK_FIT = new Live();
 
@@ -777,7 +767,7 @@ final class ClockCollapse {
 
     private static boolean nativeLandscapeFits(float aspect) {
         // AOD keeps the lit-screen decision; its own layout must not restart this animation.
-        if (!Main.screenOnCached()) return sNativeClockSizeTarget;
+        if (!Main.screenOnCached()) return ClockPageSize.nativeTarget();
         Live m = LIVE;
         View g = firstTarget();
         if (g == null || m.box == null || !(m.unit > 0f)
@@ -789,7 +779,7 @@ final class ClockCollapse {
                 + (Main.liveMediaTop() - drawnY(parent, 0f, 0f)) / zoom;
         float nativeBottom = artworkContentBottom(m, fullUnitFor(sPhase, m));
         return CoverCardStyle.nativeClockFits(aspect, Main.screenWidth() / zoom,
-                Main.density(), nativeBottom, media, sNativeClockSizeTarget);
+                Main.density(), nativeBottom, media, ClockPageSize.nativeTarget());
     }
 
     /** A long native clock may leave no initial morph endpoint until its collapse starts. */
@@ -812,57 +802,10 @@ final class ClockCollapse {
         return unzoomY(layer, bottom);
     }
 
-    /** Resize the clock independently so the media card stays in its current scene. */
+    /** The size for the page on screen (ClockPageSize), with the card left in its scene. */
     static void refreshArtworkSize() {
-        boolean compact = (LockLyrics.compactWithoutLyricsOnEntry() || LockLyrics.companionPage()
-                || CanvasHostBridge.nativeClockScene())
-                && !ImmersiveHost.holdsClock();
-        android.graphics.Bitmap art = CoverCardLayer.currentArt();
-        boolean coverVisible = Main.effectiveCoverStyle().mode == CoverCardStyle.CARD
-                && !LockLyrics.wantsCompactArtwork() && !ImmersiveHost.holdsClock()
-                && art != null && !art.isRecycled();
-        float aspect = coverVisible ? CoverCardStyle.aspect(art.getWidth(), art.getHeight()) : 1f;
-        float artworkScale = CoverCardStyle.clockScale(aspect);
-        boolean nativeSize = compact || coverVisible && CoverCardStyle.usesNativeClock(aspect)
-                && nativeLandscapeFits(aspect);
-        if (!active()) {
-            if (sNativeClockSizeAnimator != null) sNativeClockSizeAnimator.cancel();
-            sNativeClockSizeAnimator = null;
-            sNativeClockSizeTarget = nativeSize;
-            sArtworkClockScale = sArtworkClockScaleTarget = artworkScale;
-            sNativeClockSize = nativeSize ? 1f : 0f;
-            sArtworkSizeFromUnit = Float.NaN;
-            sArtworkSizeProgress = 1f;
-            sCompactTop = sCompactDate = Float.NaN;
-            return;
-        }
-        if (nativeSize == sNativeClockSizeTarget
-                && Math.abs(artworkScale - sArtworkClockScaleTarget) < 0.001f) return;
-        sNativeClockSizeTarget = nativeSize;
-        sArtworkClockScaleTarget = artworkScale;
-        if (sNativeClockSizeAnimator != null) sNativeClockSizeAnimator.cancel();
-        // Start from the drawn, notification-squeezed clock, not its hidden full-size endpoint.
-        sArtworkSizeFromUnit = sPhase == Phase.ON ? sPoseUnit : Float.NaN;
-        sArtworkSizeProgress = 0f;
-        if (nativeSize && Float.isNaN(sCompactTop) && sPhase == Phase.ON) {
-            sCompactTop = sPoseTop;
-            sCompactDate = sPoseDate;
-        }
-        final float fromCompact = sNativeClockSize, toCompact = nativeSize ? 1f : 0f;
-        final float fromScale = sArtworkClockScale, toScale = artworkScale;
-        android.animation.ValueAnimator animator = android.animation.ValueAnimator.ofFloat(0f, 1f);
-        sNativeClockSizeAnimator = animator;
-        animator.setDuration(420L);
-        animator.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
-        animator.addUpdateListener(a -> {
-            float progress = (float) a.getAnimatedValue();
-            sArtworkSizeProgress = progress;
-            sNativeClockSize = fromCompact + (toCompact - fromCompact) * progress;
-            sArtworkClockScale = fromScale + (toScale - fromScale) * progress;
-            if (sNativeClockSize == 0f) sCompactTop = sCompactDate = Float.NaN;
-            refresh();
-        });
-        animator.start();
+        ClockPageSize.update(active(), sPhase == Phase.ON, sPoseUnit, sPoseTop, sPoseDate,
+                ClockCollapse::nativeLandscapeFits, ClockCollapse::refresh);
     }
 
     /** A setting that changes the destination moved; the next frame picks it up. */
@@ -1102,6 +1045,7 @@ final class ClockCollapse {
                 + " date=" + Main.r1(sFromDate)
                 + " aod top=" + Main.r1(sAodTop) + " unit=" + Main.r1(sAodUnit)
                 + " scale own=" + Main.r3(sAodOwnScale) + " chain=" + Main.r3(sAodChainScale)
+                + " size " + ClockPageSize.describe()
                 + " | last flight: " + sLastFlight;
     }
 
@@ -1160,11 +1104,7 @@ final class ClockCollapse {
      * is always right for it.
      */
     private static float wantedOemHeight(float min, float max) {
-        float size = Main.sClockSize;
-        if (!(max > 0f)) return Float.NaN;
-        if (Float.isNaN(size) && sNativeClockSize == 0f) return Float.NaN;
-        float base = Float.isNaN(size) ? min : Math.max(min, Math.min(max, size * sArtworkClockScale * max));
-        return base + (max - base) * sNativeClockSize;
+        return ClockPageSize.wantedOemHeight(min, max, Main.sClockSize);
     }
 
     /**
@@ -1495,7 +1435,7 @@ final class ClockCollapse {
             sExactKey = null;
             sDateAnchor = Float.NaN;
             sDateAnchorView = null;
-            sCompactTop = sCompactDate = Float.NaN;
+            ClockPageSize.forgetKeptPose();
             forgetAodPose();
             Xp.log(TAG + "clock: editor geometry changed; native size baseline cleared");
             Main.saveState();
@@ -2661,22 +2601,15 @@ final class ClockCollapse {
         // The notification list owns the native clock squeeze; never scale it back to its maximum.
         float nativeUnit = ClockSizePolicy.nativeUnit(full, m.unit, LockLyrics.notificationCompact());
         if (nativeUnit > 0f) sLastNativeUnit = nativeUnit;
-        float coverUnit = ClockSizePolicy.coverUnit(requested, reference, nativeUnit,
-                sArtworkClockScale, Main.MIN_CLOCK_K, sNativeClockSize);
-        if (phase == Phase.ON && sArtworkSizeProgress < 1f
-                && Float.isFinite(sArtworkSizeFromUnit) && sArtworkSizeFromUnit > 0f) {
-            float destination = ClockSizePolicy.coverUnit(requested, reference, nativeUnit,
-                    sArtworkClockScaleTarget, Main.MIN_CLOCK_K, sNativeClockSizeTarget ? 1f : 0f);
-            coverUnit = ClockSizePolicy.transitionUnit(sArtworkSizeFromUnit, destination,
-                    sArtworkSizeProgress);
-        }
+        float coverUnit = ClockPageSize.coverUnit(requested, reference, nativeUnit,
+                Main.MIN_CLOCK_K, phase == Phase.ON);
         // Read against a fixed unit, the small clock is never larger than the face's own.
         if (coverUnit > nativeUnit) coverUnit = nativeUnit;
         // A face that is short but wide would not shrink at all by height: held to the width an
         // all_in_one clock of the asked-for size takes. Not with the clock's own size chosen.
-        if (!m.anchored && coverUnit >= nativeUnit && !(sNativeClockSize > 0f)) {
+        if (!m.anchored && coverUnit >= nativeUnit && !(ClockPageSize.nativeProgress() > 0f)) {
             coverUnit = Math.min(coverUnit, ClockSizePolicy.wideFaceUnit(
-                    requested * sArtworkClockScale, m.unit, m.box.width()));
+                    requested * ClockPageSize.artworkScale(), m.unit, m.box.width()));
         }
         // The date and the clock move as one block.
         float offset = Main.sClockOffsetDp * d;
@@ -2694,9 +2627,11 @@ final class ClockCollapse {
             coverTop = coverDateY(null) + offset + leadAbove(m, coverUnit / m.unit);
             coverDate = Float.NaN;
             // OEM glyph sizing can move its layout; keep our top anchor unchanged.
-            if (sNativeClockSize > 0f && !Float.isNaN(sCompactTop)) {
-                coverTop = sCompactTop;
-                if (!Float.isNaN(sCompactDate)) coverDate = sCompactDate;
+            float keptTop = ClockPageSize.keptTop();
+            if (!Float.isNaN(keptTop)) {
+                coverTop = keptTop;
+                float keptDate = ClockPageSize.keptDate();
+                if (!Float.isNaN(keptDate)) coverDate = keptDate;
             }
         }
 
