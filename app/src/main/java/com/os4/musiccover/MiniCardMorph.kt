@@ -61,6 +61,8 @@ internal class MiniCardMorph(
     private var roundness: (() -> Float)? = null,
     /** Opening intent belongs to this morph; later notification gestures cannot inherit it. */
     private val mediaPillTap: Boolean = MiniPlayerRuntime.musicPillTapActive,
+    /** The row's style's choreography; the engine here is the same for every style. */
+    private val style: PillMorphStyle = HyperOsPillMorph,
 ) : Choreographer.FrameCallback {
     class Landing(val art: View?, val title: View?, val text: View?, val radius: Float,
                   val artRadius: Float, val media: Boolean = false) {
@@ -443,12 +445,12 @@ internal class MiniCardMorph(
         val nativeRest = traced("MC m.native") { headerRestBox() } ?: return false
         if (miniRest.w <= 0f || nativeRest.w <= 0f) return false
         val c = motion.value.coerceIn(0f, 1f)
-        val framed = containerFrame(miniRest, nativeRest, motion.value)
+        val framed = style.containerFrame(miniRest, nativeRest, motion.value)
         // The nudge moves the whole container toward the card (up from the pill, down from it).
         val towardNative = if (nativeRest.y <= miniRest.y) -1f else 1f
         val box = CoverMorphMotion.Box(framed.x + nudgeX.value * NUDGE_UNIT,
             framed.y + towardNative * nudge.value * NUDGE_UNIT, framed.w, framed.h)
-        val radius = lerp(miniRest.h / 2f, nativeRadius, c)
+        val radius = style.cornerRadius(miniRest.h / 2f, nativeRadius, c)
 
         // The card, at the container's width and cut to its height. s is in the card's own
         // pixels, before the stack's transform.
@@ -464,8 +466,8 @@ internal class MiniCardMorph(
         // Led by the notification list: the capsule is the first card, so the hand-over from the
         // pill's face to the card's is done by halfway and the list's own blur clears both. On the
         // whole way the pill's blurred face stood till 0.9, then the card snapped in (2026-10-22).
-        val f = if (spreadLed) min(1f, c * 2f) else c
-        header.transitionAlpha = saved.transitionAlpha * nativeIn(f)
+        val f = style.faceProgress(c, spreadLed)
+        header.transitionAlpha = saved.transitionAlpha * style.nativeIn(f)
 
         // Both ends' whole content in and out of focus, the glass of neither: the pill's going
         // out as it heads for the card, the card's coming in once the pill's glass leaves it.
@@ -478,17 +480,17 @@ internal class MiniCardMorph(
         // Led by the notification list (ColorOS spread), the list blurs the whole card on its own
         // spring with the cards behind it: content-only and on the progress it cleared unevenly.
         blurCard(if (spreadLed) 0f
-            else cardBlurPx * cardBlurFactor(c, mediaCard, largeArtwork, toNative, mediaPillTap) / max(s, 0.05f))
-        mini.setMorphContentBlur(blurPx * pillBlurFactor(f, mediaCard, largeArtwork, toNative))
+            else cardBlurPx * style.cardBlurFactor(c, mediaCard, largeArtwork, toNative, mediaPillTap) / max(s, 0.05f))
+        mini.setMorphContentBlur(blurPx * style.pillBlurFactor(f, mediaCard, largeArtwork, toNative))
         // The pill's own frame carries HyperOS's backdrop blur (blur/frosted glass), which alpha on
         // its material does not lift: left drawn over the first card, it held the card blurred
         // till the morph ended, then the card snapped sharp (filmed 2026-10-22). Led by the list,
         // the whole pill goes with its material.
-        if (spreadLed) mini.alpha = materialOut(f)
+        if (spreadLed) mini.alpha = style.materialOut(f)
 
         // The mini player's frame is the container itself; its material fades last.
         boxDrawn = box
-        traced("MC m.frame") { mini.setMorphFrame(box, radius, materialOut(f)) }
+        traced("MC m.frame") { mini.setMorphFrame(box, radius, style.materialOut(f)) }
 
         // Its content: first scaled with the container, then onto the card's own elements. From
         // a small island's circle, the pill's layout is not what is at rest there: the circle
@@ -498,7 +500,7 @@ internal class MiniCardMorph(
         val laidW = max(1, mini.layoutParams?.width ?: mini.width).toFloat()
         val round = roundness?.invoke()?.coerceIn(0f, 1f) ?: if (circle) 1f else 0f
         val m = lerp(box.w / miniRest.w, box.w / laidW, round)
-        val mix = pieceMix(c)
+        val mix = style.pieceMix(c)
         val bridged = listener.artBridged()
         if (bridged && !toNative) artFlown = true
         traced("MC m.pieces") {
@@ -517,7 +519,7 @@ internal class MiniCardMorph(
                     // The small island's picture: its share of the circle, in the middle of it -
                     // growing with the container's height as the circle becomes the row.
                     // One scale from its height: a shaped (ColorOS) picture keeps its own width.
-                    val side = box.h * CIRCLE_ICON_SHARE
+                    val side = box.h * style.circleIconShare
                     val k = side / max(1, v.height)
                     kx = lerp(kx, k, round)
                     ky = lerp(ky, k, round)
@@ -542,7 +544,7 @@ internal class MiniCardMorph(
                         // Under the pill's line fading off it, the card's is whole well before the
                         // pill's is gone: two equal lines at a and 1 - a composite to 1 - a + a*a,
                         // and the time dipped to three quarters on every crossing (2026-09-26).
-                        n.transitionAlpha = piece.nativeTransitionAlpha * min(1f, NATIVE_TEXT_LEAD * (1f - pairedOut(f)))
+                        n.transitionAlpha = piece.nativeTransitionAlpha * min(1f, style.nativeTextLead * (1f - style.pairedOut(f)))
                         // The card's colour and words by the time the two lines meet: a focus row's
                         // grey under the pill's white, and a timer's two clocks a second apart,
                         // crossed over on every open and close - a flash each time (2026-09-26).
@@ -575,7 +577,7 @@ internal class MiniCardMorph(
                 v.scaleY = ky
                 v.translationX = tx - layoutX - ax * kx
                 v.translationY = ty - layoutY - ay * ky
-                val asPill = if (piece.paired) pairedOut(f) else earlyOut(f)
+                val asPill = if (piece.paired) style.pairedOut(f) else style.earlyOut(f)
                 // The blur is on the two ends' whole content (blurCard, setMorphContentBlur), not the
                 // pieces: per piece (2d269db, 2026-09-26) the unpaired buttons, rings and pictures
                 // showed sharp through it, and it was taken out.
@@ -585,7 +587,7 @@ internal class MiniCardMorph(
                     piece.art -> asPill
                     // Out of a circle, only the picture is there at first; the lines join it once
                     // the shape has room for them.
-                    else -> lerp(asPill, if (piece.paired) circleIn(f) * pairedOut(f) else 0f, round)
+                    else -> lerp(asPill, if (piece.paired) style.circleIn(f) * style.pairedOut(f) else 0f, round)
                 }
                 if (piece.art) {
                     artDrawn = CoverMorphMotion.Box(box.x + tx - ax * kx, box.y + ty - ay * ky,
@@ -647,7 +649,7 @@ internal class MiniCardMorph(
     // ---------------------------------------------------------------- the ends' content blur
 
     /** ColorOS's capsule content blur (SystemUIPlugin u4.k / u4.b0: 9dp at its far end). */
-    private val blurPx = mini.resources.displayMetrics.density * BLUR_DP
+    private val blurPx = mini.resources.displayMetrics.density * style.blurDp
 
     /** The card's template: its content views, beside which its glass background is drawn. */
     private var cardContent: List<View> = emptyList()

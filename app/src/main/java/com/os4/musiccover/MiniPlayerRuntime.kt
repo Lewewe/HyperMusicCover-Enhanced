@@ -2798,9 +2798,16 @@ private class MiniPlayerController(
          * gaining a small island beside it, or losing it (switchIsland). Its content stays.
          */
         val pillKept: Boolean = false,
+        /**
+         * ColorOS: the island leaving the capsule went to its card and the next takes the capsule
+         * as a notification comes in - out of the capsule's own middle, scaled up, faded and
+         * blurred in (applyPopIn) - not grown out of a circle at its left end, its lines fading
+         * in over an empty glass (the user, 2026-10-24).
+         */
+        val popIn: Boolean = false,
     ) {
         /** The pill's frame: CHANGE_EASE out of the small island, APPEAR_EASE out of the middle. */
-        val spring = (if (kind == SWAP_PREV && !pillKept) Jelly(APPEAR_RESPONSE, APPEAR_DAMPING)
+        val spring = (if ((kind == SWAP_PREV || popIn) && !pillKept) Jelly(APPEAR_RESPONSE, APPEAR_DAMPING)
             else Jelly(SWAP_RESPONSE, SWAP_DAMPING)).apply { value = 0f; target = 1f }
         /** The small island's part: CHANGE_EASE forming out of the pill, APPEAR_EASE emerging. */
         val small = (if (smallMode == SMALL_EMERGE) Jelly(APPEAR_RESPONSE, APPEAR_DAMPING)
@@ -2905,7 +2912,9 @@ private class MiniPlayerController(
                           /** The small island going into hiding starts at this width (0: whole). */
                           smallFromSide: Float = 0f,
                           /** The finger's speed let go, px/s: the pill's frame starts at it. */
-                          flingPx: Float = 0f) {
+                          flingPx: Float = 0f,
+                          /** ColorOS: the next island takes the capsule as a notification comes in (Swap.popIn). */
+                          popIn: Boolean = false) {
         val view = player ?: return
         // A switch cut short goes on from what it was drawing, at its speed - the super island's
         // folme.to from the current value and velocity. Restarted from rest, the pill lost its
@@ -2976,7 +2985,7 @@ private class MiniPlayerController(
             smallKey != oldSmall -> if (kind == SWAP_NEXT) SMALL_EMERGE else SMALL_POP
             else -> SMALL_KEPT
         }
-        val s = Swap(from, rest, mode, kind, holdPill, pillKept)
+        val s = Swap(if (popIn) rest else from, rest, mode, kind, holdPill, pillKept, popIn)
         s.started = android.os.SystemClock.uptimeMillis()
         fromVel?.let { s.spring.velocity = springVelocity(it, from, rest) }
         if (fromVel == null && flingPx > 0f) {
@@ -3201,6 +3210,24 @@ private class MiniPlayerController(
         }
     }
 
+    /**
+     * A notification's way into the capsule (Swap.popIn): the capsule as it comes up out of
+     * nothing (applyAppear), scaled from its own middle, faded and blurred in. Faded as a whole
+     * view, as there: the HyperOS backdrop blur ignores the glass layer's own alpha.
+     */
+    private fun applyPopIn(view: MiniPlayerView, rest: CoverMorphMotion.Box, spring: Float) {
+        val p = spring.coerceIn(0f, 1.2f)
+        val scale = APPEAR_SCALE + (1f - APPEAR_SCALE) * p
+        val w = rest.w * scale
+        val h = rest.h * scale
+        val a = MiniCardMorph.smooth(APPEAR_FADE_FROM, 1f, p)
+        view.alpha = a
+        view.setAppearScale(scale)
+        view.setMorphFrame(CoverMorphMotion.Box(rest.cx() - w / 2f, rest.cy() - h / 2f, w, h), h / 2f, a)
+        view.setContentAlpha(a)
+        view.setContentBlur((1f - a) * APPEAR_BLUR_DP * density())
+    }
+
     private fun applySwap(s: Swap) {
         if (s.kind == SWAP_UPDATE) {
             applyUpdate(s)
@@ -3221,6 +3248,8 @@ private class MiniPlayerController(
         } else if (s.pillKept) {
             view.setMorphFrame(box, box.h / 2f, 1f)
             view.setContentAlpha(1f)
+        } else if (s.popIn) {
+            applyPopIn(view, s.pillTo, p)
         } else if (s.kind == SWAP_PREV) {
             view.setMorphFrame(box, box.h / 2f, 1f)
             // Out of the middle: the content comes into focus as it arrives.
@@ -3298,6 +3327,10 @@ private class MiniPlayerController(
             if ((morph == null || flight != null) && pillLandingBox == null) it.endMorph()
             it.setContentAlpha(1f)
             it.setContentBlur(0f)
+            if (s.popIn) {
+                it.setAppearScale(1f)
+                it.alpha = 1f
+            }
         }
         hideOldContent()
         if (!keepGhosts) endGhosts()
@@ -4000,7 +4033,8 @@ private class MiniPlayerController(
             smallIsland?.visibility = View.GONE
         }
         val next = MiniCardMorph(lead, native, toNative, morphListener,
-            restBox = if (g.musicSmall) { { smallBoxOnScreen() } } else null, circle = g.musicSmall)
+            restBox = if (g.musicSmall) { { smallBoxOnScreen() } } else null, circle = g.musicSmall,
+            style = pillMorphStyle())
         // The other island's row, if the stack has it laid out already: coming down it always
         // has; going up, only if the pull was seen coming (rowsAnticipated). Otherwise the music
         // sets out alone and the other island joins it the moment its row is there (groupFrame).
@@ -4146,7 +4180,8 @@ private class MiniPlayerController(
         // Out of sight while it waited (holdRows): the morph saves the row's own alpha.
         showRow(row)
         val f = MiniCardMorph(view, row, fromIsland, followerListener, rowLanding(row),
-            restBox = if (g.otherSmall) { { smallBoxOnScreen() } } else null, circle = g.otherSmall)
+            restBox = if (g.otherSmall) { { smallBoxOnScreen() } } else null, circle = g.otherSmall,
+            style = pillMorphStyle())
         if (!f.startDragging()) {
             if (g.otherSmall) runCatching { host.removeView(view) }
             hideRow(row)
@@ -4885,6 +4920,9 @@ private class MiniPlayerController(
 
     /** MiniPlayerConfig.PILL_STYLE: ColorOS's capsule, or HyperOS's big and small islands. */
     private fun colorOs(): Boolean = MiniPlayerConfig.colorOs(config)
+
+    /** The pill-to-card choreography of the row's style; the morph's engine is shared. */
+    private fun pillMorphStyle(): PillMorphStyle = PillMorphStyle.of(colorOs())
 
     fun colorOsStyle(): Boolean = colorOs()
 
@@ -6562,7 +6600,8 @@ private class MiniPlayerController(
             m.settleAt = native.translationY
             val morph = traced("MC x.upMorph") {
                 MiniCardMorph(view, native, true, moverListener(m), landingFor(key, native),
-                    { moverEnd(m) }, !fromPill, nativeDy = { moverDy(x, m) }, roundness = { m.round.value })
+                    { moverEnd(m) }, !fromPill, nativeDy = { moverDy(x, m) }, roundness = { m.round.value },
+                    style = pillMorphStyle())
             }
             m.morph = morph
             x.movers[key] = m
@@ -6644,7 +6683,8 @@ private class MiniPlayerController(
             aimEnd(m, outPlace, snap = true)
             val morph = traced("MC x.downMorph") {
                 MiniCardMorph(view, native, false, moverListener(m), landingFor(out, native),
-                    { moverEnd(m) }, outPlace != LAND_PILL, nativeDy = { moverDy(x, m) }, roundness = { m.round.value })
+                    { moverEnd(m) }, outPlace != LAND_PILL, nativeDy = { moverDy(x, m) }, roundness = { m.round.value },
+                    style = pillMorphStyle())
             }
             m.morph = morph
             x.movers[out] = m
@@ -7322,7 +7362,8 @@ private class MiniPlayerController(
             view.visibility = View.VISIBLE
             view.alpha = 1f
             val m = MiniCardMorph(view, native, toCards, spreadListener, landingFor(item.key, native),
-                restBox = if (small) { { smallBoxOnScreen() } } else null, circle = small)
+                restBox = if (small) { { smallBoxOnScreen() } } else null, circle = small,
+                style = pillMorphStyle())
             if (!m.startDragging()) {
                 if (small) recycleSmallView(view)
                 hideRow(native)
@@ -7375,7 +7416,7 @@ private class MiniPlayerController(
         showRow(row)
         val home = s.home
         val m = MiniCardMorph(pill, row, toCards, spreadListener, rowLanding(row),
-            restBox = home?.let { h -> { h } }, circle = false)
+            restBox = home?.let { h -> { h } }, circle = false, style = pillMorphStyle())
         if (!m.startDragging()) {
             if (!s.leadWhyLogged) {
                 s.leadWhyLogged = true
@@ -8262,7 +8303,7 @@ private class MiniPlayerController(
             if (selectedIsland == key) {
                 selectedIsland = oldSmall ?: islandKeys.firstOrNull { it != key }
                 refresh()
-                startSwap(key, oldSmall)
+                startSwap(key, oldSmall, popIn = colorOs())
             } else refresh()
         } else if (selectedIsland != key) {
             val oldBig = selectedIsland
@@ -8365,7 +8406,8 @@ private class MiniPlayerController(
             }
         val next = MiniCardMorph(view, row, toRow, noteMorphListener(key), landing, restBox,
             circle = useFlight && home == HOME_SMALL,
-            nativeDy = if (toRow) { { settleDy(row, emptyList()) } } else null)
+            nativeDy = if (toRow) { { settleDy(row, emptyList()) } } else null,
+            style = pillMorphStyle())
         morph = next
         noteSpan = noteDragSpan(row, useFlight && home == HOME_SMALL)
         val drag = noteDrag?.takeIf { it.key == key }
@@ -8473,7 +8515,7 @@ private class MiniPlayerController(
                 // leaves the pill as it is.
                 if (!flew) selectedIsland = null
                 refresh()
-                if (!flew) startSwap(null, oldSmall)
+                if (!flew) startSwap(null, oldSmall, popIn = colorOs())
                 // Held where it landed until the stack has it there too.
                 nativeFor(key)?.let { pinCard(it, emptyList()) }
             } else {
@@ -10326,7 +10368,7 @@ private class MiniPlayerController(
             // a switch here took the next island's coming-up from its first frame (`op mini`: up done
             // frames=1), and it grows in as a new row instead.
             val oldSmall = smallKey
-            handler.post { if (swap == null && morph == null) startSwap(null, oldSmall) }
+            handler.post { if (swap == null && morph == null) startSwap(null, oldSmall, popIn = colorOs()) }
         }
         val view = player ?: MiniPlayerView(context).also {
             player = it
