@@ -3561,14 +3561,11 @@ private class MiniPlayerController(
     /**
      * The pill coming up where there was no row at all - the first island on a quiet lock screen,
      * the torch's own focus notification after a double tap on it. It used to be switched on
-     * whole in one frame. It grows as an island does coming back into the row beside the media
-     * card (startSwap's own-left-end case, the user's pick): out of a circle at its left end,
-     * rightward, on CHANGE_EASE, thinned while it widens fast, the content coming in over it.
+     * whole in one frame. It grows out of its own middle (applyAppear), faded and blurred in.
      * The row's spring, if the row moves meanwhile, is carried inside it.
      *
-     * The last island going - the torch switched off - it goes back the same way, right to left
-     * into that circle, which fades as it gets there; only then is it GONE. It used to go in one
-     * frame too. [appear]'s target says which way; one coming in mid-way turns it round from
+     * The last island going - the torch switched off - it goes back the same way, shrinking,
+     * fading and blurring away; only then is it GONE. It used to go in one frame too. [appear]'s target says which way; one coming in mid-way turns it round from
      * where it has got to.
      */
     private val appear = Jelly(SWAP_RESPONSE, SWAP_DAMPING)
@@ -3732,23 +3729,28 @@ private class MiniPlayerController(
         if (frameTaken() || view.visibility != View.VISIBLE) return false
         val rest = view.restBoxOnScreen() ?: return true
         val xy = IntArray(2).also(host::getLocationOnScreen)
-        // The row as its own spring has it, grown from its left end.
+        // The row as its own spring has it, grown out of its own middle: scaled up from
+        // APPEAR_SCALE, faded and blurred in, and back the same way (the maintainer's pick,
+        // 2026-10-24, over growing out of a circle at its left end).
         val fullW = (if (rowKnown) rowWidth.value else rest.w).coerceAtLeast(rest.h)
         val left = if (rowKnown) xy[0] + rowLeft.value else rest.x
-        val d = discDiameter().toFloat()
-        val p = appear.value
-        // applySwap's: thinner while it widens fast, a touch taller off its overshoot.
-        val widening = appear.velocity * (fullW - d)
-        val squash = (widening / fullW.coerceAtLeast(1f) * ROW_SQUASH).coerceIn(-ROW_SQUASH_MAX, ROW_SQUASH_MAX)
-        val h = (rest.h * (1f - squash)).coerceAtLeast(1f)
-        val w = lerp(d, fullW, p).coerceAtLeast(h)
-        val glass = if (leaving()) MiniCardMorph.smooth(0f, APPEAR_FADE_AT, p) else 1f
+        val p = appear.value.coerceIn(0f, 1.2f)
+        val s = APPEAR_SCALE + (1f - APPEAR_SCALE) * p
+        val w = fullW * s
+        val h = rest.h * s
+        // Gone before it is smallest, so the spring's last crawl to rest is never seen. On the
+        // whole view: the HyperOS backdrop blur ignores the glass layer's own alpha, and an empty
+        // glass pill stood there at the small end (recording 2026-10-24).
+        val a = MiniCardMorph.smooth(APPEAR_FADE_FROM, 1f, p)
+        view.alpha = a
         backFrames++
         // setMorphFrame does nothing to a pill out of its morph: the way is then not drawn.
         if (view.inMorph()) backDrawn++
         if (backMinW.isNaN() || w < backMinW) backMinW = w
-        view.setMorphFrame(CoverMorphMotion.Box(left, rest.y + (rest.h - h) / 2f, w, h), h / 2f, glass)
-        view.setContentAlpha(MiniCardMorph.smooth(0.35f, 0.9f, p))
+        view.setAppearScale(s)
+        view.setMorphFrame(CoverMorphMotion.Box(left + (fullW - w) / 2f, rest.y + (rest.h - h) / 2f, w, h), h / 2f, a)
+        view.setContentAlpha(a)
+        view.setContentBlur((1f - a) * APPEAR_BLUR_DP * density())
         return true
     }
 
@@ -3762,6 +3764,9 @@ private class MiniPlayerController(
         Choreographer.getInstance().removeFrameCallback(appearFrame)
         val view = player ?: return
         view.setContentAlpha(1f)
+        view.setAppearScale(1f)
+        view.setContentBlur(0f)
+        view.alpha = 1f
         if (left) {
             // Gone back into nothing (or cut short there): the row is not there any more. The
             // pill still holds the notification it went with; the refresh puts the row as it now is.
@@ -7346,7 +7351,8 @@ private class MiniPlayerController(
             }
             return
         }
-        spreadTrace("spread lead started")
+        spreadTrace("spread lead started on ${rowKey(row)?.substringAfter('|')?.substringBefore('|')} " +
+            "(shown ${if (row === shown) "found" else if (shown == null) "missing" else "not in rows"}, toCards=$toCards)")
         pill.clearNudge()
         s.lead = m
         s.leadRow = row
@@ -11838,8 +11844,12 @@ private const val UPDATE_MOVE_MS = 350f
  */
 private const val APPEAR_RESPONSE = 0.5f
 private const val APPEAR_DAMPING = 0.7f
-/** The pill going back into nothing: its circle fades over this last share of the way. */
-private const val APPEAR_FADE_AT = 0.15f
+/** The pill coming up out of nothing grows from this share of its size, and goes back to it. */
+private const val APPEAR_SCALE = 0.6f
+/** Its content's blur while it is smallest. */
+private const val APPEAR_BLUR_DP = 8f
+/** Below this share of the way it is fully faded out. */
+private const val APPEAR_FADE_FROM = 0.25f
 private const val SHOW_RESPONSE = 0.35f
 private const val SHOW_DAMPING = 0.95f
 private const val HIDDEN_RESPONSE = 0.2f

@@ -785,7 +785,7 @@ internal class MiniPlayerView(context: Context) : FrameLayout(context) {
         // layout is already at the new width: laid out there, the button jumped to where the
         // pill was going the moment it set off, and the pill caught up with it (2026-09-25).
         if (layoutOnly) {
-            val dx = (morphW - restWidth()).toFloat()
+            val dx = morphW / appearScale - restWidth()
             if (toggle.translationX != dx) toggle.translationX = dx
             if (toggle2.translationX != dx) toggle2.translationX = dx
         }
@@ -931,6 +931,22 @@ internal class MiniPlayerView(context: Context) : FrameLayout(context) {
     fun setContentScale(scale: Float, pivotX: Float) {
         content.pivotX = pivotX
         content.pivotY = height / 2f
+        content.scaleX = scale
+        content.scaleY = scale
+    }
+
+    /** The content's share of the frame while the pill grows in or shrinks away (setAppearScale). */
+    private var appearScale = 1f
+
+    /**
+     * The whole content at [scale] from its top left, in a frame resized to the same share of
+     * the pill: the pill growing in out of its own middle, or shrinking away into it. The frame's
+     * right-end button keeps to the content's own layout (setMorphFrame).
+     */
+    fun setAppearScale(scale: Float) {
+        appearScale = scale.coerceAtLeast(0.01f)
+        content.pivotX = 0f
+        content.pivotY = 0f
         content.scaleX = scale
         content.scaleY = scale
     }

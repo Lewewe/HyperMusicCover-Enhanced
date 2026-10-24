@@ -858,6 +858,14 @@ internal object LockIslands {
         val members = shown.filter { !it.focus }.sortedWith(bigFirst)
         stackMembers = members.map { it.key }
         stackNote = aggregate(members)
+        // Which notification fronts the stack island, each time that changes: after a fold the
+        // capsule showed the older one for ~0.4 s before the newest (recording 2026-10-24).
+        val front = members.firstOrNull()?.key
+        if (front != lastFrontKey) {
+            lastFrontKey = front
+            MiniPlayerRuntime.noteTouch("stack front -> ${front?.substringAfter('|')?.substringBefore('|') ?: "none"} " +
+                "of ${members.size} (${members.joinToString(",") { m -> rankOf(m.key)?.let { "${it.property}/${it.priority}/${it.time % 100000}" } ?: "-" }})")
+        }
         focusShown = shown.filter { it.focus && it.key !in released }
         if (nativeStack) {
             // The stack said nothing yet this lock screen: read where it is.
@@ -868,6 +876,9 @@ internal object LockIslands {
         }
         publish()
     }
+
+    /** The stack island's front notification last published, for its trace. */
+    private var lastFrontKey: String? = null
 
     /** Keep HyperOS's intermediate pile while the cover owns the media scene. */
     fun keepsCoverStack(): Boolean = Main.coverModeOn() && stackMembers.size > 1
@@ -1081,8 +1092,10 @@ internal object LockIslands {
     private fun publish() {
         updateNotificationArtwork()
         val stack = stackNote?.takeIf { !stackOut }
-        // Spread out, the count stays hidden too: the row folding back comes into its place.
-        if (nativeStack) NumState.hideCount(spreading || active && stack != null)
+        // Spread out, the count stays hidden too: the row folding back comes into its place. So
+        // with the stack opened its own way: the pill now grows back in from nothing, and the
+        // count line showed through ("2 notifications") until it had (recording 2026-10-24).
+        if (nativeStack) NumState.hideCount(spreading || active && stackNote != null)
         val next = (focusShown + listOfNotNull(stack)).sortedWith(bigFirst)
         // Unchanged is the same reading (read() hands back the cached note): by key and time, a
         // stopwatch paused or resumed - its `when` the same - never reached the island.

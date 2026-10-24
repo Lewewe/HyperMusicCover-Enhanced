@@ -144,6 +144,12 @@ internal object NumState {
         }
         val stack = (Xp.callMethod(strategy("stackStrategy"), "calculateTargetYPosition", info) as Number).toFloat()
         if (kotlin.math.abs(stack - target) >= 1f && !pileAt(model, info, target)) return null
+        // Swiped up, it is the list being opened: with one notification the list rests where the
+        // pile does, and a swipe up from the media card folded straight back (2026-10-24).
+        if (MiniPlayerRuntime.stackSwipedUp) {
+            trace("hands up at the pile after a swipe up: left open ($target)")
+            return null
+        }
         val number = number()
         trace("hands up at the pile: folded instead ($target -> $number)")
         return number
