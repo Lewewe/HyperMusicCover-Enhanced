@@ -3,13 +3,15 @@ package com.os4.musiccover;
 import android.media.session.PlaybackState;
 
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 
 /** Local, low-fidelity tempo estimate from the system output mix. It never records audio to disk. */
 final class BpmEstimator {
     private BpmEstimator() { }
     private static final long WINDOW_MS = 15_000L;
+    private static final long MIN_BEAT_GAP_MS = 130L;
+    /** How fast the recent-hit level fades, in ms; a quiet passage lowers the bar with it. */
+    private static final float PEAK_FADE_MS = 2000f;
     private static final float LOW_HZ = 30f;
     private static final float HIGH_HZ = 250f;
     private static final float[] BAND_EDGES = {30f, 60f, 120f, 250f};
@@ -30,10 +32,12 @@ final class BpmEstimator {
     private static final float[] previousBands = new float[3];
     private static final float[] bandBaselines = new float[3];
     private static volatile long lastBeatAt;
+    private static long lastFlipAt;
+    private static float fluxPeak;
+    private static long fluxPeakAt;
     private static volatile long beatAt;
     private static volatile long beatCount;
     private static volatile int beatDirection = 1;
-    private static volatile float learnedBeatMs;
     private static volatile boolean analysisReady;
     private static volatile float confidence;
     private static int lastPlaybackState = PlaybackState.STATE_NONE;
@@ -47,8 +51,9 @@ final class BpmEstimator {
     private static int challengerObservations;
     private static boolean publishedTempo;
     private static final String[] FACES = {
-            "(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧", "( •̀ ω •́ )✧", "(づ｡◕‿‿◕｡)づ",
-            "(≧▽≦)", "(っ˘ω˘ς )", "(ง •̀_•́)ง"
+            // Lopsided on purpose: the face mirrors on every beat, and that should show.
+            "(•ω•)ﾉ♪", "(っ•ω•)っ", "ヾ(◕ω◕)", "(๑•ω•)ﾉ",
+            "(◕ω◕✿)", "♡(•ω•)", "(ﾉ˘ω˘)ﾉ", "(•ω•)ﾉ✧"
     };
     private static final String[] MESSAGES_EN = {
             "we have no lyrics, but here's a friend",
@@ -65,7 +70,7 @@ final class BpmEstimator {
             "没有歌词.."
     };
     private static final String[] SEARCH_FACES = {
-            "(｡•́‿•̀｡)", "(๑•́ ₃ •̀๑)", "(｡･ω･｡)ﾉ♡", "(´• ω •`)", "( •ω• )?"
+            "(•ω•)?", "(◕ω◕)?", "(๑•ω•)…", "(｡•ω•｡)"
     };
     private static final String[] SEARCH_MESSAGES_EN = {
             "looking for your lyrics…", "checking for lyrics…", "searching for lyrics…"
@@ -79,7 +84,7 @@ final class BpmEstimator {
     }
 
     static String presentationMessage(int seed) {
-        String[] messages = Locale.getDefault().getLanguage().startsWith("zh")
+        String[] messages = SystemUiLanguage.isChinese()
                 ? MESSAGES_ZH : MESSAGES_EN;
         return messages[Math.floorMod(seed, messages.length)];
     }
@@ -89,7 +94,7 @@ final class BpmEstimator {
     }
 
     static String searchingMessage(int seed) {
-        String[] messages = Locale.getDefault().getLanguage().startsWith("zh")
+        String[] messages = SystemUiLanguage.isChinese()
                 ? SEARCH_MESSAGES_ZH : SEARCH_MESSAGES_EN;
         return messages[Math.floorMod(seed, messages.length)];
     }
@@ -134,6 +139,9 @@ final class BpmEstimator {
         envelope.clear();
         energy = 0f;
         lastBeatAt = beatAt = beatCount = 0L;
+        fluxPeak = 0f;
+        java.util.Arrays.fill(bandBaselines, 0f);
+        lastFlipAt = 0L;
         beatDirection = 1;
         analysisReady = false;
         confidence = 0f;
@@ -148,7 +156,8 @@ final class BpmEstimator {
         int trustedBpm = validBpm(publishedBpm);
         AudioSpectrumCapture.Lease created = null;
         try {
-            final AudioSpectrumCapture.Lease v = AudioSpectrumCapture.acquire((source, fft, rate, power) -> {
+            // Visual: over Bluetooth its frames wait out the output delay like the waves, so the face beats with what is heard.
+            final AudioSpectrumCapture.Lease v = AudioSpectrumCapture.acquire(true, (source, fft, rate, power) -> {
                 if (!BpmCompanionPolicy.captureCallback(token, generation, source, visualizer)) return;
                 if (android.os.Looper.myLooper() == worker().getLooper()) {
                     sample(fft, rate);
@@ -161,13 +170,11 @@ final class BpmEstimator {
             });
             created = v;
             java.util.Arrays.fill(previousBands, 0f);
-            java.util.Arrays.fill(bandBaselines, 0f);
             lastPlaybackState = PlaybackState.STATE_NONE;
             lastMediaPosition = 0L;
             lastMediaPositionAt = 0L;
             lastPlaybackSpeed = 1f;
             stableBpm = trustedBpm > 0 ? trustedBpm : cached == null ? 0 : cached;
-            learnedBeatMs = stableBpm > 0 ? 60000f / stableBpm : 0f;
             challengerBpm = challengerObservations = 0;
             publishedTempo = trustedBpm > 0;
             java.util.Arrays.fill(tempoSupport, 0f);
@@ -193,7 +200,6 @@ final class BpmEstimator {
                                 if (token != generation) return;
                                 CACHE.put(key, stableBpm);
                             }
-                            learnedBeatMs = 60000f / stableBpm;
                             analysisReady = true;
                             if (!resultDelivered || stableBpm != previousStable) {
                                 resultDelivered = true;
@@ -262,8 +268,10 @@ final class BpmEstimator {
         if (changed || jumped) {
             envelope.clear();
             java.util.Arrays.fill(previousBands, 0f);
-            java.util.Arrays.fill(bandBaselines, 0f);
             lastBeatAt = 0L;
+            fluxPeak = 0f;
+            java.util.Arrays.fill(bandBaselines, 0f);
+            lastFlipAt = 0L;
             beatAt = 0L;
             beatCount = 0L;
             confidence = 0f;
@@ -308,50 +316,41 @@ final class BpmEstimator {
             previousBands[band] = bands[band];
         }
         long now = android.os.SystemClock.uptimeMillis();
-        float minimumGap = learnedBeatMs > 0f ? learnedBeatMs * .82f : 300f;
         float threshold = 0f;
         for (int band = 0; band < 3; band++) {
             threshold += BAND_WEIGHTS[band] * Math.max(.002f, bandBaselines[band] * 1.8f);
         }
-        boolean onsetBeat = false;
-        boolean nearExpectedBeat = true;
-        if (learnedBeatMs > 0f && lastBeatAt > 0L) {
-            float ratio = (now - lastBeatAt) / learnedBeatMs;
-            nearExpectedBeat = ratio >= .68f && ratio <= 1.34f;
-        }
-        if (flux > threshold && now - lastBeatAt >= minimumGap && nearExpectedBeat) {
-            if (lastBeatAt > 0L) {
-                float interval = now - lastBeatAt;
-                if (interval >= 350f && interval <= 1500f
-                        && (learnedBeatMs == 0f || (interval / learnedBeatMs >= .70f
-                        && interval / learnedBeatMs <= 1.50f))) {
-                    learnedBeatMs = learnedBeatMs == 0f ? interval
-                            : learnedBeatMs * .88f + interval * .12f;
-                }
-            }
+        fluxPeak = Math.max(flux, fluxPeak * (float) Math.exp(-(now - fluxPeakAt) / PEAK_FADE_MS));
+        fluxPeakAt = now;
+        if (showsBeat(flux, threshold, fluxPeak, now - lastBeatAt, stableBpm)) {
             lastBeatAt = now;
             beatAt = now;
             beatCount++;
-            beatDirection = -beatDirection;
-            onsetBeat = true;
-        }
-        // Once tempo is known, the metrical clock is more reliable than any individual onset.
-        // Weak kicks can disappear in a mix, while guitar/piano subdivisions can arrive early.
-        // Let onsets correct the phase, but synthesize only missing full-beat events here.
-        if (!onsetBeat && learnedBeatMs > 0f && lastBeatAt > 0L) {
-            long elapsed = now - lastBeatAt;
-            int missed = 0;
-            while (elapsed >= learnedBeatMs * .92f && missed++ < 3) {
-                lastBeatAt += Math.max(1L, Math.round(learnedBeatMs));
-                beatAt = lastBeatAt;
-                beatCount++;
+            // A hit close behind the last flip only bounces the face, so it bops instead of
+            // turning back and forth.
+            if (flips(now - lastFlipAt, stableBpm)) {
                 beatDirection = -beatDirection;
-                elapsed = now - lastBeatAt;
+                lastFlipAt = now;
             }
         }
         energy = Math.min(1f, energy * .65f + lowEnergy * .35f);
         envelope.add(flux, now);
     }
+    /**
+     * Whether a low-band onset is a beat worth showing: at least half as strong as the recent
+     * hits, so soft bass notes and ghost kicks between them drop out, and no faster than about two
+     * per beat of the known tempo, so rolls do not make the face flicker.
+     */
+    static boolean showsBeat(float flux, float threshold, float peak, long sinceLast, int bpm) {
+        long gap = bpm > 0 ? Math.max(MIN_BEAT_GAP_MS, Math.round(60000f / bpm * .45f)) : 250L;
+        return flux > threshold && flux >= peak * .5f && sinceLast >= gap;
+    }
+
+    /** Whether a beat turns the face rather than only bouncing it: about one turn per 3/4 beat. */
+    static boolean flips(long sinceFlip, int bpm) {
+        return sinceFlip >= (bpm > 0 ? Math.round(60000f / bpm * .75f) : 400L);
+    }
+
     static long beatAt() { return capturing() ? beatAt : 0L; }
     static long beatCount() { return capturing() ? beatCount : 0L; }
     static int beatDirection() { return capturing() ? beatDirection : 1; }

@@ -120,7 +120,6 @@ final class LockLyrics {
     /** Optional local output-mix tempo estimate used only by the lyricless beat companion. */
     static volatile boolean sBpmEnabled;
     private static volatile int sBpm;
-    private static volatile long sBpmFoundAt;
     private static volatile int sTranslateRevision;
     /** Optional motion/effect level for lyric rendering; see AliveLyricsEffects constants. */
     static volatile int sAliveFx = AliveLyricsEffects.OFF;
@@ -627,8 +626,6 @@ final class LockLyrics {
     static boolean bpmSearchingLyrics() {
         return sBpmEnabled && Main.bpmPlayerAllowed(sController) && !sKey.isEmpty() && sLines.isEmpty() && sLoading;
     }
-    static int bpm() { return sBpm; }
-    static long bpmFoundAt() { return sBpmFoundAt; }
     static boolean bpmEstimating() { return BpmEstimator.estimating(); }
     static float bpmPulse() { return BpmEstimator.pulse(); }
     static long bpmBeatAt() { return BpmEstimator.beatAt(); }
@@ -652,7 +649,6 @@ final class LockLyrics {
     private static void requestBpm(final String key, MediaController controller) {
         BpmEstimator.stop();
         sBpm = 0;
-        sBpmFoundAt = 0L;
     }
 
     static boolean companionAnimating() {
@@ -676,7 +672,6 @@ final class LockLyrics {
         BpmEstimator.start(key, publishedBpm(sController), bpm -> {
             if (!key.equals(sKey)) return;
             sBpm = bpm;
-            if (bpm >= 40 && sBpmFoundAt == 0L) sBpmFoundAt = SystemClock.uptimeMillis();
             refresh();
         });
         BpmEstimator.onPlaybackState(sState);
@@ -738,7 +733,6 @@ final class LockLyrics {
         if (!sBpmEnabled) {
             BpmEstimator.clearCache();
             sBpm = 0;
-            sBpmFoundAt = 0L;
             refresh();
             return;
         }
