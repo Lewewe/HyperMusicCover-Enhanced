@@ -10877,7 +10877,7 @@ public class Main extends XposedModule {
             sTapDetector = new GestureDetector(c, new GestureDetector.SimpleOnGestureListener() {
                 @Override
                 public boolean onSingleTapUp(MotionEvent e) {
-                    armLockTap(e.getRawY());
+                    armLockTap(e.getRawX(), e.getRawY());
                     return false;
                 }
 
@@ -11134,7 +11134,7 @@ public class Main extends XposedModule {
      * the tap on its own - which is what covers a build whose double tap window is longer than
      * ours, and every double tap the framework itself did not recognise as one.
      */
-    private static void armLockTap(final float y) {
+    private static void armLockTap(final float x, final float y) {
         if (!singleCoverTapEnabled()) return;
         // Decided at the DOWN, because by the time this runs the centre - or the charging
         // animation - may have closed under the guard in onLockTap. See the dispatch hook for
@@ -11145,7 +11145,7 @@ public class Main extends XposedModule {
             @Override
             public void run() {
                 sPendingTap = null;
-                onLockTap(y);
+                onLockTap(x, y);
             }
         };
         sPendingTap = r;
@@ -11187,7 +11187,7 @@ public class Main extends XposedModule {
      * fraction of the screen rather than a pixel count because it stands in for a measurement
      * this device has simply not taken yet.
      */
-    private static void onLockTap(float y) {
+    private static void onLockTap(float x, float y) {
         if (!singleCoverTapEnabled()) return;
         // Background-only Canvas opens solely from the player artwork.
         if (!sCoverMode && CanvasHostBridge.backgroundOnly()) return;
@@ -11231,26 +11231,30 @@ public class Main extends XposedModule {
         float notes = MiniPlayerRuntime.stackContentTop();
         if (!Float.isNaN(notes)) bottom = Math.min(bottom, notes);
         if (y < top || y > bottom) return;
-        if (sCoverMode) {
-            if (!sCloseLyriclessCover && LockLyrics.sEnabled && !LockLyrics.hasLyrics()) {
-                // Default behaviour: without a lyric page, retain the cover scene and compact
-                // its artwork rather than treating a tap as a scene exit.
-                if (!LockLyrics.compactWithoutLyrics()) {
-                    beginCompactArtworkMorph(false);
-                    LockLyrics.setArtworkCompact(true);
-                }
-            } else if (LockLyrics.sEnabled && LockLyrics.hasDisplayContent() && !LockLyrics.wantsAttached()
-                    && !LockLyrics.compactWithoutLyrics()) {
-                // Lyrics there but hidden: into the player over the blurred artwork, its lyrics
-                // button beside the thumbnail, not out of the cover (the maintainer, 2026-10-24).
-                Xp.log(TAG + "tap at y=" + y + ": into the player");
+        // A tap acts on a thing, not on the lock screen: on the big cover's own square, never on
+        // the clock, the lyrics or the empty wallpaper - with the cover off, the wallpaper put
+        // the cover up wherever it was touched, and in it the lyrics took the cover down (the
+        // maintainer, 2026-10-24). The pill, the card and its thumbnail have their own taps.
+        // A full-screen cover is itself the thing, all of it.
+        if (!sCoverMode) return;
+        boolean fullScreen = effectiveCoverStyle().mode != CoverCardStyle.CARD;
+        if (!fullScreen && (LockLyrics.wantsCompactArtwork() || !CoverCardLayer.artworkAt(x, y))) return;
+        if (!sCloseLyriclessCover && LockLyrics.sEnabled && !LockLyrics.hasLyrics()) {
+            // Default behaviour: without a lyric page, retain the cover scene and compact
+            // its artwork rather than treating a tap as a scene exit.
+            if (!LockLyrics.compactWithoutLyrics()) {
                 beginCompactArtworkMorph(false);
-                LockLyrics.choosePlayer();
-            } else {
-                exitFromTap("tap at y=" + y);
+                LockLyrics.setArtworkCompact(true);
             }
-        } else if (sTapSuppressed) {
-            enterFromTap("tap at y=" + y);
+        } else if (LockLyrics.sEnabled && LockLyrics.hasDisplayContent() && !LockLyrics.wantsAttached()
+                && !LockLyrics.compactWithoutLyrics()) {
+            // Lyrics there but hidden: into the player over the blurred artwork, its lyrics
+            // button beside the thumbnail, not out of the cover (the maintainer, 2026-10-24).
+            Xp.log(TAG + "tap at y=" + y + ": into the player");
+            beginCompactArtworkMorph(false);
+            LockLyrics.choosePlayer();
+        } else {
+            exitFromTap("tap at y=" + y);
         }
     }
 

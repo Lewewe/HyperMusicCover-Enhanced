@@ -601,6 +601,15 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
         return p == null || p.art.isRecycled() ? null : p.art;
     }
 
+    /** Whether a point on screen falls on the square as it was last drawn, shown and lit. */
+    static boolean artworkAt(float x, float y) {
+        CoverCardLayer v = sView;
+        if (v == null || !v.isShown() || v.getAlpha() < 0.5f || v.square.isEmpty()) return false;
+        int[] at = new int[2];
+        v.getLocationOnScreen(at);
+        return v.square.contains(x - at[0], y - at[1]);
+    }
+
     /** For `op cardstate`. */
     static String describe() {
         CoverCardLayer v = sView;
