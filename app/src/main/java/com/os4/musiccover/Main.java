@@ -2511,7 +2511,11 @@ public class Main extends XposedModule {
                         // loop. What it may well be holding is the previous track's cover off
                         // its own disk, which is a state it cannot tell from the right one.
                         String why = i.getStringExtra("why");
-                        if (!sCoverMode) {
+                        if (!sCoverMode && "renderer".equals(why)) {
+                            // The renderer asks while uploading the real lock wallpaper, which
+                            // with the cover off is already right; reloading it flickered every
+                            // wake.
+                        } else if (!sCoverMode) {
                             // NOT ignored, and that was the bug behind "the wallpaper will not
                             // change back". Measured: the wallpaper process says `no art here,
                             // asked SystemUI for it`, cover mode is off, and this branch dropped
