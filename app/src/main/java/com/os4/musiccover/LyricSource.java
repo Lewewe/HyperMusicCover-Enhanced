@@ -83,46 +83,56 @@ final class LyricSource {
     }
 
     /**
-     * Resolves sources that can be identified safely from a public queue entry. Session, local
-     * file and database routes need the actual playing session and deliberately stay out here.
+     * The by-name part of load(), for a song still in the queue: the same search mode, providers,
+     * fallbacks and result checks. The session's own lyric, the bridge and a file on the phone
+     * need the song to be playing, and are left to the live lookup.
      */
     static void loadAhead(String pkg, String title, String artist, String album, long durationMs,
                           String mediaId,
                           AheadCallback cb) {
-        List<LyricLine> lines = java.util.Collections.emptyList();
-        int source = SRC_NONE;
-        String why = "no queue lyric match";
+        Rows r = new Rows();
+        r.why = "no queue lyric match";
         try {
-            NcmLyrics.Query q = NcmLyrics.build(title, artist, album, durationMs);
-            OnlineLyrics.Lookup lookup = OnlineLyrics.wordFirst(pkg, q);
-            if (lookup != null && lookup.lines != null && !lookup.lines.isEmpty()) {
-                lines = lookup.lines;
-                source = lookup.found.source();
-                why = lines.size() + " lines from " + lookup.found.who();
+            boolean spotify = "com.spotify.music".equals(pkg);
+            String spotifyId = spotify ? spotifyTrackId(mediaId) : null;
+            // Spotify's queue has no album or length, which the search ranks and retries by.
+            if (spotifyId != null && (album == null || album.isEmpty() || durationMs <= 0L)) {
+                SpotifyTrackPage.Info page = SpotifyTrackPage.fetch(spotifyId);
+                if (page != null) {
+                    if ((album == null || album.isEmpty()) && page.album != null) album = page.album;
+                    if (durationMs <= 0L) durationMs = page.durationMs;
+                }
+                Xp.log("[MCPre] Spotify page for \"" + title + "\": "
+                        + (page == null ? "unavailable" : "album=" + album + " " + durationMs + "ms"));
             }
-            // Spicy is an optional Spotify-only word-timing upgrade; normal providers above
-            // always remain enabled and are still used if this service has no answer.
-            if ("com.spotify.music".equals(pkg) && !words(lines)
-                    && LockLyrics.sSpicyLyricsEnabled) {
-                String spotifyId = spotifyTrackId(mediaId);
-                if (spotifyId != null && !LockLyrics.sSpicyLyricsApiKey.isEmpty()) {
-                    List<LyricLine> spicy = SpicyLyrics.fetch(spotifyId,
-                            LockLyrics.sSpicyLyricsApiKey);
-                    // Queue metadata may be too weak for a catalogue match. A line-timed
-                    // Spotify result is still a correct, immediate fallback; the live lookup
-                    // can later replace it with a provider's word timing.
-                    if (spicy != null && !spicy.isEmpty() && (lines.isEmpty() || words(spicy))) {
-                        lines = spicy;
-                        source = SRC_SPICY;
-                        why = lines.size() + " lines from Spicy Lyrics";
-                    }
+            boolean extended = LockLyrics.sSearchMode == LockLyrics.SEARCH_EXTENDED;
+            NcmLyrics.Query q = NcmLyrics.build(title, artist, album, durationMs);
+            if (q != null) online(pkg, q, r, extended);
+            boolean instrumental = sanitizeResult(r);
+            if (!extended && r.lines.isEmpty() && q != null && !instrumental) {
+                web(pkg, q, r);
+                instrumental = sanitizeResult(r);
+            }
+            // Spicy is an optional Spotify-only word-timing upgrade, in the extended search like
+            // the live lookup.
+            if (extended && spotifyId != null && !words(r.lines) && !instrumental
+                    && LockLyrics.sSpicyLyricsEnabled && !LockLyrics.sSpicyLyricsApiKey.isEmpty()) {
+                List<LyricLine> spicy = SpicyLyrics.fetch(spotifyId, LockLyrics.sSpicyLyricsApiKey);
+                // A line-timed Spotify result is still a correct, immediate fallback; the live
+                // lookup can later replace it with a provider's word timing.
+                if (spicy != null && !spicy.isEmpty() && (r.lines.isEmpty() || words(spicy))) {
+                    r.lines = spicy;
+                    r.source = SRC_SPICY;
+                    r.why = spicy.size() + " lines from Spicy Lyrics";
                 }
             }
         } catch (Throwable t) {
-            why = "queue lyric lookup failed";
+            r.lines = java.util.Collections.emptyList();
+            r.source = SRC_NONE;
+            r.why = "queue lyric lookup failed";
             Xp.w("[MCLyric] queue lyric lookup failed: " + t);
         }
-        cb.onLines(lines, why, source);
+        cb.onLines(r.lines, r.why, r.source);
     }
 
     private static String spotifyTrackId(String id) {
