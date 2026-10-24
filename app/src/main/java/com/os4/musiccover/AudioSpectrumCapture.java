@@ -22,12 +22,17 @@ final class AudioSpectrumCapture {
     private static long lastFftMs, lastSignalMs, lastRestartMs, epoch, lastSignalEpoch;
     private static long playbackSignature = Long.MIN_VALUE;
     private static int recoveries;
-    private static boolean activeMedia;
+    /** A media player playing on the phone, as AudioWaveSync's playback callback last said. */
+    private static volatile boolean activeMedia;
     private static MediaController stateController;
     private static PlaybackState liveState;
     private static boolean liveRemote;
     /** Since when the session has said playing with nothing playing on the phone, or 0. */
     private static long silentSince;
+    /** The track that silence was counted on. */
+    private static String silentTrack;
+    /** Silence this long, the session still saying playing, reads as playback elsewhere. */
+    private static final long CASTING_SILENCE_MS = 3000L;
     private static long stateCheckedAt;
     /** How long the capture outlives its last client once local music stops. */
     private static final long LINGER_MS = 30_000L;
@@ -62,16 +67,21 @@ final class AudioSpectrumCapture {
         try { remote = controller.getPlaybackInfo().getPlaybackType() == MediaController.PlaybackInfo.PLAYBACK_TYPE_REMOTE; }
         catch (Throwable ignored) { remote = false; }
         // Spotify Connect keeps a local session that says playing while the audio plays on
-        // another device: nothing plays on the phone. A track change has the same gap briefly.
+        // another device: nothing plays on the phone. A track change has the same gap briefly,
+        // and a slow start can run past it: the count starts again with each track.
         boolean silent = !remote && liveState != null
                 && liveState.getState() == PlaybackState.STATE_PLAYING && !mediaPlayingHere();
-        if (!silent) silentSince = 0L;
-        else if (silentSince == 0L) silentSince = now;
-        liveRemote = remote || (silentSince != 0L && now - silentSince >= 1500L);
+        String track = Main.sTrackKey;
+        if (!silent || !java.util.Objects.equals(track, silentTrack)) silentSince = 0L;
+        if (silent && silentSince == 0L) silentSince = now;
+        silentTrack = track;
+        liveRemote = remote || (silentSince != 0L && now - silentSince >= CASTING_SILENCE_MS);
     }
 
     /** Whether any media player is playing on this phone right now. */
     private static boolean mediaPlayingHere() {
+        // Kept by the playback callback the waves already register: no query per poll.
+        if (AudioWaveSync.listening()) return activeMedia;
         try {
             AudioManager audio = Main.appContext().getSystemService(AudioManager.class);
             for (AudioPlaybackConfiguration config : audio.getActivePlaybackConfigurations()) {
@@ -96,8 +106,13 @@ final class AudioSpectrumCapture {
                 clients.remove(this);
                 // The capture outlives its last client while music plays on the lit screen:
                 // registering it again re-routes media, which hitches screen recordings.
-                // checkHealth() closes it once the music stops.
-                if (clients.isEmpty() && !interactive()) shutdown();
+                // checkHealth() closes it once the music stops. Meanwhile it idles: nothing is
+                // transformed or sent while no wave is there to show it. The output-mix fallback
+                // re-routes nothing, so it goes at once, as before.
+                if (clients.isEmpty()) {
+                    if (!interactive() || playback == null) shutdown();
+                    else playback.setIdle(true);
+                }
             }
         }
     }
@@ -134,6 +149,10 @@ final class AudioSpectrumCapture {
             if (playback == null) openOutputMix();
             lastFftMs = lastSignalMs = SystemClock.uptimeMillis();
             playbackSignature = Long.MIN_VALUE;
+        } else if (playback != null && playback.isIdle()) {
+            // Awake again: its quiet spell is no stall, or checkHealth() would re-register it.
+            lastFftMs = lastSignalMs = SystemClock.uptimeMillis();
+            playback.setIdle(false);
         }
         idleSince = 0L;
         Lease client = new Lease(visual, listener);

@@ -14,6 +14,8 @@ final class InternalAudioCapture {
     private Object policy;
     private AudioRecord record;
     private volatile boolean running;
+    /** Kept registered with no one to feed: the buffers are still drained, but not transformed. */
+    private volatile boolean idle;
 
     private InternalAudioCapture(AudioManager manager) { this.manager = manager; }
 
@@ -62,6 +64,8 @@ final class InternalAudioCapture {
         try { record.stop(); } catch (Throwable ignored) { }
     }
     boolean isRunning() { return running; }
+    void setIdle(boolean idle) { this.idle = idle; }
+    boolean isIdle() { return idle; }
 
     private void read(Listener listener) {
         short[] pcm = new short[PcmSpectrum.SIZE];
@@ -74,7 +78,7 @@ final class InternalAudioCapture {
                 if (count == 0) continue;
                 filled += count;
                 if (filled == pcm.length) {
-                    listener.onFft(this, spectrum.transform(pcm), RATE * 1000, spectrum.power());
+                    if (!idle) listener.onFft(this, spectrum.transform(pcm), RATE * 1000, spectrum.power());
                     filled = 0;
                 }
             }

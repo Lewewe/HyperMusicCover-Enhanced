@@ -64,6 +64,12 @@ final class AudioWaveSync {
         AudioWaveSync current = instance;
         if (current != null) current.requestRefresh();
     }
+    /** Its playback callback is registered, so what it last reported is current. */
+    static boolean listening() {
+        AudioWaveSync current = instance;
+        return current != null && current.running;
+    }
+
     static boolean enqueue(Object source, byte[] data, int rate, float[] power) {
         AudioWaveSync current = instance;
         if (current == null || !current.running || current.delayMs == 0) return false;
