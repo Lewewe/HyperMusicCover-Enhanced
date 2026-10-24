@@ -11052,7 +11052,16 @@ public class Main extends XposedModule {
         applyMediaCard();
     }
 
+    /** When the lyrics button last switched; see openLyricsFromButton. */
+    private static long sLyricsButtonAt;
+
     static void openLyricsFromButton() {
+        // The switch reads what is on screen, and lyrics asked for a moment ago are not attached
+        // yet: a second tap in that gap took the cover's fold and collapsed the player.
+        // shortcut: a fixed settle time, not the switch's own end; tie it to that if it grows.
+        long now = android.os.SystemClock.uptimeMillis();
+        if (now - sLyricsButtonAt < 600L) return;
+        sLyricsButtonAt = now;
         boolean fromPlayer = LockLyrics.playerChosen();
         boolean showing = LockLyrics.wantsAttached();
         if (!sCoverMode || coverMorphCardMode() && LockLyrics.wantsCompactArtwork() && !fromPlayer && !showing
