@@ -47,6 +47,18 @@ internal interface PillMorphStyle {
     /** The pill's content blur, as a share of its far end. */
     fun pillBlurFactor(face: Float, media: Boolean, largeArtwork: Boolean, opening: Boolean): Float
 
+    /**
+     * Tapped open into the big cover, the card lands blurred and comes into focus: the share
+     * of the way at which that starts, or NaN for once the morph has settled.
+     */
+    val landedFocusAt: Float
+
+    /** How long the card takes to come into focus. */
+    val focusFadeMs: Long
+
+    /** The share of the card's blur left [t] of the way through its focus fade. */
+    fun focusLeft(t: Float): Float
+
     /** Both ends' content blur at its far end. */
     val blurDp: Float
 

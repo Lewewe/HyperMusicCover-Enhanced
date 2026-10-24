@@ -47,9 +47,22 @@ internal object ColorOsPillMorph : PillMorphStyle {
     override fun cardBlurFactor(progress: Float, media: Boolean, largeArtwork: Boolean, opening: Boolean,
                                 mediaPillTap: Boolean) = when {
         !media -> 1f - smooth(0.4f, 0.95f, progress)
+        // Tapped open into the big cover: blurred all the way; it comes into focus as it lands
+        // (landedFocusAt).
         largeArtwork && opening && mediaPillTap -> 1f
         else -> 0f
     }
+
+    /**
+     * The card in focus as it lands, not once the spring has all but stopped: that came half a
+     * second after the card was there, and brought into focus on the way instead, the blur was
+     * gone altogether - it is the design, only slow (the user, 2026-10-24).
+     */
+    override val landedFocusAt = 0.9f
+    /** Held a little blurred, then eased into focus: 220ms out of it read as too quick (2026-10-24). */
+    override val focusFadeMs = 360L
+
+    override fun focusLeft(t: Float) = 1f - smooth(0f, 1f, t)
 
     override fun pillBlurFactor(face: Float, media: Boolean, largeArtwork: Boolean, opening: Boolean) =
         if (!media) smooth(0f, 0.6f, face) else 0f

@@ -303,6 +303,9 @@ internal class MiniCardMorph(
     /** Posed by led(): the notification list's first card. */
     private var spreadLed = false
 
+    /** The tapped-open card's focus fade has begun (PillMorphStyle.landedFocusAt). */
+    private var focusStarted = false
+
     /**
      * The finger lets go: both springs take over from where it left them, the progress with
      * the finger's own speed, so a flick carries on and overshoots and a slow lift settles.
@@ -479,7 +482,13 @@ internal class MiniCardMorph(
         val cardBlurPx = if (mediaCard) 3f * mini.resources.displayMetrics.density else blurPx
         // Led by the notification list (ColorOS spread), the list blurs the whole card on its own
         // spring with the cards behind it: content-only and on the progress it cleared unevenly.
-        blurCard(if (spreadLed) 0f
+        // Landed far enough for its style, the tapped-open card comes into focus on its own fade.
+        val tapLanding = toNative && mediaCard && mediaPillTap && largeArtwork
+        if (tapLanding && !focusStarted && c >= style.landedFocusAt) {
+            focusStarted = true
+            fadeMediaFocus()
+        }
+        blurCard(if (spreadLed || focusStarted) 0f
             else cardBlurPx * style.cardBlurFactor(c, mediaCard, largeArtwork, toNative, mediaPillTap) / max(s, 0.05f))
         mini.setMorphContentBlur(blurPx * style.pillBlurFactor(f, mediaCard, largeArtwork, toNative))
         // The pill's own frame carries HyperOS's backdrop blur (blur/frosted glass), which alpha on
@@ -613,7 +622,9 @@ internal class MiniCardMorph(
         placedBox = null
         restore()
         listener.onSettled(this, toNative, completed)
-        if (completed && toNative && mediaCard && mediaPillTap && Main.miniPlayerLargeArtworkTarget()) {
+        // Once settled, unless its style brought it into focus as it landed.
+        if (completed && toNative && mediaCard && mediaPillTap && Main.miniPlayerLargeArtworkTarget() &&
+            !focusStarted) {
             fadeMediaFocus()
         }
     }
@@ -624,14 +635,14 @@ internal class MiniCardMorph(
         val radius = 3f * mini.resources.displayMetrics.density
         val animator = android.animation.ValueAnimator.ofFloat(0f, 1f)
         focusFades[header] = animator
-        animator.duration = 200L
+        animator.duration = style.focusFadeMs
         animator.interpolator = android.view.animation.LinearInterpolator()
         animator.addUpdateListener { a ->
             if (!header.isAttachedToWindow || !Main.miniPlayerLargeArtworkTarget()) {
                 animator.cancel()
                 return@addUpdateListener
             }
-            val r = radius * mediaFocusFade(a.animatedValue as Float)
+            val r = radius * style.focusLeft(a.animatedValue as Float)
             header.setRenderEffect(if (r < 0.5f) null else
                 android.graphics.RenderEffect.createBlurEffect(r, r, android.graphics.Shader.TileMode.DECAL))
         }
