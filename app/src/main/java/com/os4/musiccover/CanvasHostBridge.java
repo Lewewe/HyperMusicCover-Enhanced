@@ -154,10 +154,7 @@ final class CanvasHostBridge {
             }
             // A hidden layer with no frame yet, asking whether to show: nothing here changes.
             if (intent.getBooleanExtra("visibilityOnly", false)) {
-                out.putBoolean("canvasBouncer", Main.bouncerShown());
-                out.putBoolean("canvasVisible", showInPill || !MiniPlayerRuntime.canvasPlayerInPill());
-                out.putBoolean("canvasLarge", Main.coverModeOn() && (!LockLyrics.wantsCompactArtwork() || LockLyrics.wantsWindow()));
-                return out;
+                return answer(out);
             }
             sceneContext = context.getApplicationContext();
             // "temporary" means the session may come back - buffering between tracks. On the awake
@@ -227,10 +224,15 @@ final class CanvasHostBridge {
                     CoverPush.pushArtAsync(true, true);
                 }
             } else releaseBackdrop();
-            out.putBoolean("canvasBouncer", Main.bouncerShown());
-            out.putBoolean("canvasVisible", showInPill || !MiniPlayerRuntime.canvasPlayerInPill());
-            out.putBoolean("canvasLarge", Main.coverModeOn() && (!LockLyrics.wantsCompactArtwork() || LockLyrics.wantsWindow()));
+            answer(out);
         } catch (Throwable t) { Xp.w("Canvas extension handshake failed: " + t); }
+        return out;
+    }
+
+    private static Bundle answer(Bundle out) {
+        out.putBoolean("canvasBouncer", Main.bouncerShown());
+        out.putBoolean("canvasVisible", showInPill || !MiniPlayerRuntime.canvasPlayerInPill());
+        out.putBoolean("canvasLarge", Main.coverModeOn() && (!LockLyrics.wantsCompactArtwork() || LockLyrics.wantsWindow()));
         return out;
     }
 }
