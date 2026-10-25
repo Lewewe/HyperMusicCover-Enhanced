@@ -7114,7 +7114,7 @@ public class Main extends XposedModule {
         // wallpaper coming back even less than it described the old one. Dropped at the start:
         // the clock is at its smallest now, so the colour going back to the OEM's is at its
         // least visible.
-        if (sCoverTint != 0 && !CanvasHostBridge.active() && !CanvasHostBridge.nativeClockScene()) {
+        if (sCoverTint != 0 && !CanvasHostBridge.ownsVideoBackdrop() && !CanvasHostBridge.nativeClockScene()) {
             sCoverTint = 0;
             recolorClock();
         }
@@ -7166,6 +7166,16 @@ public class Main extends XposedModule {
         if (sCoverMode) return !LockLyrics.wantsCompactArtwork();
         return sAuto && sCardShowing && !LockLyrics.willAttachOnEntry()
                 && !LockLyrics.compactWithoutLyricsOnEntry();
+    }
+
+    static String canvasBackdropKey() { return trackKey(sWatched); }
+
+    /** Restore artwork identity without changing the user's selected cover or lyrics scene. */
+    static boolean prepareCanvasBackdrop() {
+        String key = trackKey(sWatched);
+        if (key.isEmpty()) return false;
+        sTrackKey = key;
+        return true;
     }
 
     static MediaController miniPlayerSession() {
@@ -11352,7 +11362,9 @@ public class Main extends XposedModule {
         // picture the AOD is not drawn on, and repainting those glyphs in it is the one way this
         // could make things worse than it found them. `isInteractive` is false in AOD, so the
         // OEM's own colouring stands there.
-        if ((!sCoverMode && !CanvasHostBridge.active() && !CanvasHostBridge.nativeClockScene()) || !sScreenOn) return 0;
+        // ownsVideoBackdrop, not active(): a Canvas still showing with the player in the pill is
+        // behind the clock all the same, and active() dropped it to the wallpaper's colour.
+        if ((!sCoverMode && !CanvasHostBridge.ownsVideoBackdrop() && !CanvasHostBridge.nativeClockScene()) || !sScreenOn) return 0;
         int forced = sCoverTintOverride;
         return forced != 0 ? forced : sCoverTint != 0 ? sCoverTint : sLastArtworkTint;
     }
