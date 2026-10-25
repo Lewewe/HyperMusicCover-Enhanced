@@ -5090,16 +5090,46 @@ private class MiniPlayerController(
      * was pressed (filmed 2026-10-18).
      */
     private val gooFollow = android.view.ViewTreeObserver.OnPreDrawListener {
-        followGlass(gooGlass, 1f)
-        followGlass(mergeGlass, mergeAlpha)
+        val lift = bracketLift()
+        // Each bracket shrinks into its own centre, where it stands: drawn again at that size.
+        if (kotlin.math.abs(lift - hintsLift) > 0.01f || lift == 0f && hintsLift != 0f) {
+            hintsLift = lift
+            placeHints()
+        }
+        followGlass(gooGlass, 1f, lift)
+        followGlass(mergeGlass, mergeAlpha, lift)
         true
     }
 
-    private fun followGlass(glass: GooGlass?, share: Float) {
+    /**
+     * How far the capsule has been pulled up off its place, 0 to 1 over BRACKET_LIFT_DP: its
+     * brackets shrink, fade and blur away with it and come back as it comes down. They stood
+     * whole beside a capsule pulled up into a card (the user, 2026-10-25).
+     */
+    private fun bracketLift(): Float {
+        val view = player ?: return 0f
+        if (gooActive) return 0f
+        val rest = view.restBoxOnScreen() ?: return 0f
+        val top = (spread?.lead?.takeIf { it.active }?.containerBox() ?: morph?.containerBox())?.y
+            ?: (rest.y + view.nudgeY)
+        return ((rest.y - top) / dp(BRACKET_LIFT_DP)).coerceIn(0f, 1f)
+    }
+
+    /** The blur each glass has now, so an unchanged one is not set again. */
+    private val bracketBlurOf = java.util.WeakHashMap<View, Float>()
+
+    private fun followGlass(glass: GooGlass?, share: Float, lift: Float = 0f) {
         val view = player
         if (glass != null && view != null && glass.visibility == View.VISIBLE) {
-            val a = (if (view.visibility == View.VISIBLE) view.alpha * view.transitionAlpha else 0f) * share
+            val a = (if (view.visibility == View.VISIBLE) view.alpha * view.transitionAlpha else 0f) * share * (1f - lift)
             if (glass.alpha != a) glass.alpha = a
+            // In whole pixels: a new blur effect is a new offscreen pass.
+            val blur = kotlin.math.round(lift * BRACKET_LIFT_BLUR_DP * density())
+            if (bracketBlurOf[glass] != blur) {
+                bracketBlurOf[glass] = blur
+                glass.setRenderEffect(if (blur < 1f) null
+                    else android.graphics.RenderEffect.createBlurEffect(blur, blur, android.graphics.Shader.TileMode.DECAL))
+            }
             val m = view.animationMatrix
             if (m == null || m.isIdentity) {
                 if (glass.animationMatrix != null) glass.setAnimationMatrix(null)
@@ -5429,6 +5459,9 @@ private class MiniPlayerController(
         placeHints()
     }
 
+    /** The lift the brackets were last drawn for (bracketLift). */
+    private var hintsLift = 0f
+
     /** The brackets at rest about the capsule, while there is anything to swipe to. */
     private fun placeHints() {
         // An update draws them about the capsule as it narrows and widens (applyUpdate).
@@ -5441,9 +5474,10 @@ private class MiniPlayerController(
             return
         }
         gooShape.reset()
-        ColorOsPill.neighbourPath(rest, right = false, grow = 1f, out = gooOut(),
+        val grow = 1f - BRACKET_LIFT_SHRINK * hintsLift
+        ColorOsPill.neighbourPath(rest, right = false, grow = grow, out = gooOut(),
             stroke = gooStroke(), into = gooShape)
-        ColorOsPill.neighbourPath(rest, right = true, grow = 1f, out = gooOut(),
+        ColorOsPill.neighbourPath(rest, right = true, grow = grow, out = gooOut(),
             stroke = gooStroke(), into = gooShape)
         showGoo(gooShape, rest)
     }
@@ -7118,6 +7152,9 @@ private class MiniPlayerController(
         var letGoSent = false
         /** Pulled open by a finger still on the island: it scrolls the stack (followFinger). */
         var finger: SpreadFinger? = null
+        /** ColorOS: let go, the progress goes on from the finger's on its own spring (moveSpread). */
+        var letGo: Jelly? = null
+        var letGoLast = 0L
         /**
          * ColorOS: the capsule is the list's first card (its proxy, scale 1.0 in
          * getStackViewScaleInCapsuleState) - the pill morphs into that row and back.
@@ -7828,8 +7865,16 @@ private class MiniPlayerController(
         // (frames of 2026-10-25).
         val held = s.finger?.takeIf { colorOs() && !it.ended && !it.base.isNaN() && s.phase == SPREAD_OPENING }
         val span = kotlin.math.abs(s.cardsY - s.islandsY).toFloat()
+        // Let go, on from where the finger had it: read off the stack, which had not followed yet,
+        // the capsule dropped from half way to its place in one frame (the user, 2026-10-25).
+        val letGo = s.letGo?.takeIf { s.phase == SPREAD_OPENING }
         val p = if (held != null && span >= 1f) ((held.pulled() - held.base) / span).coerceIn(0f, 1f)
-            else spreadProgress(s, y)
+            else if (letGo != null) {
+                val now = android.os.SystemClock.uptimeMillis()
+                letGo.step(if (s.letGoLast == 0L) 1f / 120f else ((now - s.letGoLast) / 1000f).coerceIn(0f, 0.05f))
+                s.letGoLast = now
+                letGo.value.coerceIn(0f, 1f)
+            } else spreadProgress(s, y)
         if (s.items.any { it.morph?.active == false }) {
             // The lock screen's guard ended a morph (asleep, say): straight to the nearer end.
             endSpread(folded = p < 0.5f, why = "a morph was ended")
@@ -7991,6 +8036,10 @@ private class MiniPlayerController(
         }
         // Still waiting for the rows: waitSpread takes the decision when they are in.
         if (s.phase != SPREAD_OPENING) return true
+        if (colorOs()) s.letGo = Jelly(SPREAD_FOLD_RESPONSE, SPREAD_FOLD_DAMPING).apply {
+            value = s.progress
+            target = if (f.toList) 1f else 0f
+        }
         s.finger = null
         s.still = 0
         s.nudged = false
@@ -12054,6 +12103,10 @@ private const val COLOROS_SHORTCUT = 0.8f
 
 /** Room between ColorOS's capsule and its torch and camera, for the brackets, on top of the gap. */
 private const val COLOROS_BRACKET_ROOM_DP = 10f
+/** The capsule's lift over which its brackets go, how much they shrink and blur by then. */
+private const val BRACKET_LIFT_DP = 40f
+private const val BRACKET_LIFT_SHRINK = 0.7f
+private const val BRACKET_LIFT_BLUR_DP = 6f
 
 /** Let go past this much of the gesture's way, it runs on to the end; short of it, back. */
 private const val GOO_COMMIT_AT = 0.22f
