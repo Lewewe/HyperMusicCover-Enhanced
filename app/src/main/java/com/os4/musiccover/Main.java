@@ -11700,6 +11700,56 @@ public class Main extends XposedModule {
         return sBandTopPx + ":" + sBandBotPx;
     }
 
+    /** The average of rows top..bottom, sampled 24 rows deep and every 8th pixel; 0 if none. */
+    private static int averageColour(Bitmap b, int top, int bottom) {
+        int stride = Math.max(1, (bottom - top) / 24);
+        int[] row = new int[b.getWidth()];
+        long sr = 0, sg = 0, sb = 0;
+        int n = 0;
+        for (int y = top; y < bottom; y += stride) {
+            b.getPixels(row, 0, row.length, 0, y, row.length, 1);
+            for (int x = 0; x < row.length; x += 8) {
+                int c = row[x];
+                sr += (c >> 16) & 0xff;
+                sg += (c >> 8) & 0xff;
+                sb += c & 0xff;
+                n++;
+            }
+        }
+        return n == 0 ? 0 : 0xff000000 | ((int) (sr / n) << 16) | ((int) (sg / n) << 8) | (int) (sb / n);
+    }
+
+    /**
+     * The clock's colour for a Canvas track, from its artwork. With no artwork composed into the
+     * wallpaper behind the video, measureCover() never ran for it, and the clock kept the last
+     * cover's colour or the wallpaper's.
+     */
+    static void tintFromArtwork() { tintFromArtwork(0); }
+
+    /** The artwork last measured: the same picture again means the new one has not loaded yet. */
+    private static Bitmap sTintArt;
+
+    private static void tintFromArtwork(final int tries) {
+        worker().postDelayed(() -> {
+            try {
+                Bitmap art = albumArt(sAppCtx);
+                if (art == null || art.isRecycled() || art.getHeight() < 8 || art == sTintArt) {
+                    // The Canvas can be ready before the session's artwork is: look again.
+                    if (tries < 4) tintFromArtwork(tries + 1);
+                    return;
+                }
+                sTintArt = art;
+                int tint = averageColour(art, 0, art.getHeight());
+                if (tint == 0) return;
+                sCoverTint = sLastArtworkTint = tint;
+                Xp.log(TAG + "canvas tint #" + Integer.toHexString(tint) + " from the artwork");
+                recolorClock();
+            } catch (Throwable t) {
+                Xp.w(TAG + "canvas tint failed: " + t);
+            }
+        }, tries == 0 ? 0L : 400L);
+    }
+
     static void measureCover(Bitmap full) {
         StatusBarArtwork.measure(full);
         try {
@@ -11715,28 +11765,12 @@ public class Main extends XposedModule {
             int top = Math.max(0, Math.round(topPx));
             int bottom = Math.min(full.getHeight(), Math.round(botPx));
             if (bottom - top < 8) { sCoverTint = 0; return; }
-            int stride = Math.max(1, (bottom - top) / 24);
-            int[] row = new int[full.getWidth()];
-            long sr = 0, sg = 0, sb = 0;
-            int n = 0;
-            for (int y = top; y < bottom; y += stride) {
-                full.getPixels(row, 0, row.length, 0, y, row.length, 1);
-                for (int x = 0; x < row.length; x += 8) {
-                    int c = row[x];
-                    sr += (c >> 16) & 0xff;
-                    sg += (c >> 8) & 0xff;
-                    sb += c & 0xff;
-                    n++;
-                }
-            }
-            if (n == 0) { sCoverTint = 0; return; }
             // The plain average of the band, which the mirror-blur has already smoothed: one
             // number describing the picture behind the glyphs rather than any one pixel of it.
-            sCoverTint = 0xff000000 | ((int) (sr / n) << 16) | ((int) (sg / n) << 8)
-                    | (int) (sb / n);
-            sLastArtworkTint = sCoverTint;
-            Xp.log(TAG + "cover tint #" + Integer.toHexString(sCoverTint) + " over " + n
-                    + "px, band " + top + ".." + bottom);
+            sCoverTint = averageColour(full, top, bottom);
+            if (sCoverTint != 0) sLastArtworkTint = sCoverTint;
+            Xp.log(TAG + "cover tint #" + Integer.toHexString(sCoverTint)
+                    + ", band " + top + ".." + bottom);
         } catch (Throwable t) {
             sCoverTint = 0;
             Xp.w(TAG + "cover tint failed: " + t);

@@ -163,7 +163,10 @@ final class CanvasHostBridge {
             }
             // The scene the user left stays: a Canvas arriving under the big cover no longer
             // folds it into the player (2026-10-25), so the track without one has none to undo.
-            if (ready && track != null && track.startsWith("spotify:track:")) activeTrack = track;
+            if (ready && track != null && track.startsWith("spotify:track:")) {
+                if (!track.equals(activeTrack)) Main.tintFromArtwork();
+                activeTrack = track;
+            }
             else if (!temporary) activeTrack = "";
             sceneChanged();
             syncDepth();
