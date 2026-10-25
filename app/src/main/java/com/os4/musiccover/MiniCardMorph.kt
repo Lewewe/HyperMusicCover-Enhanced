@@ -329,6 +329,10 @@ internal class MiniCardMorph(
     /** The container as this frame drew it, on screen: what presses on the shortcut discs. */
     fun containerBox(): CoverMorphMotion.Box? = if (running) boxDrawn else null
 
+    /** The card's rest top as the last frame read it, for traces. */
+    private var nativeY = Float.NaN
+    fun nativeBoxY(): Int = if (nativeY.isNaN()) -1 else nativeY.toInt()
+
     /**
      * The island's end as this frame read it, on screen: the pill's place, a narrower pill beside
      * a small island, or the small island's circle - wherever the island this morph leaves or
@@ -446,11 +450,25 @@ internal class MiniCardMorph(
         val miniRest = traced("MC m.rest") { restBox?.invoke() ?: mini.restBoxOnScreen() } ?: return false
         miniEndDrawn = miniRest
         val nativeRest = traced("MC m.native") { headerRestBox() } ?: return false
+        nativeY = nativeRest.y
         if (miniRest.w <= 0f || nativeRest.w <= 0f) return false
+        // A pill in the screen's lower half has its card above it. Below it, the card is still
+        // parked where the stack keeps it before laying it out: the container waits at the pill
+        // for those frames. Headed for that place, the pulled pill was pushed down out of sight
+        // for 0.3s, then jumped 260px up (traced 2026-10-25).
+        val pillLow = miniRest.y + miniRest.h / 2f > mini.resources.displayMetrics.heightPixels / 2f
+        val parked = pillLow && nativeRest.y > miniRest.y
+        // Let go, it waits there too, up to PARKED_WAIT_MS: run on, a flick right after a fold
+        // ended as a pill-sized card at the pill while the card sat 5000px down, then the
+        // card slid up from the bottom over an empty cover (traced 2026-10-25).
+        if (parked && !dragging && SystemClock.uptimeMillis() - startedAt < PARKED_WAIT_MS) {
+            motion.value = 0f
+            motion.velocity = 0f
+        }
         val c = motion.value.coerceIn(0f, 1f)
-        val framed = style.containerFrame(miniRest, nativeRest, motion.value)
+        val framed = style.containerFrame(miniRest, nativeRest, if (parked) 0f else motion.value)
         // The nudge moves the whole container toward the card (up from the pill, down from it).
-        val towardNative = if (nativeRest.y <= miniRest.y) -1f else 1f
+        val towardNative = if (nativeRest.y <= miniRest.y || pillLow) -1f else 1f
         val box = CoverMorphMotion.Box(framed.x + nudgeX.value * NUDGE_UNIT,
             framed.y + towardNative * nudge.value * NUDGE_UNIT, framed.w, framed.h)
         val radius = style.cornerRadius(miniRest.h / 2f, nativeRadius, c)
@@ -916,6 +934,7 @@ internal class MiniCardMorph(
 
         /** Past this the destination is handed back even if the scene is still moving. */
         private const val SETTLE_LIMIT_MS = 2200L
+        private const val PARKED_WAIT_MS = 1500L
 
         /** A leader's pose this recent stands for the frame's (follow). */
         private const val LED_FRESH_MS = 12L

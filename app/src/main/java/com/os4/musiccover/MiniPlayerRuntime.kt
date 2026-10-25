@@ -7132,6 +7132,8 @@ private class MiniPlayerController(
         var base = Float.NaN
         var ended = false
         var toList = false
+        /** The capsule's own lift as the spread took the pull over (ColorOS). */
+        var lift = Float.NaN
         fun pulled() = startY - y
     }
 
@@ -7489,7 +7491,10 @@ private class MiniPlayerController(
         if (colorOs()) {
             val held = s.finger?.takeIf { !it.ended }
             val back = s.nudgeBack
-            if (held != null) s.leadNudge = spreadRubber(held.pulled())
+            // Once the list follows the finger (base set) the capsule's own lift stops growing:
+            // both moving with the pull, it jumped up as the list came out (the user, 2026-10-25).
+            if (held != null) s.leadNudge = if (!held.lift.isNaN()) held.lift
+                else spreadRubber(if (held.base.isNaN()) held.pulled() else held.base)
             else if (back != null) {
                 val now = android.os.SystemClock.uptimeMillis()
                 back.step(if (s.nudgeLast == 0L) 1f / 120f else ((now - s.nudgeLast) / 1000f).coerceIn(0f, 0.05f))
@@ -7515,6 +7520,8 @@ private class MiniPlayerController(
     private val spreadBlurOf = java.util.WeakHashMap<View, Float>()
     /** Their own translationZ before the pile put each under the one before it. */
     private val spreadZOf = java.util.WeakHashMap<View, Float>()
+    /** Their own outline and clipToOutline before the blur clipped them to a rounded card. */
+    private val spreadClipOf = java.util.WeakHashMap<View, Pair<android.view.ViewOutlineProvider?, Boolean>>()
     private val spreadMatrix = Matrix()
     private var spreadLast = 0L
     /** The capsule going (1) as the list comes out of it, back (0) as it folds, with no lead. */
@@ -7551,9 +7558,14 @@ private class MiniPlayerController(
         spreadBlur.response = if (opening) 0.3f else 0.4f
         spreadBlur.target = if (opening) 0f else 1f
         spreadBlur.step(dt)
+        // Under the finger the list is scrubbed, so the rear cards clear with the pull: on their
+        // spring alone they were sharp before a slow pull had got anywhere (the user, 2026-10-25).
+        if (s.finger?.ended == false) spreadBlur.value = maxOf(spreadBlur.value, 1f - p)
         // The capsule morphing into the first card is that card; without a lead it fades.
         val led = s.lead?.active == true
-        if (!led) {
+        // Not while the rows are still coming: the capsule faded to a blurred glass under the
+        // finger, then came back sharp and jumped as its morph took it (the user, 2026-10-25).
+        if (!led && s.phase != SPREAD_WAIT) {
             fadeSeat(s.stackSeat, 1f - gone)
             val blurMax = SPREAD_BLUR_PX * density() / COLOROS_DENSITY
             if (s.stackSeat == SEAT_BIG) view?.setContentBlur(gone * blurMax)
@@ -7569,8 +7581,12 @@ private class MiniPlayerController(
             xy[1] + row.top + row.translationY
         }
         spreadCardsTo(p, anchor, refTop, skip, if (opening) null else s.closeFrom, pill, spreadBlur.value.coerceIn(0f, 1f))
-        // The first card on the same blur as the rest: all of them clear together.
-        s.leadRow?.takeIf { led }?.let { blurSpreadRow(it, spreadBlurRadius(spreadBlur.value.coerceIn(0f, 1f))) }
+        // The first card blurs with the morph itself, at most 0.3 of the rear cards' blur (more showed the row's square bounds), peaking
+        // halfway and sharp at both ends (the user, 2026-10-25): on the rear cards' spring it read
+        // as a blurred block growing out of the pill, sharp the change of shape looked bare, and
+        // blurred to the end of a fold the capsule stood blurred at home, then snapped clear.
+        val q = p.coerceIn(0f, 1f)
+        s.leadRow?.takeIf { led }?.let { blurSpreadRow(it, spreadBlurRadius(4f * q * (1f - q) * 0.3f)) }
     }
 
     /**
@@ -7591,8 +7607,15 @@ private class MiniPlayerController(
         val rows = ArrayList<View>()
         for (i in 0 until stack.childCount) {
             val row = stack.getChildAt(i)
-            if (row.visibility != View.VISIBLE || row.height <= 0 || row in morphing) continue
-            if (!row.javaClass.name.endsWith("ExpandableNotificationRow")) continue
+            if (row in morphing || !row.javaClass.name.endsWith("ExpandableNotificationRow")) continue
+            if (row.visibility != View.VISIBLE || row.height <= 0) {
+                // Not laid out yet: kept unseen till a frame here places it. Shown by the stack's
+                // layout first, it was drawn whole at its list place for a frame (LSPosed's
+                // notifications flashing on the pull, the user, 2026-10-25).
+                if (row !in hiddenRows && row.transitionAlpha != 0f) row.transitionAlpha = 0f
+                spreadCards[row] = true
+                continue
+            }
             unholdFolded(row)
             rows += row
         }
@@ -7622,9 +7645,15 @@ private class MiniPlayerController(
             val base = if (from != null) home else anchor
             val pileW = base.w * scale
             val pileH = base.h * scale
-            val pileCy = base.y + base.h + base.h * SPREAD_PILE_PEEK * peek - pileH / 2f
-            val sx = lerp(pileW / w, 1f, q)
-            val sy = lerp(pileH / h, 1f, q)
+            // Centred on the height it is drawn at there: opening that is the capsule's (sy below),
+            // and off the first card's growing height it sat too high, rising out over the capsule
+            // as the pull came back down (the user, 2026-10-25).
+            val pileCy = base.y + base.h + base.h * SPREAD_PILE_PEEK * peek - (if (from != null) pileH else home.h * scale) / 2f
+            // Opening, sized off the first card as drawn now - a share of it that grows to whole -
+            // and the capsule's height: off pileW, which grows with the first card already, the
+            // second card outgrew the first halfway out (the user, 2026-10-25).
+            val sx = if (from != null) lerp(pileW / w, 1f, q) else anchor.w * lerp(scale, 1f, q) / w
+            val sy = if (from != null) lerp(pileH / h, 1f, q) else lerp(home.h * scale / h, 1f, q)
             val toX = lerp(base.cx(), from?.get(0) ?: cx, q)
             val toY = lerp(pileCy, if (from != null) from[1] + h / 2f else anchor.y + (top - ref) + h / 2f, q)
             // Each under the one before it: the stack draws its later rows over the earlier.
@@ -7637,7 +7666,10 @@ private class MiniPlayerController(
             // Behind the capsule's glass they showed through it, the second card's colours as the
             // list folded (the user, 2026-10-21): gone by the time it is the capsule again.
             if (row !in hiddenRows) {
+                // Opening, out only once the first card is big enough to stand in front of them:
+                // from the start they showed round the capsule on a slow pull.
                 val a = if (depth > SPREAD_PILE_SHOWN) MiniCardMorph.smooth(0f, 0.5f, p)
+                    else if (from == null) MiniCardMorph.smooth(0.15f, 0.35f, p)
                     else MiniCardMorph.smooth(0f, SPREAD_REAR_FADE, p)
                 if (kotlin.math.abs(row.transitionAlpha - a) > 0.002f) row.transitionAlpha = a
             }
@@ -7653,8 +7685,25 @@ private class MiniPlayerController(
     private fun blurSpreadRow(row: View, blur: Float) {
         if (spreadBlurOf[row] == blur) return
         spreadBlurOf[row] = blur
+        // Cut to a rounded card: blurred, the row's own rounding is lost and it showed as a
+        // square block - its outline is a plain rectangle (the user, 2026-10-25).
+        if (blur >= 0.5f && row !in spreadClipOf) {
+            spreadClipOf[row] = row.outlineProvider to row.clipToOutline
+            val r = Main.notificationRowRadius(row)
+            row.outlineProvider = object : android.view.ViewOutlineProvider() {
+                // The row's drawn height, not its view's: HyperOS's rows are laid out far taller.
+                override fun getOutline(v: View, o: android.graphics.Outline) = o.setRoundRect(0, 0, v.width,
+                    (runCatching { Xp.callMethod(v, "getActualHeight") as Int }.getOrNull() ?: v.height).coerceIn(1, v.height), r)
+            }
+            row.clipToOutline = true
+        } else if (blur < 0.5f) spreadClipOf.remove(row)?.let { restoreClip(row, it) }
         row.setRenderEffect(if (blur < 0.5f) null
             else android.graphics.RenderEffect.createBlurEffect(blur, blur, android.graphics.Shader.TileMode.DECAL))
+    }
+
+    private fun restoreClip(row: View, saved: Pair<android.view.ViewOutlineProvider?, Boolean>) {
+        row.outlineProvider = saved.first
+        row.clipToOutline = saved.second
     }
 
     /** At the spread's end the cards are where it left them (an end): given back. */
@@ -7697,6 +7746,8 @@ private class MiniPlayerController(
         }
         // The first card too, blurred with them but never one of spreadCards.
         for (row in spreadBlurOf.keys) row.setRenderEffect(null)
+        for ((row, saved) in spreadClipOf) restoreClip(row, saved)
+        spreadClipOf.clear()
         spreadZOf.clear()
         spreadCards.clear()
         spreadBlurOf.clear()
@@ -7720,12 +7771,11 @@ private class MiniPlayerController(
     /** Opening or closing: every island on the stack's scroll, until the stack rests at an end. */
     private fun moveSpread(s: Spread) {
         s.finger?.takeIf { !it.ended && s.phase == SPREAD_OPENING }?.let { f ->
-            // ColorOS does not scrub the list with the finger: the capsule follows it a little
-            // (spreadRubber) and past dragMaxAction the list comes out on its own, from there.
-            if (!colorOs()) followFinger(s, f)
-            else if (f.pulled() >= SPREAD_DRAG_ACTION_PX * density() / COLOROS_DENSITY) {
-                spreadFingerEnd(-(SPREAD_FLING_DP + 1f) * density(), cancelled = false)
-            }
+            // Scrubbed by the finger on both styles: the capsule turning into the first card step
+            // by step, as the media player does. ColorOS's own capsule only follows a little and
+            // past dragMaxAction pops the list out by itself, which read as no morph at all (the
+            // user, 2026-10-25).
+            followFinger(s, f)
         }
         // ColorOS: pulled back down while still opening, it folds the same way as from open.
         if (colorOs() && s.phase == SPREAD_OPENING && s.finger?.ended != false && s.lead != null &&
@@ -7745,7 +7795,13 @@ private class MiniPlayerController(
             return
         }
         val y = NumState.position() ?: return
-        val p = spreadProgress(s, y)
+        // Held, the finger itself sets the progress: the stack takes our scroll only once it has
+        // opened, 0.8s in, and on its scroll the capsule stood still that long, then shot up
+        // (frames of 2026-10-25).
+        val held = s.finger?.takeIf { colorOs() && !it.ended && !it.base.isNaN() && s.phase == SPREAD_OPENING }
+        val span = kotlin.math.abs(s.cardsY - s.islandsY).toFloat()
+        val p = if (held != null && span >= 1f) ((held.pulled() - held.base) / span).coerceIn(0f, 1f)
+            else spreadProgress(s, y)
         if (s.items.any { it.morph?.active == false }) {
             // The lock screen's guard ended a morph (asleep, say): straight to the nearer end.
             endSpread(folded = p < 0.5f, why = "a morph was ended")
@@ -8404,6 +8460,7 @@ private class MiniPlayerController(
         if (toRow) {
             unpinCard()
             }
+        openFrames = 0
         val next = MiniCardMorph(view, row, toRow, noteMorphListener(key), landing, restBox,
             circle = useFlight && home == HOME_SMALL,
             nativeDy = if (toRow) { { settleDy(row, emptyList()) } } else null,
@@ -8456,6 +8513,9 @@ private class MiniPlayerController(
         return true
     }
 
+    /** Frames of an opening note morph traced so far (`op mini`'s "o c=" lines). */
+    private var openFrames = 0
+
     private fun noteMorphListener(key: String) = object : MiniCardMorph.Listener {
         /** The music out of a scene lands once the cover has let go of the lock screen. */
         override fun canSettle(morph: MiniCardMorph, toNative: Boolean) =
@@ -8466,6 +8526,10 @@ private class MiniPlayerController(
         override fun onFrame(morph: MiniCardMorph, progress: Float) {
             if (key == STACK_ISLAND && this@MiniPlayerController.morph === morph) pileStack(progress, morph.miniEndBox())
             val f = flight ?: return
+            if (morph.toNative && openFrames++ < 40) morph.containerBox()?.let { b ->
+                trace("o c=${"%.3f".format(progress)} box=${b.cx().toInt()},${b.y.toInt()} ${b.w.toInt()}x${b.h.toInt()} " +
+                    "fa=${"%.2f".format(f.alpha)} out=$flightOut nat=${morph.nativeBoxY()}")
+            }
             if (this@MiniPlayerController.morph !== morph || flightOut) return
             if (progress > 0f) restFrames = 0 else restFrames++
             if (!morph.toNative && restFrames <= 10) morph.containerBox()?.let { b ->
@@ -8652,9 +8716,13 @@ private class MiniPlayerController(
         // goes.
         if (spread != null) return false
         if (key == STACK_ISLAND && LockIslands.foldsNatively()) {
-            player?.springNudgeBack(0f, 0f)
+            val finger = SpreadFinger(startY)
+            // ColorOS: the capsule stays lifted where the finger has it and the morph carries that
+            // lift on. Sprung home here and lifted again by the morph, it jumped (the user, 2026-10-25).
+            if (colorOs()) player?.let { it.holdNudge(); finger.lift = -it.nudgeY } else player?.springNudgeBack(0f, 0f)
             springSmallNudgeBack(0f, 0f)
-            openSpread("pull", SpreadFinger(startY))
+            MiniPlayerRuntime.noteTouch("spread pull lift=${"%.1f".format(finger.lift)}")
+            openSpread("pull", finger)
             return true
         }
         if (noteMorphKey != null || morph != null || exchange != null) return false
@@ -8677,6 +8745,9 @@ private class MiniPlayerController(
             return startExchange(key)
         }
         if (prepareFlight(key) == null) return false
+        // Rows still held hidden after a ColorOS fold keep the stack from laying the card out: it
+        // sat 5000px down till their hold ran out, the flight waiting on it (traced 2026-10-25).
+        foldHidden.toList().forEach(::unholdFolded)
         endSwap()
         resetIslandDrag()
         // The island keeps following the finger until its row is there to morph into; its
@@ -11878,9 +11949,8 @@ private const val SPREAD_FIRST_SCALE = 0.85f
 private const val SPREAD_SCALE_STEP = 0.1f
 private const val SPREAD_SCALE_MIN = 0.1f
 // ColorOS ExtStateAnimParams CapsuleToStack dragMaxDistance / dragMaxAction (px at 560 dpi): how
-// far the capsule follows the finger, and the pull that sends the list out.
+// far the capsule follows the finger.
 private const val SPREAD_DRAG_MAX_PX = 200f
-private const val SPREAD_DRAG_ACTION_PX = 68f
 private const val SPREAD_NUDGE_BACK_RESPONSE = 0.35f
 // ColorOS DraggerParams stack dragMaxAction (dp) and StackToCapsule translationY spring.
 private const val SPREAD_LIST_DRAG_ACTION_DP = 60f
