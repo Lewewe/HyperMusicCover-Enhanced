@@ -14,8 +14,6 @@ final class CanvasHostBridge {
     private static Boolean lastVisible;
     private static boolean clockOwned;
     private static long resumeUntil;
-    private static boolean backdropHeld;
-    private static String backdropTrack = "";
     private static boolean backdropAllowed = true;
     private static boolean showInPill;
     private static boolean frozenInAod;
@@ -24,14 +22,12 @@ final class CanvasHostBridge {
     private static long sessionGoneSince;
     /** Longer than a buffering gap between tracks; past it the session has ended. */
     private static final long SESSION_GONE_MS = 2500L;
-    /** The extension's last word, for a release decided between its frames. */
-    private static boolean lastReady, lastTemporary;
     static void suspendForBackdrop() {
         if (!Main.sHidePlayerBackground || !canvasReady && !frozenInAod
-                && !backdropHeld && !clockOwned) return;
-        canvasReady = frozenInAod = backdropHeld = false;
+                && !clockOwned) return;
+        canvasReady = frozenInAod = false;
         syncDepth();
-        activeTrack = backdropTrack = "";
+        activeTrack = "";
         resumeUntil = 0L;
         if (clockOwned) {
             clockOwned = false;
@@ -67,16 +63,6 @@ final class CanvasHostBridge {
         return (canvasReady || frozenInAod)
                 && (showInPill || !MiniPlayerRuntime.canvasPlayerInPill());
     }
-    static boolean keepPaletteBackdrop() {
-        if (MiniPlayerRuntime.canvasPlayerInPill())
-            return showInPill && canvasReady && backdropAllowed && Main.screenOnCached();
-        if (frozenInAod && !Main.screenOnCached()) return true;
-        return Main.screenOnCached() && backdropAllowed && (active() || nativeClockScene());
-    }
-    static void backdropRetained() {
-        // Keeping the outgoing bitmap does not mean artwork for the new track was loaded.
-        backdropHeld = true;
-    }
     static boolean backgroundOnly() {
         return active() || nativeClockScene();
     }
@@ -107,10 +93,6 @@ final class CanvasHostBridge {
     static void sceneChanged() {
         syncClock();
         refreshStatusColors();
-        // Here as well as on the extension's frames: those come 0.7s apart at best, and the
-        // player going to the pill waited for the next one - 1.2-2.6s measured between the
-        // swipe and the wallpaper coming back, felt as lag on a video wallpaper.
-        releaseBackdrop();
         if (!canvasReady || sceneContext == null) return;
         boolean next = Main.coverModeOn() && (!LockLyrics.wantsCompactArtwork() || LockLyrics.wantsWindow());
         boolean visible = showInPill || !MiniPlayerRuntime.canvasPlayerInPill();
@@ -118,16 +100,6 @@ final class CanvasHostBridge {
         lastScene = next;
         lastVisible = visible;
         sceneContext.sendBroadcast(new Intent("com.os4.canvas.SCENE_CHANGED").setPackage("com.android.systemui"));
-    }
-    /** Drops the retained artwork backdrop once nothing is showing it any more. */
-    private static void releaseBackdrop() {
-        if (!backdropHeld || keepPaletteBackdrop()) return;
-        boolean screenOn = Main.screenOnCached();
-        if (backdropAllowed && screenOn && !MiniPlayerRuntime.canvasPlayerInPill()
-                && (lastReady || lastTemporary)) return;
-        backdropHeld = false;
-        backdropTrack = "";
-        if (!Main.coverModeOn()) CoverPush.pushArtAsync(false, false);
     }
     static boolean active() { return canvasReady && !MiniPlayerRuntime.canvasPlayerInPill() && Main.screenOnCached() && android.os.SystemClock.uptimeMillis() - lastFrame < 2500L; }
     static Bundle frame(Context context, Intent intent) {
@@ -185,8 +157,6 @@ final class CanvasHostBridge {
                 resumeUntil = android.os.SystemClock.uptimeMillis() + 1500L;
             }
             lastFrame = android.os.SystemClock.uptimeMillis();
-            lastReady = ready;
-            lastTemporary = temporary;
             if (wasReady != canvasReady) {
                 Main.refreshCanvasControls();
                 Main.recolorClock();
@@ -197,17 +167,9 @@ final class CanvasHostBridge {
             else if (!temporary) activeTrack = "";
             sceneChanged();
             syncDepth();
-            String backdropIdentity = Main.canvasBackdropKey();
-            if (ready && backdropAllowed && Main.screenOnCached() && !Main.coverModeOn()
-                    && (!MiniPlayerRuntime.canvasPlayerInPill() || ready && showInPill)
-                    && (!backdropHeld || !backdropIdentity.equals(backdropTrack))) {
-                // The glass clock samples the wallpaper behind the video, so retain music there.
-                if (Main.prepareCanvasBackdrop()) {
-                    backdropRetained();
-                    backdropTrack = backdropIdentity;
-                    CoverPush.pushArtAsync(true, true);
-                }
-            } else releaseBackdrop();
+            // No artwork is kept in the wallpaper behind the video any more (2026-10-25): it was
+            // for the glass clock's colour, and showed through as a light flash on every change
+            // between a Canvas track and one without, while the wallpaper reloaded.
             answer(out);
         } catch (Throwable t) { Xp.w("Canvas extension handshake failed: " + t); }
         return out;

@@ -7168,16 +7168,6 @@ public class Main extends XposedModule {
                 && !LockLyrics.compactWithoutLyricsOnEntry();
     }
 
-    static String canvasBackdropKey() { return trackKey(sWatched); }
-
-    /** Restore artwork identity without changing the user's selected cover or lyrics scene. */
-    static boolean prepareCanvasBackdrop() {
-        String key = trackKey(sWatched);
-        if (key.isEmpty()) return false;
-        sTrackKey = key;
-        return true;
-    }
-
     static MediaController miniPlayerSession() {
         return sWatched;
     }
