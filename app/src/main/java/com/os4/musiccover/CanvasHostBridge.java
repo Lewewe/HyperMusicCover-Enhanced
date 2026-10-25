@@ -7,7 +7,7 @@ import android.os.Bundle;
 /** Optional extension handshake; without a ready Canvas the normal cover path is untouched. */
 final class CanvasHostBridge {
     private static String activeTrack = "";
-    private static boolean autoCollapsed, verified, canvasReady;
+    private static boolean verified, canvasReady;
     private static long lastFrame;
     private static Context sceneContext;
     private static Boolean lastScene;
@@ -28,8 +28,8 @@ final class CanvasHostBridge {
     private static boolean lastReady, lastTemporary;
     static void suspendForBackdrop() {
         if (!Main.sHidePlayerBackground || !canvasReady && !frozenInAod
-                && !backdropHeld && !clockOwned && !autoCollapsed) return;
-        canvasReady = frozenInAod = backdropHeld = autoCollapsed = false;
+                && !backdropHeld && !clockOwned) return;
+        canvasReady = frozenInAod = backdropHeld = false;
         syncDepth();
         activeTrack = backdropTrack = "";
         resumeUntil = 0L;
@@ -67,7 +67,6 @@ final class CanvasHostBridge {
         return (canvasReady || frozenInAod)
                 && (showInPill || !MiniPlayerRuntime.canvasPlayerInPill());
     }
-    static void userSelectedScene() { autoCollapsed = false; }
     static boolean keepPaletteBackdrop() {
         if (MiniPlayerRuntime.canvasPlayerInPill())
             return showInPill && canvasReady && backdropAllowed && Main.screenOnCached();
@@ -162,7 +161,6 @@ final class CanvasHostBridge {
             // the retained artwork backdrop up until the next screen-off: the previous song's
             // (often frosted) cover over the user's own wallpaper, a video one included.
             boolean temporary = intent.getBooleanExtra("temporary", false);
-            boolean sessionEnded = false;
             long now = android.os.SystemClock.uptimeMillis();
             if (ready || !temporary || !Main.screenOnCached() || !Main.onKeyguardNow()) {
                 sessionGoneSince = 0L;
@@ -170,7 +168,6 @@ final class CanvasHostBridge {
                 sessionGoneSince = now;
             } else if (now - sessionGoneSince >= SESSION_GONE_MS) {
                 temporary = false;
-                sessionEnded = true;
             }
             boolean wasReady = canvasReady;
             showInPill = intent.getBooleanExtra("showInPill", false);
@@ -194,23 +191,10 @@ final class CanvasHostBridge {
                 Main.refreshCanvasControls();
                 Main.recolorClock();
             }
-            if (ready && track != null && track.startsWith("spotify:track:")) {
-                if (!track.equals(activeTrack)) {
-                    activeTrack = track;
-                    if (Main.coverModeOn() && !LockLyrics.wantsCompactArtwork()) {
-                        Main.miniPlayerLeaveCover();
-                        // Automatic Canvas entry is a player scene, not a pill-to-cover request.
-                        MiniPlayerRuntime.forgetRestoreScene();
-                        autoCollapsed = true;
-                    }
-                } else if (Main.coverModeOn() && !LockLyrics.wantsCompactArtwork()) autoCollapsed = false;
-            } else if (!temporary) {
-                activeTrack = "";
-                // Back to the cover only for a track without Canvas, not for music that has stopped.
-                if (autoCollapsed && !sessionEnded && !Main.coverModeOn() && Main.screenOn()
-                        && !MiniPlayerRuntime.canvasPlayerInPill()) Main.miniPlayerEnterCover();
-                autoCollapsed = false;
-            }
+            // The scene the user left stays: a Canvas arriving under the big cover no longer
+            // folds it into the player (2026-10-25), so the track without one has none to undo.
+            if (ready && track != null && track.startsWith("spotify:track:")) activeTrack = track;
+            else if (!temporary) activeTrack = "";
             sceneChanged();
             syncDepth();
             String backdropIdentity = Main.canvasBackdropKey();

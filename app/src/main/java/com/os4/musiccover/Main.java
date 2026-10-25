@@ -11050,7 +11050,6 @@ public class Main extends XposedModule {
     static void toggleCanvasLyrics() {
         if (!CanvasHostBridge.active() || !LockLyrics.sEnabled || !LockLyrics.hasLyrics()
                 || !keyguardShowing() || bouncerUp()) return;
-        CanvasHostBridge.userSelectedScene();
         MiniPlayerRuntime.keepCanvasPlayerExpanded();
         String key = trackKey(sWatched);
         if (key.isEmpty()) key = sTrackKey;
