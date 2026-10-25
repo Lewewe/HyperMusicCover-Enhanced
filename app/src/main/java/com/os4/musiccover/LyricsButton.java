@@ -202,6 +202,11 @@ final class LyricsButton {
         }
     }
 
+    /** Shown, or on its way in, beside the title rather than under the thumbnail. */
+    static boolean byTitle() {
+        return button != null && requested && !besideControls;
+    }
+
     private static float position(View card, View view, boolean horizontal) {
         float value = 0f;
         while (view != null && view != card) {

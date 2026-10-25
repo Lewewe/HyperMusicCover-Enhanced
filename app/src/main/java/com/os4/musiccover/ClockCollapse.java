@@ -185,6 +185,8 @@ final class ClockCollapse {
      * Derived from the OEM's own ClockResult; see floorY().
      */
     private static float sFloor = Float.NaN;
+    /** sFloor came from the top clamp: read again from the held y until a reading is exact. */
+    private static boolean sFloorEstimated;
     /** The old device-specific floor, as a dp, for the one case nothing can be read. */
     private static final float FALLBACK_FLOOR_DP = 246.7f;
 
@@ -1151,6 +1153,7 @@ final class ClockCollapse {
     private static float floorY(float natural) {
         float derived = Float.NaN;
         String how = "";
+        String layout = null;
         View c = Main.sContainer;
         Float held = Main.sHoldY;
         float y = held != null ? held : natural;
@@ -1164,6 +1167,7 @@ final class ClockCollapse {
                     float min = num(Xp.getObjectField(it, "timeMinHeight"));
                     float max = num(Xp.getObjectField(it, "adaptTimeHeight"));
                     String key = layoutKey(it);
+                    layout = key;
                     if (key != null && key.equals(sExactKey) && !Float.isNaN(sExactFloor)) {
                         derived = sExactFloor;
                         how = "exact, remembered for this layout";
@@ -1195,11 +1199,28 @@ final class ClockCollapse {
         boolean sane = !Float.isNaN(derived) && derived > 0f
                 && (screenH == 0 || derived < screenH)
                 && (Float.isNaN(natural) || derived <= natural);
-        float floor = sane ? derived : (Float.isNaN(natural) ? FALLBACK_FLOOR_DP * Main.density()
-                : natural);
+        // A reading that fails here (an entry with nothing under the clock: natural is the screen's
+        // bottom) made the floor that bottom, and the clock sat unsqueezed - its tall, narrow
+        // glyphs scaled down - until the next wake read it again.
+        boolean remembered = !sane && layout != null && layout.equals(sSaneKey);
+        float floor = sane ? derived : remembered ? sSaneFloor
+                : (Float.isNaN(natural) ? FALLBACK_FLOOR_DP * Main.density() : natural);
+        if (sane && layout != null) {
+            sSaneFloor = derived;
+            sSaneKey = layout;
+        }
+        // Nothing readable yet (a restore before the keyguard laid out): left unread, so the
+        // pre-draw reads it again once the OEM has drawn instead of keeping the bottom for good.
+        boolean unread = !sane && !remembered && Float.isNaN(derived);
+        sFloorEstimated = sane && how.startsWith("estimated");
+        if (unread) {
+            sFloor = Float.NaN;
+            return floor;
+        }
         if (Float.isNaN(sFloor) || Math.abs(floor - sFloor) >= 1f) {
             Xp.log(TAG + "clock: squeeze floor y=" + Main.r1(floor) + " ("
-                    + (sane ? how : "no squeeze: derived " + Main.r1(derived)) + ", read at y="
+                    + (sane ? how : remembered ? "remembered for this layout, derived " + Main.r1(derived)
+                    : "no squeeze: derived " + Main.r1(derived)) + ", read at y="
                     + Main.r1(y) + ", natural " + Main.r1(natural) + ")");
         }
         sFloor = floor;
@@ -1260,6 +1281,10 @@ final class ClockCollapse {
     /** The exact floor last read off a layout, and which layout it was. */
     private static float sExactFloor = Float.NaN;
     private static String sExactKey;
+
+    /** The last floor that read sanely, and its layout: the fallback for a reading that did not. */
+    private static float sSaneFloor = Float.NaN;
+    private static String sSaneKey;
 
     private static String layoutKey(Object it) {
         try {
@@ -1433,6 +1458,8 @@ final class ClockCollapse {
             sFullStyle = null;
             sFloor = sExactFloor = Float.NaN;
             sExactKey = null;
+            sSaneFloor = Float.NaN;
+            sSaneKey = null;
             sDateAnchor = Float.NaN;
             sDateAnchorView = null;
             ClockPageSize.forgetKeptPose();
@@ -2575,7 +2602,7 @@ final class ClockCollapse {
         }
 
         android.os.Trace.beginSection("MC c.legacy"); try { Main.convertLegacyHeight(m.box); } finally { android.os.Trace.endSection(); }
-        if (phase == Phase.ON && Float.isNaN(sFloor)) {
+        if (phase == Phase.ON && (Float.isNaN(sFloor) || sFloorEstimated)) {
             // Settled before the floor could be read - a restore at startup, before the keyguard
             // existed. The OEM has laid out by now, so read it and hold there.
             float f = floorY(naturalY());

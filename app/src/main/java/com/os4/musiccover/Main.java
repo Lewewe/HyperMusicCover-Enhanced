@@ -9068,6 +9068,9 @@ public class Main extends XposedModule {
      * inside and been brief: a drag that began on the artwork does nothing rather than toggling
      * on release.
      */
+    /** The last artwork tap hid the lyrics, so a quick second one can bring them back. */
+    private static boolean sArtHidLyrics;
+
     private static boolean swallowArtTap(MotionEvent ev) {
         int action = ev.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN) {
@@ -9094,6 +9097,8 @@ public class Main extends XposedModule {
                 // is read at UP rather than at DOWN: a cover that came up under the finger
                 // during the gesture (the OEM can re-lay the card out at any point) would
                 // otherwise send the tap the wrong way.
+                boolean undoLyricsTap = sArtHidLyrics && CoverMorphLayer.active();
+                sArtHidLyrics = false;
                 if (sCoverMode && LockLyrics.compactWithoutLyrics()) {
                     beginCompactArtworkMorph(true);
                     LockLyrics.setPlayerChosen(false);
@@ -9103,6 +9108,18 @@ public class Main extends XposedModule {
                     if (CanvasHostBridge.active()) {
                         LockLyrics.setCanvasLyricsVisible(false, trackKey(sWatched), sWatched);
                     } else LockLyrics.toggleByTap(sTrackKey, sWatched);
+                    sArtHidLyrics = true;
+                } else if (sCoverMode && undoLyricsTap) {
+                    // A second tap while the cover is still growing out of the lyrics takes it
+                    // back to them; exiting here dropped the blur for the wallpaper.
+                    beginCompactArtworkMorph(false);
+                    if (CanvasHostBridge.active()) {
+                        LockLyrics.setCanvasLyricsVisible(true, trackKey(sWatched), sWatched);
+                    } else LockLyrics.toggleByTap(sTrackKey, sWatched);
+                } else if (sCoverMode && LyricsButton.byTitle()) {
+                    // The lyrics button by the title rests where the thumbnail was, and is still
+                    // sliding there as the cover grows: the whole spot is its switch.
+                    openLyricsFromButton();
                 } else if (sCoverMode) exitFromTap("artwork tapped");
                 else if (MiniPlayerRuntime.wantsNativeArtworkGesture()) miniPlayerEnterCover();
                 else enterFromTap("artwork tapped");
@@ -11056,16 +11073,7 @@ public class Main extends XposedModule {
         applyMediaCard();
     }
 
-    /** When the lyrics button last switched; see openLyricsFromButton. */
-    private static long sLyricsButtonAt;
-
     static void openLyricsFromButton() {
-        // The switch reads what is on screen, and lyrics asked for a moment ago are not attached
-        // yet: a second tap in that gap took the cover's fold and collapsed the player.
-        // shortcut: a fixed settle time, not the switch's own end; tie it to that if it grows.
-        long now = android.os.SystemClock.uptimeMillis();
-        if (now - sLyricsButtonAt < 600L) return;
-        sLyricsButtonAt = now;
         boolean fromPlayer = LockLyrics.playerChosen();
         boolean showing = LockLyrics.wantsAttached();
         if (!sCoverMode || coverMorphCardMode() && LockLyrics.wantsCompactArtwork() && !fromPlayer && !showing
