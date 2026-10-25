@@ -129,6 +129,17 @@ object MiniPlayerRuntime {
                 result
             }
         }.onFailure { Xp.w("MCMini: list scroll hook unavailable: $it") }
+        // ColorOS, folded: the empty upper half of the space under the clock no longer pulls the
+        // stack's pile out - a swipe there opened it by surprise (the user, 2026-10-25).
+        runCatching {
+            val cls = Xp.findClass("com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout", classLoader)
+            Xp.hookAll(cls, "dispatchTouchEvent") { chain ->
+                val event = chain.args.firstOrNull() as? MotionEvent
+                val stack = chain.thisObject as? ViewGroup
+                if (event?.actionMasked == MotionEvent.ACTION_DOWN && stack != null && ignoresStackDown(stack, event)) false
+                else chain.proceed()
+            }
+        }.onFailure { Xp.w("MCMini: stack touch zone hook unavailable: $it") }
         // A row given back to its island ahead of its morph home is left to the stack as a
         // transient view: laid out no more, drawn still. The stack takes it away when its own
         // animation ends; the morph's rows are kept until the morph has landed (holdTransient).
@@ -1580,6 +1591,23 @@ object MiniPlayerRuntime {
     /** Where the music's island is drawn, for the lyrics to grow out of; null when it is not up. */
     @JvmStatic fun musicIslandCentreOnScreen(): FloatArray? =
         live().firstNotNullOfOrNull { it.musicIslandCentreOnScreen() }
+
+    /** A finger down in the top half of the folded stack's empty space, between its top and the pill. */
+    private fun ignoresStackDown(stack: ViewGroup, ev: MotionEvent): Boolean {
+        if (!colorOsStyle() || NumState.inNumber != true || !Main.keyguardLocked()) return false
+        val pillTop = live().firstNotNullOfOrNull { it.pillTopOnScreen() } ?: return false
+        val xy = IntArray(2).also(stack::getLocationOnScreen)
+        val top = xy[1] + (runCatching { (Xp.callMethod(stack, "getTopPadding") as Number).toFloat() }.getOrNull() ?: 0f)
+        if (ev.rawY >= (top + pillTop) / 2f) return false
+        // Not over anything drawn there: a card in that space keeps its touches.
+        for (i in 0 until stack.childCount) {
+            val c = stack.getChildAt(i)
+            if (c.visibility != View.VISIBLE || c.alpha <= 0f || c.transitionAlpha <= 0f || c.height <= 0) continue
+            c.getLocationOnScreen(xy)
+            if (ev.rawX >= xy[0] && ev.rawX < xy[0] + c.width && ev.rawY >= xy[1] && ev.rawY < xy[1] + c.height) return false
+        }
+        return true
+    }
 
     /** Where the music's island will rest once back from its card, for the lyrics to go into. */
     @JvmStatic fun musicIslandHomeOnScreen(): FloatArray? =
@@ -9983,6 +10011,8 @@ private class MiniPlayerController(
      * The music's island at rest: the small island's circle when the music sits there, else the
      * pill's rest box - the music is in its card now, so neither is drawn where it will be.
      */
+    fun pillTopOnScreen(): Float? = player?.takeIf { it.visibility == View.VISIBLE }?.restBoxOnScreen()?.y
+
     fun musicIslandHomeOnScreen(): FloatArray? {
         val box = if (smallKey == MUSIC_ISLAND && smallIsland != null) smallBoxOnScreen()
             else player?.restBoxOnScreen() ?: return null
