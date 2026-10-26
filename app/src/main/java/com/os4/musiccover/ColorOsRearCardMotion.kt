@@ -5,7 +5,7 @@
 package com.os4.musiccover
 
 /** A rear card's starting pose is independent of the destination already requested by a fling. */
-internal class ColorOsRearCardMotion(startedOpen: Boolean) {
+internal class ColorOsRearCardMotion(startedOpen: Boolean, private val growIntoNative: Boolean = false) {
     val place = Jelly(0.5f, 0.84f)
     val width = Jelly(0.41f, 0.999f)
     val height = Jelly(0.45f, 0.999f)
@@ -14,6 +14,10 @@ internal class ColorOsRearCardMotion(startedOpen: Boolean) {
     val alpha = Jelly(0.3f, 0.89f)
     val all = arrayOf(place, width, height, corner, blur, alpha)
     val revealedSize get() = ColorOsSpreadGeometry.revealGrowth(width.value, place.value)
+
+    /** A row revealed by a second pull grows now, independently of the column's older hand-off. */
+    fun nativeMix(columnMix: Float): Float = if (growIntoNative)
+        minOf(columnMix, ColorOsSpreadGeometry.handoffMix(revealedSize)) else columnMix
 
     init {
         val initial = if (startedOpen) 1f else 0f
@@ -28,6 +32,20 @@ internal class ColorOsRearCardMotion(startedOpen: Boolean) {
 internal class ColorOsSpreadHandoff {
     var started = false
         private set
+    private var openedGesture: Long? = null
+    var scrolling = false
+        private set
+
+    fun listOpened(gesture: Long) { openedGesture = gesture }
+
+    /** The opening flick is not a second gesture scrolling an already open list. */
+    fun scroll(gesture: Long, upward: Boolean): Boolean {
+        if (upward && openedGesture?.let { gesture > it } == true) scrolling = true
+        return scrolling
+    }
+
+    fun canReturnToNative(cardsRest: Boolean, mix: Float, piled: Boolean, busy: Boolean): Boolean =
+        cardsRest && !piled && mix >= 0.995f && (!busy || scrolling)
 
     fun target(piled: Boolean, grown: Boolean): Float {
         if (!piled && grown) started = true

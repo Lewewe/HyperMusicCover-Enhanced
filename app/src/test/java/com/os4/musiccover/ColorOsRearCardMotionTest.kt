@@ -8,6 +8,39 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ColorOsRearCardMotionTest {
+    @Test fun aUserFlingDoesNotKeepSettledCardsInMixedOwnershipUntilItStops() {
+        val handoff = ColorOsSpreadHandoff()
+        handoff.listOpened(1L)
+        assertTrue(!handoff.canReturnToNative(true, 1f, false, true))
+        handoff.scroll(2L, true)
+        assertTrue(handoff.canReturnToNative(true, 1f, false, true))
+        assertTrue("scrolling cannot hand back unfinished geometry", !handoff.canReturnToNative(false, 1f, false, true))
+        assertTrue("the capsule transition still has to finish", !handoff.canReturnToNative(true, 0.8f, false, true))
+        assertTrue("a resting pile remains ours", !handoff.canReturnToNative(true, 1f, true, true))
+    }
+
+    @Test fun scrollingTheOpenedListDoesNotWaitForTheOpeningHandoff() {
+        val handoff = ColorOsSpreadHandoff()
+        handoff.listOpened(3L)
+        assertTrue("the original opening flick keeps its flash guard", !handoff.scroll(3L, true))
+        assertTrue("a new touch alone must not release rows", !handoff.scroll(4L, false))
+        assertTrue(handoff.scroll(4L, true))
+        assertTrue("the following fling keeps native viewport entries visible", handoff.scroll(4L, false))
+        assertTrue("no handoff spring needs to finish first", !handoff.started)
+    }
+
+    @Test fun aRowRevealedFromThePileGrowsDuringAnAlreadyRunningHandoff() {
+        val card = ColorOsRearCardMotion(startedOpen = false, growIntoNative = true)
+        card.all.forEach { it.target = 1f }
+        assertEquals(0f, card.nativeMix(1f), 0f)
+        repeat(12) { card.all.forEach { it.step(1f / 120f) } }
+        assertTrue("the row must be growing before the column settles", card.nativeMix(1f) > 0f)
+        assertTrue("the old hand-off must not make the new row full size", card.nativeMix(1f) < 1f)
+        repeat(180) { card.all.forEach { it.step(1f / 120f) } }
+        assertEquals(1f, card.nativeMix(1f), 0.001f)
+        assertEquals(0.4f, card.nativeMix(0.4f), 0.001f)
+    }
+
     @Test fun aFlingDestinationDoesNotBecomeTheInitialSize() {
         val card = ColorOsRearCardMotion(startedOpen = false)
         card.width.response = ColorOsSpreadGeometry.widthResponse(0)

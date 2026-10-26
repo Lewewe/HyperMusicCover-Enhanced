@@ -1632,6 +1632,8 @@ object MiniPlayerRuntime {
 
     /** The last finger on the lock screen's list: -1 went up, 1 down, past the slop; 0 not yet. */
     private var stackSwipe = 0
+    var stackGesture = 0L
+        private set
 
     /**
      * A swipe up the list, never a pull toward the fold however the stack's scroll moves under
@@ -1655,7 +1657,7 @@ object MiniPlayerRuntime {
 
     private fun noteStackSwipe(ev: MotionEvent, stack: View) {
         when (ev.actionMasked) {
-            MotionEvent.ACTION_DOWN -> { stackDownY = ev.rawY; stackSwipe = 0 }
+            MotionEvent.ACTION_DOWN -> { stackDownY = ev.rawY; stackSwipe = 0; stackGesture++ }
             MotionEvent.ACTION_MOVE -> {
                 if (stackDownY.isNaN()) stackDownY = ev.rawY
                 val dy = ev.rawY - stackDownY
@@ -7211,6 +7213,8 @@ private class MiniPlayerController(
 
     private class Spread(val items: List<SpreadItem>, val stackSeat: Int) {
         val rearHandoff = ColorOsSpreadHandoff()
+        /** A second pull reveals rows outside our resting pile; they must join, not wait hidden. */
+        var openedFromPile = false
         var phase = SPREAD_WAIT
         var since = 0L
         /** The stack's scroll at the islands' end and at the cards' end of this motion. */
@@ -7787,8 +7791,9 @@ private class MiniPlayerController(
             CoverMorphMotion.Box(xy[0] + row.left + r.left, xy[1] + row.top + r.top, r.width(), r.height())
         } ?: home
         // Given back only once on the stack's own shape, never part way.
-        val rest = spreadCardsTo(1f, anchor, front, skip, null, home, true, dt) && !s.toStack &&
-            spreadReal.value >= 0.995f && !NumState.busy()
+        val rest = s.rearHandoff.canReturnToNative(
+            cardsRest = spreadCardsTo(1f, anchor, front, skip, null, home, true, dt),
+            mix = spreadReal.value, piled = s.toStack, busy = NumState.busy())
         if (rest) settleColorOsSpread(opened = true)
         return rest
     }
@@ -7876,6 +7881,12 @@ private class MiniPlayerController(
         var coverFoot = anchor.y + anchor.h
         val screenH = stack.resources.displayMetrics.heightPixels.toFloat()
         for ((i, row) in ordered.withIndex()) {
+            // A second upward gesture belongs to native scrolling. Rows newly entering its
+            // viewport must not wait hidden for the opening springs or the fling to stop.
+            if (opening && row !in spreadRear && spread?.rearHandoff?.scrolling == true) {
+                showScrolledRow(row)
+                continue
+            }
             val w = row.width.toFloat()
             // Its drawn height: HyperOS lays rows out far taller than it draws them.
             val h = spreadHeightOf(row, intrinsic = false)
@@ -7888,7 +7899,7 @@ private class MiniPlayerController(
             // Shown by the stack once its own places have taken over: left to it. Taken on then,
             // our window lifted its pile clip and the card stood whole under the list for a few
             // frames before folding back in (the user's recording, 2026-10-26).
-            if (row !in spreadRear && opening && real > 0f) {
+            if (row !in spreadRear && opening && real > 0f && spread?.openedFromPile != true) {
                 // Kept out of sight while the stack's own scroll still runs: after a fast fling
                 // its foot pile passes through other rows on the way (/1cc/ for ~0.25s, then the
                 // card it settles on - the user's recordings, 2026-10-26).
@@ -7901,8 +7912,10 @@ private class MiniPlayerController(
                 // opening row starts small, even if the preceding row has already finished.
                 // Past the hand-off, newly visible bottom rows belong to native layout already.
                 // Replaying their small pose here pulled the bottom of the list backwards.
+                val joiningFromPile = opening && spread?.openedFromPile == true
                 ColorOsRearCardMotion(startedOpen = (!opening && closeFrom?.containsKey(row) == true) ||
-                    (opening && spread?.rearHandoff?.started == true))
+                    (opening && !joiningFromPile && spread?.rearHandoff?.started == true),
+                    growIntoNative = joiningFromPile)
             }
             val k = i.toFloat()
             // A small, bounded delay keeps the column together, even with many notifications.
@@ -7920,6 +7933,9 @@ private class MiniPlayerController(
             // Closing keeps the card legible; only the last part of the shared fold hides it.
             card.blur.target = 1f; card.alpha.target = 1f; card.corner.target = 1f
             for (j in card.all) j.step(dt)
+            // A newly revealed pile row has its own growth clock. The column's hand-off may
+            // already be nearly over; inheriting it would draw this row full size immediately.
+            val real = card.nativeMix(real)
             // Near enough is given back: waiting out the springs' last pixel held the cards ours
             // for most of a second after the list stood still (the user's recording, 2026-10-26).
             if (card.all.any { !it.nearRest(0.02f) }) rest = false
@@ -8069,8 +8085,30 @@ private class MiniPlayerController(
 
     private fun hideLateRow(row: View) {
         if (row in spreadRear || row in hiddenRows) return
+        if (spread?.rearHandoff?.scrolling == true) {
+            showScrolledRow(row)
+            return
+        }
+        // The second pull deliberately reveals more rows. spreadCardsTo gives each its own
+        // growth on this frame, instead of withholding it until every other spring settles.
+        if (spread?.openedFromPile == true) return
         if (row.transitionAlpha != 0f) row.transitionAlpha = 0f
         spreadLate += row
+    }
+
+    /** A viewport entry during user scrolling keeps the native row's geometry and clipping. */
+    private fun showScrolledRow(row: View) {
+        if (row in spreadRear || row in hiddenRows) return
+        spreadLate.remove(row)
+        // Older rear cards still have negative elevations until their hand-off finishes.
+        // A native viewport entry at elevation 0 otherwise draws over that whole column on
+        // reversal (Reddit over the screen-recorder card), then vanishes when native order returns.
+        if (spreadRear.isNotEmpty()) {
+            if (row !in spreadZOf) spreadZOf[row] = row.elevation
+            val z = -(spreadRear.size + 1f) - 100f - row.translationZ
+            if (kotlin.math.abs(row.elevation - z) > 0.01f) row.elevation = z
+        }
+        if (row.transitionAlpha != 1f) row.transitionAlpha = 1f
     }
 
     /** Rows past the stack's pile shown for the spread (spreadCardsTo), hidden again on a fold. */
@@ -8121,10 +8159,26 @@ private class MiniPlayerController(
         val stack = notificationStack() ?: return "rows: none "
         return "rows: " + (0 until stack.childCount).map(stack::getChildAt)
             .filter { it.javaClass.name.endsWith("ExpandableNotificationRow") }.take(9).joinToString(" ") { r ->
+                // Read only on the explicit probe, never during drawing: a newly bound row can
+                // carry a different native glass/tint from the rows already in the list.
+                fun field(owner: Any?, name: String) = owner?.let {
+                    runCatching { Xp.getObjectField(it, name) }.getOrNull()
+                }
+                fun call(owner: Any?, name: String) = owner?.let {
+                    runCatching { Xp.callMethod(it, name) }.getOrNull()
+                }
+                val bg = field(r, "mBackgroundNormal")
+                val injector = call(r, "getInjector")
+                val vm = field(injector, "viewModel")
+                val hun = call(field(vm, "headUpState"), "getValue")
+                val tint = (field(r, "mCurrentBackgroundTint") as? Number)?.toInt()?.toUInt()?.toString(16)
+                val material = listOf("getMiViewBlurMode", "getMiBackgroundBlurMode", "getMiBackgroundBlurRadius",
+                    "getMiViewMaterialType").joinToString("/") { call(bg, it)?.toString() ?: "?" }
                 "[${rowKey(r)?.substringAfter('|')?.substringBefore('|')?.takeLast(6)} v=${r.visibility} a=${"%.2f".format(r.alpha)}" +
                     " ta=${"%.2f".format(r.transitionAlpha)} el=${r.elevation.toInt()} tz=${r.translationZ.toInt()}" +
                     " op=${r.outlineProvider?.javaClass?.simpleName} clip=${r.clipToOutline} am=${r.animationMatrix != null}" +
-                    " ours=${r in spreadCards}/${r in spreadForced}/${r in foldHidden}/${r in hiddenRows}]"
+                    " ours=${r in spreadCards}/${r in spreadForced}/${r in foldHidden}/${r in hiddenRows}" +
+                    " bg=$tint/$material hun=$hun]"
             } + " "
     }
 
@@ -8328,8 +8382,9 @@ private class MiniPlayerController(
             row.setAnimationMatrix(null)
             row.setRenderEffect(null)
             if (row !in hiddenRows) row.transitionAlpha = 1f
-            spreadZOf[row]?.let { row.elevation = it }
         }
+        // Native viewport entries can have only their order held, without a spread matrix.
+        for ((row, z) in spreadZOf) row.elevation = z
         // The first card too, blurred with them but never one of spreadCards.
         for (row in spreadBlurOf.keys) row.setRenderEffect(null)
         for ((row, saved) in spreadClipOf) restoreClip(row, saved)
@@ -8620,6 +8675,7 @@ private class MiniPlayerController(
         smallIsland?.alpha = 1f
         if (s.items.any { it.key == MUSIC_ISLAND }) ensureNativeHeaderVisible()
         s.phase = SPREAD_OPEN
+        s.rearHandoff.listOpened(MiniPlayerRuntime.stackGesture)
         s.cardsY = y
         s.still = 0
         // The list's place read again, from the stack as it is now: asked from a sample still
@@ -8645,9 +8701,15 @@ private class MiniPlayerController(
      * else moving it - a notification coming or going - is the list's own: its rest follows.
      */
     private fun watchOpen(s: Spread) {
+        if (colorOs() && !s.rearHandoff.scrolling &&
+            s.rearHandoff.scroll(MiniPlayerRuntime.stackGesture, MiniPlayerRuntime.stackSwipedUp)) {
+            spreadLate.toList().forEach(::showScrolledRow)
+            spreadTrace("spread rows released to user scroll")
+        }
         // Pulled on from our pile to the stack's list: the cards go to their list places.
         if (colorOs() && s.toStack && NumState.state() == "LIST") {
             s.toStack = false
+            s.openedFromPile = true
             spreadTrace("spread pile to the list")
         }
         if (colorOs() && settleRearCards(s)) measureListGap()
