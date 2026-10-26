@@ -8397,9 +8397,44 @@ public class Main extends XposedModule {
         View v = sContainer;
         if (v == null) return null;
         View root = v.getRootView();
-        int i = v.getContext().getResources().getIdentifier(id, "id", "com.android.systemui");
-        View hit = i == 0 ? null : root.findViewById(i);
-        return hit != null ? hit : findByName(root, id);
+        // Both walks go over the whole tree, the one by name reading every view's resource name:
+        // called each frame from the clock's animation and a pre-draw, for a card that is not
+        // there (no music), they were a fifth of SystemUI's CPU on the lock screen and its frames
+        // ran past 8ms (simpleperf, 2026-10-26). So a find is kept while it stays up, and a miss
+        // is not walked again for a while.
+        java.lang.ref.WeakReference<View> kept = sFoundByName.get(id);
+        View found = kept == null ? null : kept.get();
+        if (found != null && found.isAttachedToWindow() && found.getRootView() == root) return found;
+        long now = android.os.SystemClock.uptimeMillis();
+        Long missed = sMissedByName.get(id);
+        if (missed != null && now - missed < NAME_MISS_MS) return null;
+        int i = sysuiId(v, id);
+        found = i == 0 ? null : root.findViewById(i);
+        if (found == null) found = findByName(root, id);
+        if (found != null) {
+            sFoundByName.put(id, new java.lang.ref.WeakReference<>(found));
+            sMissedByName.remove(id);
+        } else {
+            sMissedByName.put(id, now);
+        }
+        return found;
+    }
+
+    /** How long a name not found in the tree is answered "not there" before it is walked again. */
+    private static final long NAME_MISS_MS = 500L;
+    private static final java.util.HashMap<String, java.lang.ref.WeakReference<View>> sFoundByName = new java.util.HashMap<>();
+    private static final java.util.HashMap<String, Long> sMissedByName = new java.util.HashMap<>();
+    private static final java.util.HashMap<String, Integer> sSysuiIds = new java.util.HashMap<>();
+    private static final java.util.HashMap<String, java.lang.ref.WeakReference<View>> sOnScreenById = new java.util.HashMap<>();
+    private static final java.util.HashMap<String, Long> sOnScreenMissed = new java.util.HashMap<>();
+
+    /** SystemUI's id for a name, looked up once: getIdentifier searches the package's names each call. */
+    private static int sysuiId(View v, String name) {
+        Integer known = sSysuiIds.get(name);
+        if (known != null) return known;
+        int i = v.getContext().getResources().getIdentifier(name, "id", "com.android.systemui");
+        sSysuiIds.put(name, i);
+        return i;
     }
 
     /** The screen height the card readings are checked against. */
@@ -8426,9 +8461,25 @@ public class Main extends XposedModule {
         View v = sContainer;
         if (v == null) return null;
         View root = v.getRootView();
-        int i = v.getContext().getResources().getIdentifier(id, "id", "com.android.systemui");
-        View hit = i == 0 ? null : findOnScreenById(root, i);
-        return hit != null ? hit : findSysuiView(id);
+        int i = sysuiId(v, id);
+        if (i == 0) return findSysuiView(id);
+        // Kept while it stays up where it was found; a miss not walked again for a while - the
+        // walk ran every frame from a pre-draw with no card up (simpleperf, 2026-10-26).
+        java.lang.ref.WeakReference<View> kept = sOnScreenById.get(id);
+        View hit = kept == null ? null : kept.get();
+        if (hit != null && hit.isAttachedToWindow() && hit.isShown() && hit.getRootView() == root) return hit;
+        long now = android.os.SystemClock.uptimeMillis();
+        Long missed = sOnScreenMissed.get(id);
+        if (missed == null || now - missed >= NAME_MISS_MS) {
+            hit = findOnScreenById(root, i);
+            if (hit != null) {
+                sOnScreenById.put(id, new java.lang.ref.WeakReference<>(hit));
+                sOnScreenMissed.remove(id);
+                return hit;
+            }
+            sOnScreenMissed.put(id, now);
+        }
+        return findSysuiView(id);
     }
 
     /** The first view carrying this id that is really up on the lock screen, in tree order. */

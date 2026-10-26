@@ -255,6 +255,9 @@ internal class Jelly(var response: Float, var damping: Float) {
     }
 
     fun atRest() = abs(value - target) < 0.001f && abs(velocity) < 0.012f
+
+    /** Within [eps] of its target and all but still: for an end nobody can tell from rest. */
+    fun nearRest(eps: Float = 0.004f) = abs(value - target) < eps && abs(velocity) < eps * 12f
 }
 
 /**

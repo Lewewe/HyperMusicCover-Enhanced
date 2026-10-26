@@ -1,6 +1,7 @@
 // Portions (the card led by the ColorOS-style notification list) are Copyright (C) 2026 Lewewe
 // (HyperMusicCover-Enhanced, https://github.com/Lewewe/HyperMusicCover-Enhanced), modelled on
 // ColorOS 16 (OPPO) behaviour; no ColorOS code is included.
+// Developed with the assistance of OpenAI Codex and Anthropic Claude.
 package com.os4.musiccover
 
 import android.graphics.Matrix
@@ -471,7 +472,10 @@ internal class MiniCardMorph(
         val towardNative = if (nativeRest.y <= miniRest.y || pillLow) -1f else 1f
         val box = CoverMorphMotion.Box(framed.x + nudgeX.value * NUDGE_UNIT,
             framed.y + towardNative * nudge.value * NUDGE_UNIT, framed.w, framed.h)
-        val radius = style.cornerRadius(miniRest.h / 2f, nativeRadius, c)
+        // ColorOS's list: the card's own corners within the first quarter (cornerRadius 0, 0.35 on
+        // its own clock); on the pull's progress a slow pull kept the first card a stadium (2026-10-25).
+        val radius = style.cornerRadius(miniRest.h / 2f, nativeRadius,
+            if (spreadLed && style === ColorOsPillMorph) min(1f, c * 4f) else c)
 
         // The card, at the container's width and cut to its height. s is in the card's own
         // pixels, before the stack's transform.
@@ -595,6 +599,11 @@ internal class MiniCardMorph(
                                 piece.textRefused = true
                                 Xp.log("MCMini: morph kept its own words: $t")
                             }
+                        } else if (mix < 0.5f && piece.tookText && style === ColorOsPillMorph) {
+                            // ColorOS: its own words back as its face returns. Kept to the end, the
+                            // capsule landed with the card's "+6" chip as its line (recording 2026-10-25).
+                            tv.text = piece.ownText
+                            piece.tookText = false
                         }
                     }
                 }
