@@ -93,6 +93,7 @@ object MiniPlayerRuntime {
         loader = classLoader
         if (hooksInstalled) return
         hooksInstalled = true
+        NativeNotificationMaterial.install(classLoader)
         runCatching {
             val cls = Xp.findClass(
                 "com.android.systemui.statusbar.notification.mediacontrol.MiuiMediaHeaderView",
@@ -7573,6 +7574,7 @@ private class MiniPlayerController(
         pill.alpha = 1f
         unholdFolded(row)
         showRow(row)
+        NativeNotificationMaterial.restore(row)
         val home = s.home
         val m = MiniCardMorph(pill, row, toCards, spreadListener, rowLanding(row, cardRadius(row)),
             restBox = home?.let { h -> { h } }, circle = false, style = pillMorphStyle())
@@ -8178,7 +8180,7 @@ private class MiniPlayerController(
                     " ta=${"%.2f".format(r.transitionAlpha)} el=${r.elevation.toInt()} tz=${r.translationZ.toInt()}" +
                     " op=${r.outlineProvider?.javaClass?.simpleName} clip=${r.clipToOutline} am=${r.animationMatrix != null}" +
                     " ours=${r in spreadCards}/${r in spreadForced}/${r in foldHidden}/${r in hiddenRows}" +
-                    " bg=$tint/$material hun=$hun]"
+                    " bg=$tint/$material hun=$hun mat=${NativeNotificationMaterial.describe(r)}]"
             } + " "
     }
 
@@ -8283,6 +8285,10 @@ private class MiniPlayerController(
 
     private fun clipSpreadRow(row: View) {
         if (row in spreadClipOf) return
+        // A retained row can outlive native AOD/material updates while the capsule owns it.
+        // Reapply the actual OEM effect before borrowing its outline, including its original
+        // dark/light/glass theme; pill blur settings must never become a notification style.
+        NativeNotificationMaterial.restore(row)
         fun clip(name: String) = runCatching {
             (Xp.callMethod(row, name) as Number).toInt()
         }.getOrDefault(0)
@@ -8339,7 +8345,11 @@ private class MiniPlayerController(
         spreadPastEnd.clear()
         MiniPlayerRuntime.stackWantsHidden.clear()
         clearColorOsSpread()
-        if (opened) return
+        if (opened) {
+            rows.filter { it.visibility == View.VISIBLE && it !in hiddenRows }
+                .forEach { NativeNotificationMaterial.restore(it) }
+            return
+        }
         // Folded: given their alpha back while the stack still laid them out above the capsule,
         // the cards behind flashed there (the second one, filmed 2026-10-22). Hidden till the
         // stack has put them away; a new spread takes them back at once (spreadCardsTo).
