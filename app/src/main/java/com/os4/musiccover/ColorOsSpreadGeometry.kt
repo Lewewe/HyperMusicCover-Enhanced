@@ -6,6 +6,11 @@ package com.os4.musiccover
 
 /** Geometry of the rear cards, whose background window and content have separate transforms. */
 internal object ColorOsSpreadGeometry {
+    /** An already open player shares the lead's clock and always leaves room below it. */
+    fun mediaTop(from: Float, nativeTop: Float, progress: Float, leadTop: Float,
+                 height: Float, gap: Float): Float = minOf(
+        from + (nativeTop - from) * progress.coerceIn(0f, 1f), leadTop - height - gap)
+
     /** Both card edges travel toward the pill along the same reversible, height-led guide. */
     fun routeWidth(pillTop: Float, pillWidth: Float, cardTop: Float, cardWidth: Float, top: Float): Float {
         val distance = pillTop - cardTop

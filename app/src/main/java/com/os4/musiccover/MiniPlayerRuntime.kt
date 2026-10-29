@@ -6196,6 +6196,7 @@ private class MiniPlayerController(
      * 2026-09-25). Null when it is neither.
      */
     fun cardHeldDy(card: View): Float? {
+        spread?.media?.takeIf { viewWithin(it.native, card) }?.let { return it.dy }
         pinned?.get()?.takeIf { viewWithin(it, card) }?.let { v ->
             return if (pinnedAt != null) pinnedAt!! - v.translationY else pinY.value - v.translationY
         }
@@ -7233,8 +7234,19 @@ private class MiniPlayerController(
         var morph: MiniCardMorph? = null
     }
 
+    private class SpreadMedia(val native: View, val from: Float) {
+        val matrix = Matrix()
+        val saved = native.animationMatrix?.let(::Matrix)
+        val xy = IntArray(2)
+        var dy = 0f
+        var top = from
+        var closingFrom: Float? = null
+        var closeAt = 1f
+    }
+
     private class Spread(val items: List<SpreadItem>, val stackSeat: Int) {
         val rearHandoff = ColorOsSpreadHandoff()
+        var media: SpreadMedia? = null
         /** A second pull reveals rows outside our resting pile; they must join, not wait hidden. */
         var openedFromPile = false
         var phase = SPREAD_WAIT
@@ -7395,6 +7407,13 @@ private class MiniPlayerController(
             small -> SEAT_SMALL
             else -> SEAT_HIDDEN
         }
+        // Capture the visible card before closing a lyrics/cover scene changes its position.
+        val media = transitionHeader()?.takeIf { colorOs() && it.isShown && it.height > 0 }
+        val mediaTop = media?.let {
+            val xy = IntArray(2)
+            it.getLocationOnScreen(xy)
+            xy[1] + if (pinned?.get() === it) pinnedDy else 0f
+        }
         // A page up behind the lock screen (高德's map, a countdown) goes: the list opens on the
         // plain lock screen, the page's notification one of its cards (the user, 2026-09-30).
         LockIslands.closeSceneForList()
@@ -7420,10 +7439,14 @@ private class MiniPlayerController(
         spread = s
         // A card held where it landed goes with the list from here.
         releaseNativeScrollPin()
+        if (media != null && mediaTop != null && s.items.none { it.key == MUSIC_ISLAND }) {
+            s.media = SpreadMedia(media, mediaTop)
+            notificationStack()?.let(::keepSpreadShown)
+        }
         player?.setInteractionsEnabled(false)
         // Every focus notification's row into the stack, out of sight till its morph takes it.
         LockIslands.setSpread(true)
-        spreadTrace("spread asked ($why): " + describeSpread())
+        spreadTrace("spread asked ($why): " + describeSpread() + " media=${s.media?.from}")
         MiniPlayerRuntime.noteTouch("spread ($why) items=${items.size} stack=${s.stackSeat}")
         Choreographer.getInstance().removeFrameCallback(spreadFrame)
         Choreographer.getInstance().postFrameCallback(spreadFrame)
@@ -7528,6 +7551,7 @@ private class MiniPlayerController(
      * posed by the progress from then on. One with no card, or no place, fades where it is.
      */
     private fun startSpreadMorphs(s: Spread, toCards: Boolean) {
+        if (!toCards) beginSpreadMediaFold(s)
         val pill = player
         // Closing, the row is drawn again: its places fade in as the cards come down.
         if (!toCards) pill?.visibility = View.VISIBLE
@@ -7780,6 +7804,41 @@ private class MiniPlayerController(
         s.lead?.takeIf { it.active }?.led(
             if (foldEnd != null) ColorOsSpreadGeometry.foldLeadProgress(p, foldEnd) else p, nudge)
         if (colorOs()) colorOsSpread(s, p) else fadeSeat(s.stackSeat, 1f - p)
+        poseSpreadMedia(s)
+    }
+
+    private fun poseSpreadMedia(s: Spread) {
+        val media = s.media ?: return
+        if (s.phase != SPREAD_OPENING && s.phase != SPREAD_CLOSING) return
+        val native = media.native
+        val parent = native.parent as? View ?: return
+        parent.getLocationOnScreen(media.xy)
+        val top = media.xy[1] - parent.scrollY + native.top + native.translationY
+        val lead = s.lead?.containerBox()
+        val closing = s.phase == SPREAD_CLOSING
+        media.dy = ColorOsSpreadGeometry.mediaTop(media.from,
+            if (closing) media.closingFrom ?: top else top,
+            if (closing) s.progress / media.closeAt else s.progress,
+            lead?.y ?: Float.POSITIVE_INFINITY, rowHeight(native) * native.scaleY,
+            dp(8f).toFloat()) - top
+        media.top = top + media.dy
+        media.matrix.setTranslate(0f, media.dy)
+        media.saved?.let { media.matrix.preConcat(it) }
+        native.setAnimationMatrix(media.matrix)
+    }
+
+    private fun beginSpreadMediaFold(s: Spread) {
+        val media = s.media ?: return
+        val native = media.native
+        val parent = native.parent as? View ?: return
+        parent.getLocationOnScreen(media.xy)
+        media.closingFrom = media.xy[1] - parent.scrollY + native.top + native.translationY + media.dy
+        media.closeAt = s.progress.coerceAtLeast(0.001f)
+    }
+
+    private fun releaseSpreadMedia(s: Spread) {
+        s.media?.let { it.native.setAnimationMatrix(it.saved) }
+        s.media = null
     }
 
     /** The stack's rows the ColorOS spread has drawn on (colorOsSpread), to be given back. */
@@ -8326,6 +8385,7 @@ private class MiniPlayerController(
         }
         spread?.takeIf { it.phase == SPREAD_OPENING && it.footerBottom != null && it.items.isEmpty() }
             ?.let { applySpread(it, it.progress) }
+        spread?.takeIf { it.media != null }?.let(::poseSpreadMedia)
         true
     }
 
@@ -8667,6 +8727,7 @@ private class MiniPlayerController(
                 (row.parent as? View)?.getLocationOnScreen(xy)
                 floatArrayOf(xy[0] + row.left + row.translationX + row.width / 2f, xy[1] + row.top + row.translationY)
             }
+            beginSpreadMediaFold(s)
             s.phase = SPREAD_CLOSING
             s.since = android.os.SystemClock.uptimeMillis()
             s.fold = null
@@ -8806,8 +8867,12 @@ private class MiniPlayerController(
             s.progress = f.value.coerceAtLeast(-0.05f)
             notificationStack()?.invalidate()
         }
+        // Keep the drawn player until the finger lets go and native layout catches up.
+        val mediaSettled = s.media?.let {
+            !it.native.isAttachedToWindow || !stackDragged() && kotlin.math.abs(it.dy) < dp(1f)
+        } ?: true
         // Landed, and the stack folded under it (or long enough waiting for it).
-        if (f.atRest() && (NumState.inNumber == true || now - s.since > SPREAD_GIVE_UP_MS)) {
+        if (f.atRest() && mediaSettled && (NumState.inNumber == true || now - s.since > SPREAD_GIVE_UP_MS)) {
             endSpread(folded = true, why = "colorOS folded")
         }
     }
@@ -8904,6 +8969,10 @@ private class MiniPlayerController(
 
     /** The list is open: the cards are the lock screen's own, the row's views put away. */
     private fun finishOpen(s: Spread, y: Int) {
+        s.media?.let {
+            it.native.setAnimationMatrix(it.saved)
+            it.dy = 0f
+        }
         endSpreadLead(s)
         // ColorOS: the rear cards finish on their own springs (settleRearCards in watchOpen).
         if (!colorOs()) settleColorOsSpread(opened = true)
@@ -9026,6 +9095,7 @@ private class MiniPlayerController(
      */
     private fun endSpread(folded: Boolean, why: String) {
         val s = spread ?: return
+        releaseSpreadMedia(s)
         spread = null
         Choreographer.getInstance().removeFrameCallback(spreadFrame)
         endSpreadLead(s)
@@ -9922,7 +9992,7 @@ private class MiniPlayerController(
             "native=${row?.translationY},${row?.scaleX},${row?.transitionAlpha} " +
             "gesture=${MiniPlayerRuntime.stackGesture} up=${MiniPlayerRuntime.stackSwipedUp} " +
             "down=${MiniPlayerRuntime.stackPulledDown} drag=${stackDragged()} scrolling=${s.rearHandoff.scrolling} " +
-            "over=${NumState.overScroll()}"
+            "over=${NumState.overScroll()} media=${s.media?.let { "${it.top},${it.dy},${rowHeight(it.native)}" }}"
     }
 
     fun rowTree(match: String): String {

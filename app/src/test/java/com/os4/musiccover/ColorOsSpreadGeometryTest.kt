@@ -8,6 +8,54 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ColorOsSpreadGeometryTest {
+    @Test fun closingMediaFollowsTheLeadBackToItsOriginalSeat() {
+        var previous = 866f
+        for (i in 0..120) {
+            val p = 1f - i / 120f
+            val lead = 2416f + (1473f - 2416f) * p
+            val top = ColorOsSpreadGeometry.mediaTop(1709f, 866f, p, lead, 582f, 23f)
+            assertTrue(top >= previous - 0.001f)
+            assertTrue(top - previous < 10f)
+            assertTrue(lead - top - 582f >= 23f - 0.001f)
+            previous = top
+        }
+        assertEquals(1709f, previous, 0f)
+    }
+
+    @Test fun turningAnOpeningAroundStartsFromTheCurrentlyDrawnMediaPosition() {
+        val turnAt = 0.6f
+        val drawnTop = 1012f
+        assertEquals(drawnTop, ColorOsSpreadGeometry.mediaTop(1709f, drawnTop,
+            turnAt / turnAt, 1633f, 582f, 23f), 0.001f)
+        assertEquals(1709f, ColorOsSpreadGeometry.mediaTop(1709f, drawnTop,
+            0f / turnAt, 2416f, 582f, 23f), 0f)
+    }
+
+    @Test fun expandedMediaSharesOpeningProgressAndKeepsTheNotificationGap() {
+        var previous = 1710f
+        for (i in 0..120) {
+            val p = i / 120f
+            val lead = 2416f + (1600f - 2416f) * p
+            val top = ColorOsSpreadGeometry.mediaTop(1710f, 993f, p, lead, 582f, 25f)
+            assertTrue(top <= previous)
+            assertTrue(lead - top - 582f >= 25f)
+            assertTrue(previous - top < 10f)
+            previous = top
+        }
+        assertEquals(1710f, ColorOsSpreadGeometry.mediaTop(1710f, 993f, 0f, 2416f, 582f, 25f), 0f)
+        assertEquals(993f, previous, 0f)
+    }
+
+    @Test fun mediaReturnsToNativeWithoutAnExtraGapAtHandoff() {
+        val top = ColorOsSpreadGeometry.mediaTop(1709f, 686f, 1f, 1293f, 582f, 23f)
+        assertEquals(686f, top, 0f)
+        assertEquals(25f, 1293f - top - 582f, 0f)
+    }
+
+    @Test fun expandedMediaMakesRoomForALeadThatArrivesEarlier() {
+        assertEquals(1393f, ColorOsSpreadGeometry.mediaTop(1710f, 993f, 0.2f, 2000f, 582f, 25f), 0.001f)
+    }
+
     @Test fun openingRearFillFollowsActualLeadTravelEvenForLongLists() {
         for (nativeTop in listOf(700f, 1293f, 2100f)) {
             var previous = 0f
