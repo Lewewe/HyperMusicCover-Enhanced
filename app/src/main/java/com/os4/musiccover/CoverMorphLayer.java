@@ -177,6 +177,14 @@ final class CoverMorphLayer extends View implements Choreographer.FrameCallback 
 
     static boolean active() { return sView != null && sView.running; }
 
+    static String motionForProbe() {
+        CoverMorphLayer v = sView;
+        if (v == null || !v.running) return "idle";
+        CoverMorphMotion.Box live = v.mini ? MiniPlayerRuntime.artworkRestBox() : Main.coverMorphThumbnail();
+        return v.motion.value + "," + v.motion.target + "," + v.thumb.y + ","
+                + (live == null ? "null" : live.y);
+    }
+
     static float response() {
         return CoverMorphMotion.responseFor(active() && sView.compactToggle,
                 Main.sClockResponse);
@@ -296,6 +304,11 @@ final class CoverMorphLayer extends View implements Choreographer.FrameCallback 
     @Override protected void onDraw(Canvas canvas) {
         if (!running || art == null || art.isRecycled()) return;
         if (Main.perfOff("flight")) return;
+        // The notification spread poses the media card at pre-draw, after our frame callback.
+        if (notificationMorph && motion.target == 0f) {
+            CoverMorphMotion.Box live = Main.coverMorphThumbnail();
+            if (live != null) thumb = live;
+        }
         float density = getResources().getDisplayMetrics().density;
         CoverMorphMotion.Box box = CoverMorphMotion.frame(thumb, cover, motion.value, density);
         int[] root = tmpLoc;

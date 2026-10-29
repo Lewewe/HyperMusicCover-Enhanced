@@ -9992,7 +9992,7 @@ private class MiniPlayerController(
             "native=${row?.translationY},${row?.scaleX},${row?.transitionAlpha} " +
             "gesture=${MiniPlayerRuntime.stackGesture} up=${MiniPlayerRuntime.stackSwipedUp} " +
             "down=${MiniPlayerRuntime.stackPulledDown} drag=${stackDragged()} scrolling=${s.rearHandoff.scrolling} " +
-            "over=${NumState.overScroll()} media=${s.media?.let { "${it.top},${it.dy},${rowHeight(it.native)}" }}"
+            "over=${NumState.overScroll()} media=${s.media?.let { "${it.top},${it.dy},${rowHeight(it.native)}" }}" + " art=${CoverMorphLayer.motionForProbe()}"
     }
 
     fun rowTree(match: String): String {

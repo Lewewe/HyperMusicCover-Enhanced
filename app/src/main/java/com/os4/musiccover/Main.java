@@ -7556,7 +7556,8 @@ public class Main extends XposedModule {
                 || art.getHeight() <= 0 || !(art.getParent() instanceof View)) return null;
         int[] xy = new int[2];
         ((View) art.getParent()).getLocationOnScreen(xy);
-        return new CoverMorphMotion.Box(xy[0] + art.getLeft(), xy[1] + art.getTop(),
+        return new CoverMorphMotion.Box(xy[0] + art.getLeft(),
+                xy[1] + art.getTop() + MiniPlayerRuntime.cardHeldDy(art),
                 art.getWidth(), art.getHeight());
     }
 
