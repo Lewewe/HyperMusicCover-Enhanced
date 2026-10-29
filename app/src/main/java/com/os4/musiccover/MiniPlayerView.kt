@@ -721,6 +721,11 @@ internal class MiniPlayerView(context: Context) : FrameLayout(context) {
     private var layoutOnly = false
 
     private var backdropBlurSuppressed = false
+    private var materialFadeOverlap: Pair<Boolean, Boolean>? = null
+
+    fun setMorphBackdropAmount(amount: Float) {
+        MiniPlayerRuntime.fadePillBackdrop(materialLayer, amount)
+    }
 
     fun suppressBackdropBlur(suppress: Boolean) {
         if (backdropBlurSuppressed == suppress) return
@@ -728,8 +733,15 @@ internal class MiniPlayerView(context: Context) : FrameLayout(context) {
         MiniPlayerRuntime.suppressPillBackdrop(materialLayer, suppress)
     }
 
-    fun beginMorph(layoutOnly: Boolean = false) {
+    fun beginMorph(layoutOnly: Boolean = false, backgroundFade: Boolean = false) {
         if (morphing) return
+        if (backgroundFade) {
+            // An overlapping alpha group is rendered offscreen as soon as alpha < 1.
+            // Vendor backdrop blur cannot sample the window there and disappears in one frame.
+            materialFadeOverlap = getHasOverlappingRendering() to materialLayer.getHasOverlappingRendering()
+            forceHasOverlappingRendering(false)
+            materialLayer.forceHasOverlappingRendering(false)
+        }
         this.layoutOnly = layoutOnly
         // Over the media card for the morph - the card's layer is drawn after the pill's - and
         // back down among the lock screen when it ends. Z orders siblings without moving the
@@ -810,6 +822,12 @@ internal class MiniPlayerView(context: Context) : FrameLayout(context) {
 
     fun endMorph() {
         if (!morphing) return
+        materialFadeOverlap?.let { (parent, material) ->
+            forceHasOverlappingRendering(parent)
+            materialLayer.forceHasOverlappingRendering(material)
+        }
+        materialFadeOverlap = null
+        setMorphBackdropAmount(1f)
         morphing = false
         suppressBackdropBlur(false)
         // The play button back in its own place, where a row move had carried it (setMorphFrame).

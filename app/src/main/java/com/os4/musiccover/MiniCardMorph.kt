@@ -64,9 +64,13 @@ internal class MiniCardMorph(
     private val mediaPillTap: Boolean = MiniPlayerRuntime.musicPillTapActive,
     /** The row's style's choreography; the engine here is the same for every style. */
     private val style: PillMorphStyle = HyperOsPillMorph,
+    /** A notification folding in stages keeps its captured shape while the native list closes. */
+    private val nativeBox: (() -> CoverMorphMotion.Box?)? = null,
+    /** Notification edges follow their vertical travel even while gathering is staged. */
+    private val widthAtY: ((Float) -> Float)? = null,
 ) : Choreographer.FrameCallback {
     class Landing(val art: View?, val title: View?, val text: View?, val radius: Float,
-                  val artRadius: Float, val media: Boolean = false) {
+                  val artRadius: Float, val media: Boolean = false, val summary: Boolean = false) {
         companion object {
             fun mediaCard(header: View) = Landing(Main.miniPairArt(), Main.miniPairTitle(),
                 Main.miniPairArtist(), Main.miniPlayerCardRadius(header), Main.coverMorphThumbnailRadius(),
@@ -118,6 +122,8 @@ internal class MiniCardMorph(
     private val saved = Saved(header)
     private val nativeRadius = landing.radius
     private val nativeArtRadius = landing.artRadius
+    private val summaryFace = landing.summary && style === ColorOsPillMorph
+    private val summaryBackdrop = if (summaryFace) NotificationBackdropMorph() else null
     private val pieces = listOf(
         Piece(mini.artworkView, landing.art, text = false, art = true),
         Piece(mini.titleView, landing.title, text = true, art = false),
@@ -213,7 +219,7 @@ internal class MiniCardMorph(
             lastCancel = "measure " + geometryWhy()
             return false
         }
-        mini.beginMorph()
+        mini.beginMorph(backgroundFade = summaryFace)
         running = true
         artFlown = false
         startedAt = SystemClock.uptimeMillis()
@@ -438,6 +444,7 @@ internal class MiniCardMorph(
         if (!header.isAttachedToWindow || header.width <= 0 || header.height <= 0) return false
         focusFades.remove(header)?.cancel()
         cardContent = contentViews(header)
+        cardContentAlpha = cardContent.map { it.alpha }
         pieces.forEach { piece ->
             val n = piece.native
             piece.paired = n != null && n.isAttachedToWindow && n.visibility == View.VISIBLE
@@ -470,8 +477,11 @@ internal class MiniCardMorph(
         val framed = style.containerFrame(miniRest, nativeRest, if (parked) 0f else motion.value)
         // The nudge moves the whole container toward the card (up from the pill, down from it).
         val towardNative = if (nativeRest.y <= miniRest.y || pillLow) -1f else 1f
-        val box = CoverMorphMotion.Box(framed.x + nudgeX.value * NUDGE_UNIT,
+        var box = CoverMorphMotion.Box(framed.x + nudgeX.value * NUDGE_UNIT,
             framed.y + towardNative * nudge.value * NUDGE_UNIT, framed.w, framed.h)
+        widthAtY?.invoke(box.y)?.takeIf { it.isFinite() && it > 0f }?.let { width ->
+            box = CoverMorphMotion.Box(box.cx() - width / 2f, box.y, width, box.h * width / box.w)
+        }
         // ColorOS's list: the card's own corners within the first quarter (cornerRadius 0, 0.35 on
         // its own clock); on the pull's progress a slow pull kept the first card a stadium (2026-10-25).
         val radius = style.cornerRadius(miniRest.h / 2f, nativeRadius,
@@ -485,6 +495,8 @@ internal class MiniCardMorph(
         clipW = header.width.toFloat()
         clipH = min(drawnHeight(), box.h / s)
         clipR = radius / s
+        summaryBackdrop?.apply(header, 0f, 0f, clipW, clipH, clipR,
+            ColorOsNotificationMotion.nativeIn(c))
         if (header.outlineProvider !== clipOutline) header.outlineProvider = clipOutline
         if (!header.clipToOutline) header.clipToOutline = true
         header.invalidateOutline()
@@ -492,7 +504,9 @@ internal class MiniCardMorph(
         // pill's face to the card's is done by halfway and the list's own blur clears both. On the
         // whole way the pill's blurred face stood till 0.9, then the card snapped in (2026-10-22).
         val f = style.faceProgress(c, spreadLed)
-        header.transitionAlpha = saved.transitionAlpha * style.nativeIn(f)
+        val materialOut = if (summaryFace) ColorOsNotificationMotion.materialOut(c) else style.materialOut(f)
+        header.transitionAlpha = saved.transitionAlpha *
+            if (summaryFace) ColorOsNotificationMotion.nativeIn(c) else style.nativeIn(f)
 
         // Both ends' whole content in and out of focus, the glass of neither: the pill's going
         // out as it heads for the card, the card's coming in once the pill's glass leaves it.
@@ -510,18 +524,30 @@ internal class MiniCardMorph(
             focusStarted = true
             fadeMediaFocus()
         }
-        blurCard(if (spreadLed || focusStarted) 0f
+        val foldingSummary = summaryFace && !toNative
+        val foldBlur = 2f * mini.resources.displayMetrics.density * ColorOsNotificationMotion.foldBlur(c)
+        if (foldingSummary) cardContent.forEachIndexed { i, v ->
+            v.alpha = cardContentAlpha[i] * ColorOsNotificationMotion.foldContentAlpha(c)
+            cardContentFaded = true
+        }
+        blurCard(if (foldingSummary) foldBlur / max(s, 0.05f)
+            else if (summaryFace) blurPx * ColorOsNotificationMotion.blurRemaining(s) / max(s, 0.05f)
+            else if (spreadLed || focusStarted) 0f
             else cardBlurPx * style.cardBlurFactor(c, mediaCard, largeArtwork, toNative, mediaPillTap) / max(s, 0.05f))
-        mini.setMorphContentBlur(blurPx * style.pillBlurFactor(f, mediaCard, largeArtwork, toNative))
+        mini.setMorphContentBlur(if (foldingSummary) foldBlur else
+            blurPx * style.pillBlurFactor(f, mediaCard, largeArtwork, toNative))
         // The pill's own frame carries HyperOS's backdrop blur (blur/frosted glass), which alpha on
         // its material does not lift: left drawn over the first card, it held the card blurred
         // till the morph ended, then the card snapped sharp (filmed 2026-10-22). Led by the list,
         // the whole pill goes with its material.
-        if (spreadLed) mini.alpha = style.materialOut(f)
+        if (spreadLed) mini.alpha = materialOut
+        if (summaryFace) mini.setMorphBackdropAmount(materialOut)
 
         // The mini player's frame is the container itself; its material fades last.
         boxDrawn = box
-        traced("MC m.frame") { mini.setMorphFrame(box, radius, style.materialOut(f)) }
+        // The summary's custom backdrop belongs to the pill parent. Fade that parent once;
+        // fading only its material child leaves the backdrop covering the native card.
+        traced("MC m.frame") { mini.setMorphFrame(box, radius, if (summaryFace) 1f else materialOut) }
 
         // Its content: first scaled with the container, then onto the card's own elements. From
         // a small island's circle, the pill's layout is not what is at rest there: the circle
@@ -613,7 +639,9 @@ internal class MiniCardMorph(
                 v.scaleY = ky
                 v.translationX = tx - layoutX - ax * kx
                 v.translationY = ty - layoutY - ay * ky
-                val asPill = if (piece.paired) style.pairedOut(f) else style.earlyOut(f)
+                val asPill = if (foldingSummary) 1f - ColorOsNotificationMotion.foldContentAlpha(c)
+                    else if (summaryFace) ColorOsNotificationMotion.contentOut(c)
+                    else if (piece.paired) style.pairedOut(f) else style.earlyOut(f)
                 // The blur is on the two ends' whole content (blurCard, setMorphContentBlur), not the
                 // pieces: per piece (2d269db, 2026-09-26) the unpaired buttons, rings and pictures
                 // showed sharp through it, and it was taken out.
@@ -691,6 +719,8 @@ internal class MiniCardMorph(
 
     /** The card's template: its content views, beside which its glass background is drawn. */
     private var cardContent: List<View> = emptyList()
+    private var cardContentAlpha: List<Float> = emptyList()
+    private var cardContentFaded = false
     private val mediaCard = landing.media
     /** The radius last written; none yet, so the first is always written. */
     private var cardBlurred = -1f
@@ -705,7 +735,8 @@ internal class MiniCardMorph(
         if (!root.javaClass.name.contains("ExpandableNotificationRow")) return emptyList()
         val out = ArrayList<View>()
         fun walk(v: View, depth: Int) {
-            if (v.javaClass.name.contains("NotificationContentView")) {
+            if (v.javaClass.name.contains("NotificationContentView") ||
+                summaryFace && v.javaClass.name.contains("NotificationChildrenContainer")) {
                 out.add(v)
                 return
             }
@@ -738,9 +769,10 @@ internal class MiniCardMorph(
      * taps never finished, and its row stayed blurred at rest (filmed 2026-09-30).
      */
     private fun clearBlur() {
-        cardContent.forEach { v ->
+        cardContent.forEachIndexed { i, v ->
             if (blurOwners[v].let { it == null || it === this }) {
                 runCatching { v.setRenderEffect(null) }
+                if (cardContentFaded) v.alpha = cardContentAlpha[i]
                 blurOwners.remove(v)
             }
         }
@@ -753,6 +785,7 @@ internal class MiniCardMorph(
     }
 
     private fun restore() {
+        summaryBackdrop?.clear()
         clearBlur()
         mini.setMorphContentBlur(0f)
         pieces.forEach { piece ->
@@ -783,6 +816,7 @@ internal class MiniCardMorph(
      */
     private fun headerRestBox(): CoverMorphMotion.Box? {
         if (!header.isAttachedToWindow || header.width <= 0 || header.height <= 0) return null
+        nativeBox?.invoke()?.let { return it }
         val origin = headerOrigin() ?: return null
         oemMatrix.set(header.matrix)
         corner[0] = 0f

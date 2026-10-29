@@ -8,6 +8,65 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ColorOsRearCardMotionTest {
+    @Test fun footerGrowthLagsAShortFlickAndKeepsTheSameClockThroughRelease() {
+        for (hz in listOf(60, 120)) for (index in listOf(0, 5, 30)) {
+            val card = ColorOsRearCardMotion(startedOpen = false)
+            card.width.response = ColorOsSpreadGeometry.widthResponse(index) * 1.2f
+            var previous = 0f
+            repeat(hz / 10) { frame ->
+                val progress = (frame + 1f) / (hz / 10)
+                card.step(progress, opening = true, dt = 1f / hz)
+                val size = card.footerGrowth(progress)
+                assertTrue(size >= previous && size <= progress)
+                previous = size
+            }
+            assertTrue("growth must not be over at the end of a fast flick", previous < 0.9f)
+            card.step(1f, opening = true, dt = 1f / hz)
+            assertTrue(card.footerGrowth(1f) >= previous)
+            repeat(hz) { card.step(1f, opening = true, dt = 1f / hz) }
+            assertEquals(1f, card.footerGrowth(1f), 0.001f)
+            assertEquals("reversal must not expose a wider tail", 0f, card.footerGrowth(0f), 0f)
+        }
+    }
+
+    @Test fun footerCardsReachTheNativeShapeBeforeRelease() {
+        for (growIntoNative in listOf(false, true)) {
+            val card = ColorOsRearCardMotion(startedOpen = false, growIntoNative = growIntoNative)
+            for (frame in 0..120) {
+                val fill = frame / 120f
+                assertEquals(fill, card.nativeMix(0f, fill), 0f)
+                assertEquals("release must not start another shape transition", fill,
+                    card.nativeMix(1f, fill), 0f)
+            }
+            assertEquals(1f, card.nativeMix(0f, 1f), 0f)
+        }
+    }
+
+    @Test fun rearCardsFollowTheLeadThroughReleaseHoldAndReversal() {
+        for (hz in listOf(60, 120)) {
+            val card = ColorOsRearCardMotion(startedOpen = false)
+            val dt = 1f / hz
+            repeat(hz) { card.step(0.4f, opening = true, dt = dt) }
+            val beforeRelease = card.place.value
+            card.step(0.4f, opening = true, dt = dt)
+            assertEquals("release alone must not send the card to full size", 0.4f, card.place.target, 0f)
+            assertEquals(beforeRelease, card.place.value, 0.001f)
+            repeat(hz) { frame ->
+                val lead = 0.4f + 0.6f * (frame + 1) / hz
+                card.step(lead, opening = true, dt = dt)
+                assertEquals(lead, card.width.target, 0f)
+                assertTrue("the follower must not overtake the lead", card.revealedSize <= lead + 0.001f)
+            }
+            repeat(hz) { card.step(1f, opening = true, dt = dt) }
+            assertEquals(1f, card.revealedSize, 0.001f)
+            repeat(hz) { card.step(0.3f, opening = true, dt = dt) }
+            assertEquals(0.3f, card.place.value, 0.001f)
+            card.step(0f, opening = false, dt = dt)
+            assertEquals(0f, card.width.target, 0f)
+            assertEquals(1f, card.alpha.target, 0f)
+        }
+    }
+
     @Test fun aUserFlingDoesNotKeepSettledCardsInMixedOwnershipUntilItStops() {
         val handoff = ColorOsSpreadHandoff()
         handoff.listOpened(1L)

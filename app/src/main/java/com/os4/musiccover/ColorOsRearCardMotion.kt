@@ -14,9 +14,18 @@ internal class ColorOsRearCardMotion(startedOpen: Boolean, private val growIntoN
     val alpha = Jelly(0.3f, 0.89f)
     val all = arrayOf(place, width, height, corner, blur, alpha)
     val revealedSize get() = ColorOsSpreadGeometry.revealGrowth(width.value, place.value)
+    fun footerGrowth(progress: Float) = width.value.coerceIn(0f, progress)
 
-    /** A row revealed by a second pull grows now, independently of the column's older hand-off. */
-    fun nativeMix(columnMix: Float): Float = if (growIntoNative)
+    fun step(progress: Float, opening: Boolean, dt: Float) {
+        for (spring in all) spring.target = progress
+        blur.target = 1f
+        alpha.target = if (opening) ColorOsNotificationMotion.rearAlpha(progress) else 1f
+        corner.target = 1f
+        for (spring in all) spring.step(dt)
+    }
+
+    /** Footer growth reaches the native shape during touch; other rows retain their growth clock. */
+    fun nativeMix(columnMix: Float, footerProgress: Float? = null): Float = footerProgress ?: if (growIntoNative)
         minOf(columnMix, ColorOsSpreadGeometry.handoffMix(revealedSize)) else columnMix
 
     init {

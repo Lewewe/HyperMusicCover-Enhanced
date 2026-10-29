@@ -208,6 +208,16 @@ internal object NumState {
         return java.lang.Enum.valueOf(now.javaClass as Class<out Enum<*>>, name)
     }
 
+    /** The native notification footer, in the same coordinates as the stack's target positions. */
+    fun bottomOnKeyguard(): Float? = runCatching {
+        val model = model() ?: return null
+        val info = value(model, "getOnUpdateChildSampleStackInfo") ?: return null
+        val event = Xp.callMethod(model, "notifStackStateToEvent", stateConst(model, "LIST"))
+        val status = Xp.callMethod(model, "getKeyguardStackStatusInfo", info, event)
+        (Xp.getObjectField(status, "notificationBottomOnKeyguard") as Number).toFloat()
+            .takeIf { it.isFinite() && it > 0f }
+    }.getOrNull()
+
     /** The scroll that puts the stack in [state], as SystemUI works it out. */
     fun scrollFor(model: Any, state: String): Int {
         val info = value(model, "getOnUpdateChildSampleStackInfo")!!

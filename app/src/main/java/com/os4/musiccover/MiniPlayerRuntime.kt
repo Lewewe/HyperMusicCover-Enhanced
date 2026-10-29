@@ -1050,6 +1050,9 @@ object MiniPlayerRuntime {
             else -> 0f
         }
         if (action == MotionEvent.ACTION_DOWN) {
+            // A replacement DOWN can arrive without the preceding pull's UP/CANCEL (for
+            // example after the input stream is interrupted). Do not leave its finger held.
+            if (routedNote) routedOwner?.cancelAbandonedColorOsPull()
             routedX = ev.rawX
             routedY = ev.rawY
             routedDrag = false
@@ -1591,6 +1594,8 @@ object MiniPlayerRuntime {
     /** The keyguard's notification stack, for NumStateProbe. */
     @JvmStatic fun stackForProbe(): ViewGroup? = live().firstNotNullOfOrNull { it.stackForProbe() }
 
+    internal fun spreadMotionForProbe(): String = live().firstNotNullOfOrNull { it.spreadMotionForProbe() } ?: "idle"
+
     /** For `op mini`: the pill, the card, and the torch button's chain as they are right now. */
     @JvmStatic fun describe(): String {
         val sb = StringBuilder("gone: " + synchronized(goneLog) { goneLog.joinToString(" ; ") } +
@@ -1888,6 +1893,19 @@ object MiniPlayerRuntime {
 
     private val suppressedPillBackdrops = WeakHashMap<View, Boolean>()
     private val configuredBackdropViews = WeakHashMap<ImageView, Boolean>()
+    private val configuredBackdropRadii = WeakHashMap<View, Int>()
+    private val morphBackdropRadii = WeakHashMap<View, Int>()
+
+    /** The custom pill's backdrop lives on its parent, outside materialLayer's alpha. */
+    internal fun fadePillBackdrop(view: ImageView, amount: Float) {
+        if (configuredBackdropViews[view] != true) return
+        val container = view.parent as? View ?: return
+        val base = configuredBackdropRadii[container] ?: return
+        val radius = (base * amount.coerceIn(0f, 1f)).roundToInt()
+        if (morphBackdropRadii[container] == radius) return
+        runCatching { backgroundRadius.invoke(container, radius) }
+        morphBackdropRadii[container] = radius
+    }
 
     /** A stretched pill must not blur the player underneath its own focus animation. */
     internal fun suppressPillBackdrop(view: ImageView, suppress: Boolean) {
@@ -1908,6 +1926,8 @@ object MiniPlayerRuntime {
         val radius = (MiniPlayerConfig.blurRadius(config.optDouble(
             MiniPlayerConfig.BACKGROUND_BLUR_RADIUS, 30.0))
             * view.resources.displayMetrics.density).toInt()
+        configuredBackdropRadii[container] = if (useBlur) radius else 0
+        morphBackdropRadii.remove(container)
         run {
             // Initialize the same cross-window blur source used by the native pill container.
             Class.forName("miuix.core.util.MiuiBlurUtils", false, loader ?: view.context.classLoader)
@@ -7257,6 +7277,9 @@ private class MiniPlayerController(
         var nudgeLast = 0L
         /** The capsule's rest place as the pull began: both ends of the morph are there. */
         var home: CoverMorphMotion.Box? = null
+        var footerBottom: Float? = null
+        var footerFill = 0f
+        var foldMorphEnd: Float? = null
         /**
          * ColorOS's fold into the capsule, on its own spring (StackToCapsule translationY: bounce
          * 0.25, response 0.35) rather than the stack's scroll: HyperOS piles the rows at the
@@ -7293,6 +7316,7 @@ private class MiniPlayerController(
     /** For `op mini`. */
     private fun describeSpread(): String = spread?.let { s ->
         "spread ph=${s.phase} p=${"%.2f".format(s.progress)} y=${s.lastY} ${s.islandsY}->${s.cardsY} " +
+            "footer=${s.footerBottom} fill=${"%.2f".format(s.footerFill)} " +
             "stack=${s.stackSeat} focus=${s.focusBefore}->${NumState.focusCount()} items=" + s.items.joinToString(",") {
                 "${it.key.takeLast(6)}:${it.seat}${if (it.morph?.active == true) "m" else ""}" +
                     "${if (it.native != null) "n" else ""}${if (it.wasOut) "o" else ""}"
@@ -7426,6 +7450,10 @@ private class MiniPlayerController(
                 SPREAD_OPEN -> watchOpen(s)
                 else -> moveSpread(s)
             }
+            // Native property updates also run at pre-draw. Once our matrices stop changing,
+            // keep traversals alive until handback instead of displaying a stale native pose
+            // and revealing its final position when the clips are restored.
+            if (s.phase == SPREAD_OPEN && spreadRear.isNotEmpty()) notificationStack()?.invalidate()
             if (spread === s) Choreographer.getInstance().postFrameCallback(this)
         } finally { android.os.Trace.endSection() } }
     }
@@ -7471,13 +7499,20 @@ private class MiniPlayerController(
         s.cardsY = NumState.listScroll() ?: s.islandsY
         startSpreadMorphs(s, toCards = true)
         s.phase = SPREAD_OPENING
+        // A flick released before row layout still needs the same continuous opening clock.
+        if (colorOs() && held == null && s.footerBottom != null && s.stackSeat == SEAT_BIG) {
+            s.letGo = Jelly(if (s.items.isEmpty()) ColorOsNotificationMotion.OPEN_RESPONSE else SPREAD_ROW_RESPONSE,
+                if (s.items.isEmpty()) ColorOsNotificationMotion.OPEN_DAMPING else SPREAD_FOLD_DAMPING)
+                .apply { target = 1f }
+        }
         s.since = android.os.SystemClock.uptimeMillis()
         s.still = 0
         s.lastY = Int.MIN_VALUE
         // Under a finger the stack goes where it takes it (followFinger), from where it is now.
         LockIslands.openStack("spread", scroll = held == null)
+        if (s.letGo != null && s.items.isEmpty()) NumState.goTo("LIST", anim = false, why = "spread morph clock")
         if (held != null) held.base = held.pulled()
-        applySpread(s, spreadProgress(s, NumState.position() ?: s.islandsY))
+        applySpread(s, s.letGo?.value ?: spreadProgress(s, NumState.position() ?: s.islandsY))
         spreadTrace("spread out after ${waited}ms ready=$ready measured=$measured: " + describeSpread())
     }
 
@@ -7576,8 +7611,62 @@ private class MiniPlayerController(
         showRow(row)
         NativeNotificationMaterial.restore(row)
         val home = s.home
-        val m = MiniCardMorph(pill, row, toCards, spreadListener, rowLanding(row, cardRadius(row)),
-            restBox = home?.let { h -> { h } }, circle = false, style = pillMorphStyle())
+        if (toCards && s.footerBottom == null) s.footerBottom = NumState.bottomOnKeyguard()
+            ?.takeIf { home != null && it < home.y + home.h }
+        val leadXY = IntArray(2)
+        val leadBounds = android.graphics.RectF()
+        // shortcut: focus/media rows have separate slots; keep their live destination until calibrated.
+        val listTop = if (toCards && s.items.isEmpty() && NumState.focusCount() == 0)
+            s.footerBottom?.minus((s.cardsY - s.islandsY).toFloat())?.takeIf { it > 0f } else null
+        // This capsule summarizes the whole list, not this row. In a notification group,
+        // rowLanding can pick a child's line: bridging to it duplicates that line over the
+        // group's other messages and rewrites the capsule midway through a slow pull.
+        // Keep the same container morph, crossing the two complete faces without pairing.
+        val landing = MiniCardMorph.Landing(null, null, null, cardRadius(row), 0f, summary = true)
+        val m = MiniCardMorph(pill, row, toCards, spreadListener, landing,
+            restBox = home?.let { h -> { h } }, circle = false, style = pillMorphStyle(),
+            widthAtY = home?.let { h -> { top ->
+                val from = s.closeFrom?.get(row)?.takeIf { !toCards && it.size >= 4 }
+                val parent = row.parent as? View
+                if (from != null) ColorOsSpreadGeometry.routeWidth(h.y, h.w, from[1], from[2], top)
+                else if (parent != null) {
+                    parent.getLocationOnScreen(leadXY)
+                    leadBounds.set(0f, 0f, row.width.toFloat(), rowHeight(row))
+                    row.matrix.mapRect(leadBounds)
+                    val remaining = s.cardsY - (NumState.position() ?: s.islandsY)
+                    ColorOsSpreadGeometry.routeWidth(h.y, h.w,
+                        listTop ?: (leadXY[1] - parent.scrollY + row.top + leadBounds.top - remaining),
+                        leadBounds.width(), top)
+                } else row.width.toFloat()
+            } },
+            nativeBox = {
+                val from = s.closeFrom?.get(row)
+                val footer = s.footerBottom
+                val parent = row.parent as? View
+                if (toCards && footer != null && parent != null && !s.openedFromPile) {
+                    parent.getLocationOnScreen(leadXY)
+                    leadBounds.set(0f, 0f, row.width.toFloat(), rowHeight(row))
+                    row.matrix.mapRect(leadBounds)
+                    // Land at LIST's position, not at an endpoint riding HyperOS's other spring.
+                    val remaining = s.cardsY - (NumState.position() ?: s.islandsY)
+                    CoverMorphMotion.Box(leadXY[0] - parent.scrollX + row.left + leadBounds.left,
+                        listTop ?: (leadXY[1] - parent.scrollY + row.top + leadBounds.top - remaining),
+                        leadBounds.width(), leadBounds.height())
+                } else if (toCards || s.foldMorphEnd == null || from == null || footer == null) null else
+                    CoverMorphMotion.Box(from[0] - from[2] / 2f,
+                        lerp(footer - from[3], from[1], s.footerFill), from[2], from[3])
+            }, nativeDy = {
+                val footer = s.footerBottom
+                val parent = row.parent as? View
+                if (footer == null || parent == null || s.openedFromPile) 0f else {
+                    parent.getLocationOnScreen(leadXY)
+                    leadBounds.set(0f, 0f, row.width.toFloat(), rowHeight(row))
+                    row.matrix.mapRect(leadBounds)
+                    ColorOsSpreadGeometry.footerLeadOffset(
+                        leadXY[1] - parent.scrollY + row.top + leadBounds.top,
+                        leadBounds.height(), footer, s.footerFill)
+                }
+            })
         if (!m.startDragging()) {
             if (!s.leadWhyLogged) {
                 s.leadWhyLogged = true
@@ -7592,6 +7681,7 @@ private class MiniPlayerController(
         s.lead = m
         s.leadRow = row
         spreadFront = WeakReference(row)
+        if (toCards && s.footerBottom != null && s.items.isEmpty()) stack?.let(::keepSpreadShown)
     }
 
     /** ColorOS's capsule drag: the finger's pull, slowing toward dragMaxDistance. */
@@ -7669,8 +7759,17 @@ private class MiniPlayerController(
         // faded to an empty blurred glass while the row came up at its place in the list.
         if (colorOs() && s.lead == null && s.stackSeat == SEAT_BIG && s.phase != SPREAD_OPEN &&
             s.items.none { it.morph != null }) startSpreadLead(s, toCards = s.phase != SPREAD_CLOSING)
+        val foldEnd = s.foldMorphEnd.takeIf { s.phase == SPREAD_CLOSING }
+        s.footerFill = if (foldEnd != null) ColorOsSpreadGeometry.foldGather(p, foldEnd) else
+            s.footerBottom?.takeUnless { s.openedFromPile }?.let { footer ->
+            ColorOsSpreadGeometry.footerFill(s.home?.y ?: footer, footer,
+                s.leadRow?.let { rowHeight(it) * it.scaleX } ?: 1f, p,
+                s.lead?.nativeBoxY()?.takeIf { it >= 0 }?.toFloat()
+                    ?: (footer - (s.leadRow?.let { rowHeight(it) * it.scaleX } ?: 1f)))
+        } ?: p.coerceIn(0f, 1f)
         val nudge = if (s.phase == SPREAD_CLOSING) 0f else s.leadNudge * (1f - p)
-        s.lead?.takeIf { it.active }?.led(p, nudge)
+        s.lead?.takeIf { it.active }?.led(
+            if (foldEnd != null) ColorOsSpreadGeometry.foldLeadProgress(p, foldEnd) else p, nudge)
         if (colorOs()) colorOsSpread(s, p) else fadeSeat(s.stackSeat, 1f - p)
     }
 
@@ -7691,6 +7790,8 @@ private class MiniPlayerController(
     private val spreadPillGone = Jelly(0.3f, 0.89f)
 
     private val spreadRear = java.util.WeakHashMap<View, ColorOsRearCardMotion>()
+    private val spreadBackdrops = NotificationBackdropMorph()
+    private val spreadOpeningViewport = java.util.Collections.newSetFromMap(java.util.WeakHashMap<View, Boolean>())
     /** The list open and the stack's own places read: the rear cards go to those from ours. */
     private val spreadReal = Jelly(SPREAD_HANDOFF_RESPONSE, 0.999f)
     /**
@@ -7737,14 +7838,9 @@ private class MiniPlayerController(
         spreadFront?.get()?.let { skip += it }
         // Behind the first card wherever its morph has it: they come out from under it.
         val anchor = s.lead?.takeIf { led }?.containerBox() ?: pill
-        // Under the finger the list is scrubbed: the springs chase the pull. Let go, ColorOS's
-        // state flips and they run to that end on their own.
-        val held = s.finger?.ended == false && s.phase != SPREAD_CLOSING
-        val target = when {
-            held -> p
-            !opening -> 0f
-            else -> s.letGo?.target ?: 1f
-        }
+        // Keep following the lead's release spring too; jumping to its destination breaks rhythm.
+        val target = if (s.footerBottom != null && (!s.openedFromPile || s.foldMorphEnd != null)) s.footerFill
+            else if (opening) p else 0f
         spreadReal.target = 0f
         spreadPile.target = if (s.toStack) 1f else 0f
         spreadCardsTo(target, anchor, s.leadRow?.takeIf { led }, skip, if (opening) null else s.closeFrom,
@@ -7823,11 +7919,27 @@ private class MiniPlayerController(
         val rows = ArrayList<View>()
         // Every row of the list in its order, the morphing ones too: their room counts in it.
         val all = ArrayList<View>()
+        val openingPull = opening && spread?.phase == SPREAD_OPENING
+        val remainingScroll = spread?.let { it.cardsY - (NumState.position() ?: it.islandsY) }?.toFloat() ?: 0f
+        val viewportHeight = stack.resources.displayMetrics.heightPixels.toFloat()
         // Bound the work when retaining cards that the native stack hides during a fold.
         var showBudget = SPREAD_SHOW_PER_FRAME
         for (i in 0 until stack.childCount) {
             val row = stack.getChildAt(i)
             if (!row.javaClass.name.endsWith("ExpandableNotificationRow")) continue
+            // Native NUMBER/STACK visibility is not the opening list's viewport. Prepare only
+            // rows whose unstacked destination fits the screen, before they first draw there.
+            if (openingPull && row.height > 0 && (row !in hiddenRows || row in foldHidden) &&
+                ColorOsNotificationMotion.entersViewport(screenTop(row),
+                    spreadHeightOf(row, intrinsic = false), remainingScroll, viewportHeight)) {
+                spreadOpeningViewport += row
+                unholdFolded(row)
+                if (row.visibility == View.INVISIBLE && showBudget-- > 0) {
+                    row.transitionAlpha = 0f
+                    MiniPlayerRuntime.showSpreadRow(row)
+                    keepSpreadShown(stack)
+                }
+            }
             // Opening must respect the native list's viewport. Forcing its hidden rows visible
             // exposed extra notifications at the foot, then removed them at the hand-off.
             // Only retain an already animated card while folding it back into the capsule.
@@ -7854,6 +7966,8 @@ private class MiniPlayerController(
             rows += row
         }
         val tops = rows.associateWith(::screenTop)
+        val footerFold = !opening && spread?.foldMorphEnd != null
+        val footer = spread?.takeUnless { it.openedFromPile && !footerFold }?.footerBottom
         // Each row's place in the list: as the fold found it, else worked out from the rows'
         // own heights and the list's gap. Read off the stack while it opens, it was its folded
         // pile's, and the cards came out above the capsule (recording 2026-10-25).
@@ -7864,14 +7978,19 @@ private class MiniPlayerController(
             listY[row] = closeFrom?.get(row)?.get(1) ?: known ?: y
             // A group's intrinsic height is all of it expanded (9466px measured): the list
             // shows it collapsed, and every card after it went off the screen (the fifth on).
-            y = (known ?: y) + spreadHeightOf(row, intrinsic = true).coerceAtMost(dp(LIST_ROW_MAX_DP).toFloat()) + listGap
+            y = (known ?: y) + spreadHeightOf(row, intrinsic = footer == null).coerceAtMost(dp(LIST_ROW_MAX_DP).toFloat()) + listGap
         }
         val listTop = { row: View -> listY[row] ?: tops[row] ?: screenTop(row) }
         // In the stack's own order, which is the list's: by their places, one remembered and
         // the next worked out could swap, and a card coming in late took the first one's springs.
         val ordered = rows
         val ref = lead?.let(listTop) ?: ordered.firstOrNull()?.let(listTop) ?: return true
-        val leadH = lead?.let { spreadHeightOf(it, intrinsic = opening) } ?: anchor.h
+        val leadH = lead?.let { spreadHeightOf(it, intrinsic = opening && footer == null) * if (footer != null) it.scaleX else 1f } ?: anchor.h
+        val nativeLeadCenter = lead?.let { row ->
+            spreadSrc.set(0f, 0f, row.width.toFloat(), spreadHeightOf(row, intrinsic = false))
+            row.matrix.mapRect(spreadSrc)
+            xy[1] + row.top + spreadSrc.centerY()
+        }
         spreadReal.step(dt)
         spreadPile.step(dt)
         MiniPlayerRuntime.spreadLateRow = if (opening && spreadReal.value > 0f) lateRowHider else null
@@ -7882,6 +8001,9 @@ private class MiniPlayerController(
         // The foot of the card drawn before this one, the first card's to begin with.
         var coverFoot = anchor.y + anchor.h
         val screenH = stack.resources.displayMetrics.heightPixels.toFloat()
+        // The folded pill fits between the shortcuts; an emerging wide card must clear their top.
+        val footBottom = footer ?: if (opening) ColorOsSpreadGeometry.footBottom(
+            home.y, home.h, dp(8f).toFloat(), progress) else home.y + home.h
         for ((i, row) in ordered.withIndex()) {
             // A second upward gesture belongs to native scrolling. Rows newly entering its
             // viewport must not wait hidden for the opening springs or the fling to stop.
@@ -7917,34 +8039,36 @@ private class MiniPlayerController(
                 val joiningFromPile = opening && spread?.openedFromPile == true
                 ColorOsRearCardMotion(startedOpen = (!opening && closeFrom?.containsKey(row) == true) ||
                     (opening && !joiningFromPile && spread?.rearHandoff?.started == true),
-                    growIntoNative = joiningFromPile)
+                    growIntoNative = joiningFromPile || row in spreadOpeningViewport)
             }
             val k = i.toFloat()
             // A small, bounded delay keeps the column together, even with many notifications.
-            val response = if (opening) ColorOsSpreadGeometry.widthResponse(i)
+            val response = if (opening) ColorOsSpreadGeometry.widthResponse(i) * (if (footer != null) 1.2f else 1f)
                 else SPREAD_ROW_RESPONSE
             card.place.response = if (opening) ColorOsSpreadGeometry.positionResponse(i)
                 else SPREAD_ROW_RESPONSE
             card.width.response = response; card.height.response = response
             card.blur.response = if (opening) 0.3f else 0.4f
             card.alpha.response = if (opening) 0.16f else 0.3f
-            for (j in card.all) j.target = target
             // Sharp on their own clock as soon as the list comes out, as ColorOS's (alpha and blur
             // 0.11, 0.3): on the pull they stayed a blurred heap all the way up (the user, 2026-10-25).
             // Their corners too, now that they show: the capsule's round ends on a small card read as pills.
             // Closing keeps the card legible; only the last part of the shared fold hides it.
-            card.blur.target = 1f; card.alpha.target = 1f; card.corner.target = 1f
-            for (j in card.all) j.step(dt)
+            val rowProgress = if (footer != null) ColorOsSpreadGeometry.footerRowProgress(target, i) else target
+            card.step(rowProgress, opening, dt)
             // A newly revealed pile row has its own growth clock. The column's hand-off may
             // already be nearly over; inheriting it would draw this row full size immediately.
             val real = card.nativeMix(real)
+            val growth = if (opening && footer != null) card.footerGrowth(rowProgress) else rowProgress
+            val shapeMix = card.nativeMix(real, growth.takeIf { footer != null && !footerFold })
             // Near enough is given back: waiting out the springs' last pixel held the cards ours
             // for most of a second after the list stood still (the user's recording, 2026-10-26).
             if (card.all.any { !it.nearRest(0.02f) }) rest = false
             val scale = (SPREAD_FIRST_SCALE - SPREAD_SCALE_STEP * k).coerceAtLeast(SPREAD_SCALE_MIN)
-            val fold = progress.coerceIn(0f, 1f)
+            val fold = (if (footer != null) rowProgress else progress).coerceIn(0f, 1f)
             // Let the small natural overshoot settle instead of abruptly stopping at 100%.
-            val qp = if (opening) card.place.value.coerceIn(0f, 1.02f) else minOf(card.place.value.coerceAtLeast(0f), fold)
+            val qp = if (footer != null) rowProgress else if (opening) card.place.value.coerceIn(0f, 1.02f)
+                else minOf(card.place.value.coerceAtLeast(0f), fold)
             // In the pile, as HyperOS's own (NotificationStackingCalculator at rest): the second
             // card at 0.934 its foot 32dp under the first's (notif_stacking_height_1), the third
             // at 0.85 another 12dp down (notif_stacking_height_2), the rest hidden behind them.
@@ -7953,20 +8077,35 @@ private class MiniPlayerController(
             val pileH = h * pileScale
             val pileFoot = dp(PILE_HEIGHT_1_DP) + if (i == 0) 0 else dp(PILE_HEIGHT_2_DP)
             val pileOff = anchor.h / 2f + pileFoot - pileH / 2f
-            val qw = if (opening) card.revealedSize else card.width.value.coerceIn(0f, fold)
+            val qw = if (footer != null) growth else if (opening) card.revealedSize else card.width.value.coerceIn(0f, fold)
             val qh = card.height.value.coerceIn(0f, if (opening) 1f else fold)
-            var winW = lerp(home.w * scale, lerp(w, pileW, pile), qw)
-            var winH = if (opening) ColorOsSpreadGeometry.windowHeight(home.w * scale,
-                home.h * scale, lerp(w, pileW, pile), lerp(h, pileH, pile), winW)
+            val foldedW = (if (footer != null) w else home.w) * scale
+            val foldedH = (if (footer != null) h else home.h) * scale
+            var winW = lerp(foldedW, lerp(w, pileW, pile), qw)
+            var winH = if (opening || footer != null) ColorOsSpreadGeometry.windowHeight(foldedW,
+                foldedH, lerp(w, pileW, pile), lerp(h, pileH, pile), winW)
                 else lerp(home.h * scale, lerp(h, pileH, pile), qh)
+            val from = closeFrom?.get(row)?.takeIf { footerFold && it.size >= 4 }
+            if (from != null) {
+                winW = from[2] * lerp(scale, 1f, qw)
+                winH = from[3] * (winW / from[2])
+            }
             // Off the first card as drawn, by its offset in the list growing with the progress:
             // lerped toward its list place on its own it fell behind the first card.
             // Keep the same spacing curve on reversal, carried by the live lead on both legs.
-            val ours = anchor.cy() + qp * lerp(listTop(row) - ref + h / 2f - leadH / 2f, pileOff, pile)
-            val cx = if (opening) lerp(home.cx(), spreadDrawn.centerX(), qp) else anchor.cx() +
+            val offset = lerp(listTop(row) - ref + h / 2f - leadH / 2f, pileOff, pile)
+            val ours = if (footer != null) lerp(footer + winH / 2f, anchor.cy() + offset, qp)
+                else anchor.cy() + qp * offset
+            val cx = if (footer != null) spreadDrawn.centerX() else if (opening) lerp(home.cx(), spreadDrawn.centerX(), qp) else anchor.cx() +
                 qp * ((closeFrom?.get(row)?.get(0) ?: spreadDrawn.centerX()) -
                     (lead?.let { closeFrom?.get(it)?.get(0) } ?: anchor.cx()))
             var cy = lerp(ours, spreadDrawn.centerY(), real)
+            if (opening && footer != null && nativeLeadCenter != null)
+                cy = anchor.cy() + spreadDrawn.centerY() - nativeLeadCenter
+            if (from != null) {
+                val front = lead?.let { closeFrom?.get(it) }
+                if (front != null) cy = anchor.cy() + qp * (from[1] + from[3] / 2f - front[1] - front[3] / 2f)
+            }
             // Never below the capsule: ColorOS's list grows up out of it, the cards that do not
             // fit yet gathered at its foot, each narrower and peeking a little lower. Ours hung
             // under the capsule as a heap down to the screen's edge (the user, 2026-10-25). Let go
@@ -7975,14 +8114,14 @@ private class MiniPlayerController(
             // moved every card after it a peek lower - a stutter on a slow pull (2026-10-25).
             // The deepest at the capsule's own foot, never below it (the user, 2026-10-26).
             val span = dp(FOOT_SPAN_DP).toFloat()
-            val over = cy + winH / 2f - (home.y + home.h - span)
+            val over = cy + winH / 2f - (footBottom - span)
             var footHidden = 0f
-            if (over > 0f) {
+            if (over > 0f && footer == null) {
                 val t = 1f - kotlin.math.exp(-over / span)
                 val narrow = 1f - FOOT_NARROW * ColorOsSpreadGeometry.footNarrowing(t)
                 val footW = winW * narrow
                 val footH = winH * narrow
-                val footCy = home.y + home.h - span + span * t - footH / 2f
+                val footCy = footBottom - span + span * t - footH / 2f
                 // Not the pile's: its second card stands whole under the first.
                 val free = maxOf(real, pile)
                 winW = lerp(footW, winW, free)
@@ -7993,13 +8132,32 @@ private class MiniPlayerController(
             // Never wider than the first card at its place in the pile: folding, the first card
             // shrinks with its morph ahead of the rear cards' springs, and they swelled out past
             // it for a moment (the user's recording, 2026-10-26).
-            val capW = anchor.w * lerp(1f, pileScale, pile)
+            val capW = if (opening) ColorOsNotificationMotion.rearWidthLimit(anchor.w, scale, qp)
+                else anchor.w * lerp(1f, pileScale, pile)
             if (!opening && winW > capW) {
                 winH *= capW / winW
                 winW = capW
             }
-            winW = lerp(winW, spreadDrawn.width(), real)
-            winH = lerp(winH, spreadDrawn.height(), real)
+            if (opening) cy = maxOf(cy, anchor.y + winH / 2f)
+            winW = lerp(winW, spreadDrawn.width(), shapeMix)
+            winH = lerp(winH, spreadDrawn.height(), shapeMix)
+            if (footer != null) {
+                val top = cy - winH / 2f
+                val routeW = ColorOsSpreadGeometry.routeWidth(home.y, home.w,
+                    from?.get(1) ?: spreadDrawn.top, from?.get(2) ?: spreadDrawn.width(), top)
+                if (winW > routeW) {
+                    winH *= routeW / winW
+                    winW = routeW
+                    cy = top + winH / 2f
+                }
+            }
+            // Native shape blending must not widen rear cards past the still-growing lead.
+            if (opening && winW > capW) {
+                val top = cy - winH / 2f
+                winH *= capW / winW
+                winW = capW
+                cy = top + winH / 2f
+            }
             // Each under the one before it: the stack draws its later rows over the earlier.
             if (row !in spreadZOf) spreadZOf[row] = row.elevation
             // Below every row's own: HyperOS raises its later rows, and a late one came out over the card above.
@@ -8013,7 +8171,7 @@ private class MiniPlayerController(
             // The background is clipped, not scaled with its content. ColorOS derives its
             // clipped height from the width and centres the separately scaled content in it
             // (OplusExpandableViewExImpl.updateContentScaleAndTranslationY).
-            val fit = lerp(1f, spreadDrawn.width() / w, real).coerceAtLeast(0.01f)
+            val fit = lerp(1f, spreadDrawn.width() / w, shapeMix).coerceAtLeast(0.01f)
             val lw = winW / fit
             val lh = (winH / fit).coerceIn(1f, maxOf(1f, row.height.toFloat()))
             val l = (w - lw) / 2f
@@ -8028,8 +8186,11 @@ private class MiniPlayerController(
             // outline instead, its rounded top pinched in, and as a path the glass went clear.
             val cut = ((coverFoot - (cy - winH / 2f)) * pile).coerceIn(0f, maxOf(0f, winH - 1f))
             coverFoot = cy + winH / 2f
-            if (!clipSpreadAmounts(row, (cut / fit).roundToInt(), real, dt)) rest = false
-            val clippedHeight = (lh - (MiniPlayerRuntime.spreadNativeClips[row]?.bottomAmount ?: 0)).coerceAtLeast(0f)
+            if (!clipSpreadAmounts(row, (cut / fit).roundToInt(), shapeMix, dt)) rest = false
+            val nativeHeight = (lh - (MiniPlayerRuntime.spreadNativeClips[row]?.bottomAmount ?: 0)).coerceAtLeast(0f)
+            // Native geometry can still cross the shortcuts while its own pile clipping catches up.
+            val clippedHeight = if (opening || footer != null) ColorOsSpreadGeometry.clipHeightAtFoot(
+                nativeHeight, cy - winH / 2f, fit, footBottom) else nativeHeight
             val win = spreadWindowOf.getOrPut(row) { FloatArray(5) }
             if (win[0] != l || win[3] != clippedHeight || win[4] != r) {
                 win[0] = l; win[1] = 0f; win[2] = l + lw; win[3] = clippedHeight; win[4] = r
@@ -8056,26 +8217,30 @@ private class MiniPlayerController(
                 // Opening, not at all: since the hand-off runs from the start, a row past the end
                 // (kept shown from a fold) stood over the third card while it faded with it -
                 // /1cc/ for a third of a second (the user's recording, 2026-10-26).
-                val handedBack = if (!pastEnd) 1f else if (opening) 0f else 1f - real
+                val handedBack = ColorOsNotificationMotion.retainedVisibility(
+                    pastEnd, row in spreadOpeningViewport, opening, real)
                 val a = MiniCardMorph.smooth(0f, 1f, card.alpha.value) * visible *
+                    (if (footerFold && target <= 0f) 0f else 1f) *
                     (if (i < 2) 1f else 1f - pile) * (1f - footHidden) * handedBack *
                     (MiniPlayerRuntime.spreadNativeClips[row]?.visibilityAmount ?: 1f)
                 if (kotlin.math.abs(row.transitionAlpha - a) > 0.002f) row.transitionAlpha = a
             }
+            spreadBackdrops.apply(row, l, 0f, lw, clippedHeight, r,
+                if (clippedHeight > 0f) row.transitionAlpha else 0f)
             // Unseen (faded out, or off the screen): no blur layer for it. Each blurred row is an
             // offscreen pass a frame, and ten of them kept the render thread past 8ms at 120Hz.
-            // Only the two cards right behind the first: the rest sit hidden behind those, and
-            // their blur layers alone cost ~20 dropped frames in 300 (gfxinfo, 2026-10-26).
-            val seen = i < SPREAD_BLURRED_CARDS && row.transitionAlpha > 0.01f &&
+            // All visible emerging cards receive the same content-only focus curve. Hidden
+            // and offscreen cards need no blur pass; their native glass remains in the window.
+            val seen = row.transitionAlpha > 0.01f &&
                 cy + winH / 2f > 0f && cy - winH / 2f < screenH
             // Blurred while small, behind the capsule, as ColorOS's (blur 70 in the capsule
             // state), clear by the time it is full size: prettier, and a small layer is cheap.
-            val small = 1f - MiniCardMorph.smooth(SPREAD_BLUR_CLEAR_FROM, SPREAD_BLUR_CLEAR_TO, winW / w)
-            // Only that: blurred, a row is drawn offscreen and loses HyperOS's glass behind it, so
-            // a blurred card out from behind the capsule was see-through (the user, 2026-10-26).
+            val small = ColorOsNotificationMotion.blurRemaining(winW / w)
             val closingBlur = if (opening) 0f else
                 (1f - MiniCardMorph.smooth(SPREAD_FADE_END, SPREAD_BLUR_FROM, fold)) * SPREAD_FOLD_BLUR
-            blurSpreadRow(row, if (seen) spreadBlurRadius(maxOf(small * SPREAD_SMALL_BLUR, closingBlur * small)) else 0f)
+            val contentScale = (winW / w).coerceAtLeast(0.1f)
+            blurSpreadRow(row, if (seen) spreadBlurRadius(
+                maxOf(small * SPREAD_SMALL_BLUR, closingBlur * small) / contentScale) else 0f)
             spreadCards[row] = true
         }
         return rest
@@ -8146,6 +8311,12 @@ private class MiniPlayerController(
     /** Each draw: the stack's layout put them back INVISIBLE, shown again before it is drawn. */
     private val spreadKeepShown = android.view.ViewTreeObserver.OnPreDrawListener {
         for (row in spreadForced.keys) if (row.visibility == View.INVISIBLE) MiniPlayerRuntime.showSpreadRow(row)
+        // Native animations update rows after Choreographer; pose them last on both legs.
+        spread?.takeIf { it.phase == SPREAD_CLOSING && it.foldMorphEnd != null }?.let { s ->
+            applySpread(s, s.fold?.value?.coerceAtLeast(-0.05f) ?: s.progress)
+        }
+        spread?.takeIf { it.phase == SPREAD_OPENING && it.footerBottom != null && it.items.isEmpty() }
+            ?.let { applySpread(it, it.progress) }
         true
     }
 
@@ -8207,7 +8378,7 @@ private class MiniPlayerController(
             row to xy[1] + row.top + row.translationY
         }.sortedBy { it.second }
         if (rows.size < 2) return
-        val gap = rows[1].second - rows[0].second - intrinsicHeight(rows[0].first)
+        val gap = rows[1].second - rows[0].second - rowHeight(rows[0].first)
         if (gap in 0f..dp(40f).toFloat()) listGap = gap
         Main.notificationRowRadius(rows[0].first).takeIf { it > 0f && it < rowHeight(rows[0].first) / 3f }
             ?.let { listRowRadius = it }
@@ -8309,9 +8480,11 @@ private class MiniPlayerController(
     private val spreadRowStates = java.util.WeakHashMap<View, Any>()
     private val spreadRowInjectors = java.util.WeakHashMap<View, Any>()
 
-    // In whole steps: a new blur effect per row per frame is a new offscreen pass each time.
+    private val spreadEffects = HashMap<Int, android.graphics.RenderEffect>()
+
+    // One-pixel steps, shared across cards: four-pixel changes were visible on a slow pull.
     private fun spreadBlurRadius(blurred: Float) = if (Main.sPerfOff.contains("spreadblur")) 0f
-        else kotlin.math.round(blurred * SPREAD_BLUR_PX * density() / COLOROS_DENSITY / 4f) * 4f
+        else kotlin.math.round(blurred * SPREAD_BLUR_PX * density() / COLOROS_DENSITY).coerceAtMost(dp(40f).toFloat())
 
     private fun blurSpreadRow(row: View, blur: Float, clip: Boolean = true) {
         if (spreadBlurOf[row] == blur) return
@@ -8323,8 +8496,12 @@ private class MiniPlayerController(
         if (!clip) Unit
         else if (blur >= 0.5f) clipSpreadRow(row)
         else if (row !in spreadWindowOf) spreadClipOf.remove(row)?.let { restoreClip(row, it) }
-        row.setRenderEffect(if (blur < 0.5f) null
-            else android.graphics.RenderEffect.createBlurEffect(blur, blur, android.graphics.Shader.TileMode.DECAL))
+        // Keep the vendor backdrop on the row in the window. Blurring the whole row sends
+        // that backdrop through an offscreen pass and changes its colour/transparency.
+        val effect = if (blur < 0.5f) null else spreadEffects.getOrPut(blur.roundToInt()) {
+            android.graphics.RenderEffect.createBlurEffect(blur, blur, android.graphics.Shader.TileMode.DECAL)
+        }
+        for (saved in spreadContent[row].orEmpty()) saved.view.setRenderEffect(effect)
     }
 
     private fun restoreClip(row: View, saved: Pair<android.view.ViewOutlineProvider?, Boolean>) {
@@ -8339,12 +8516,33 @@ private class MiniPlayerController(
         // Out of spreadForced first: the visibility hold lets the stack's own hide through again.
         val forced = spreadForced.keys.toList()
         spreadForced.clear()
+        val keepVisible = HashSet<View>()
         // Open, the ones the stack still hides go back to it hidden too; left shown, they stood
         // at the screen's foot until its next layout (after a wake from AOD, 2026-10-26).
-        for (row in forced) if (!opened || row in MiniPlayerRuntime.stackWantsHidden) row.visibility = View.INVISIBLE
+        for (row in forced) {
+            val parent = row.parent as? View
+            val xy = IntArray(2)
+            parent?.getLocationOnScreen(xy)
+            val bounds = android.graphics.RectF(0f, 0f, row.width.toFloat(),
+                spreadHeightOf(row, intrinsic = false))
+            row.matrix.mapRect(bounds)
+            bounds.offset(xy[0] + row.left.toFloat(), xy[1] + row.top.toFloat())
+            val inViewport = parent != null && bounds.bottom > 0f &&
+                bounds.top < row.resources.displayMetrics.heightPixels
+            val drawn = row.visibility == View.VISIBLE && row.transitionAlpha > 0.99f
+            val hidden = ColorOsNotificationMotion.restoreHidden(
+                row in MiniPlayerRuntime.stackWantsHidden, row in spreadOpeningViewport,
+                drawn, inViewport)
+            if (opened && !hidden && drawn && inViewport) keepVisible += row
+            spreadTrace("handback ${shortName(row)} prepared=${row in spreadOpeningViewport} " +
+                "drawn=$drawn viewport=$inViewport native=${MiniPlayerRuntime.spreadNativeClips[row]?.nativeVisible} hidden=$hidden")
+            // showSpreadRow preserves the folded hide request. Replaying it after an opening
+            // hid the newly grown bottom cards for ~0.12s, until the next native visibility pass.
+            if (!opened || hidden) row.visibility = View.INVISIBLE
+        }
         spreadPastEnd.clear()
         MiniPlayerRuntime.stackWantsHidden.clear()
-        clearColorOsSpread()
+        clearColorOsSpread(keepVisible)
         if (opened) {
             rows.filter { it.visibility == View.VISIBLE && it !in hiddenRows }
                 .forEach { NativeNotificationMaterial.restore(it) }
@@ -8376,9 +8574,15 @@ private class MiniPlayerController(
         if (foldHidden.remove(row)) showRow(row)
     }
 
-    private fun clearColorOsSpread() {
-        for (contents in spreadContent.values) for (saved in contents) saved.view.setAnimationMatrix(saved.matrix)
+    private fun clearColorOsSpread(keepVisible: Set<View> = emptySet()) {
+        spreadBackdrops.clear()
+        for (contents in spreadContent.values) for (saved in contents) {
+            saved.view.setRenderEffect(null)
+            saved.view.setAnimationMatrix(saved.matrix)
+        }
         spreadContent.clear()
+        spreadEffects.clear()
+        spreadOpeningViewport.clear()
         MiniPlayerRuntime.spreadLateRow = null
         // Still up once the stack has settled: faded in; one it hides meanwhile never shows.
         for (row in spreadLate.toList()) if (row !in spreadCards && row !in hiddenRows)
@@ -8401,7 +8605,7 @@ private class MiniPlayerController(
         spreadClipOf.clear()
         for ((row, state) in MiniPlayerRuntime.spreadNativeClips.toMap()) {
             MiniPlayerRuntime.spreadNativeClips.remove(row)
-            if (!state.nativeVisible) row.visibility = View.INVISIBLE
+            if (!state.nativeVisible && row !in keepVisible) row.visibility = View.INVISIBLE
             runCatching { Xp.callMethod(row, "setClipTopAmount", state.nativeTop) }
             runCatching { Xp.callMethod(row, "setClipBottomAmount", state.nativeBottom) }
             runCatching { Xp.callMethod(row, "setExtClipBottomAmount", state.nativeExtBottom) }
@@ -8484,13 +8688,22 @@ private class MiniPlayerController(
             endSpread(folded = p < 0.5f, why = "a morph was ended")
             return
         }
-        applySpread(s, p)
+        if (s.phase == SPREAD_OPENING && s.footerBottom != null && s.items.isEmpty()) {
+            s.progress = p
+            notificationStack()?.invalidate()
+        } else applySpread(s, p)
         // Held by the finger, it rests where the finger does; the let-go sends it to an end.
         if (s.finger?.ended == false) {
             s.lastY = y
             s.still = 0
             return
         }
+        // Native idle is not morph idle: a quick flick can still have half its flight left.
+        if (s.phase == SPREAD_OPENING && s.letGo?.let { kotlin.math.abs(p - it.target) > 0.001f } == true) return
+        // A finished morph must not hand back to a native scroll still 100px short of LIST.
+        if (s.phase == SPREAD_OPENING && s.letGo != null && s.footerBottom != null &&
+            s.items.isEmpty() && !s.toStack && kotlin.math.abs(y - s.cardsY) > dp(2f) &&
+            android.os.SystemClock.uptimeMillis() - s.since < SPREAD_GIVE_UP_MS) return
         // At an end and the stack already reading that state, no finger on it: done now. The fold
         // overshoots - the scroll ran to -275 and took 700ms coming back to 0 - and waiting for it
         // to stand still held the media card out for all of it after the islands had landed
@@ -8580,7 +8793,10 @@ private class MiniPlayerController(
             s.foldAskedAt = now
             NumState.goTo("NUMBER", why = "colorOS fold finish")
         }
-        applySpread(s, f.value.coerceAtLeast(-0.05f))
+        if (s.foldMorphEnd == null) applySpread(s, f.value.coerceAtLeast(-0.05f)) else {
+            s.progress = f.value.coerceAtLeast(-0.05f)
+            notificationStack()?.invalidate()
+        }
         // Landed, and the stack folded under it (or long enough waiting for it).
         if (f.atRest() && (NumState.inNumber == true || now - s.since > SPREAD_GIVE_UP_MS)) {
             endSpread(folded = true, why = "colorOS folded")
@@ -8612,6 +8828,10 @@ private class MiniPlayerController(
         val f = spread?.finger?.takeIf { !it.ended } ?: return false
         f.y = y
         return true
+    }
+
+    fun cancelAbandonedColorOsPull() {
+        if (colorOs()) spreadFingerEnd(0f, cancelled = true)
     }
 
     /**
@@ -8652,17 +8872,24 @@ private class MiniPlayerController(
                 spreadTrace("spread to the pile at $stackY (pile p=${"%.2f".format(stackP)})")
             }
         }
-        if (colorOs()) s.letGo = Jelly(SPREAD_FOLD_RESPONSE, SPREAD_FOLD_DAMPING).apply {
+        val smoothOpen = s.footerBottom != null && s.stackSeat == SEAT_BIG && s.items.isEmpty() && f.toList && !s.toStack
+        if (colorOs()) s.letGo = Jelly(
+            if (smoothOpen) ColorOsNotificationMotion.OPEN_RESPONSE
+                else if (s.footerBottom != null && s.stackSeat == SEAT_BIG) SPREAD_ROW_RESPONSE else SPREAD_FOLD_RESPONSE,
+            if (smoothOpen) ColorOsNotificationMotion.OPEN_DAMPING else SPREAD_FOLD_DAMPING).apply {
             value = s.progress
             target = if (f.toList || s.toStack) 1f else 0f
             // Continue the finger's motion instead of braking to zero on the release frame.
             val span = kotlin.math.abs(s.cardsY - s.islandsY).toFloat()
             if (!cancelled && span >= 1f) velocity = (-velocityY / span).coerceIn(-4f, 4f)
+            if (smoothOpen) velocity = ColorOsNotificationMotion.openingVelocity(value, velocity)
         }
         s.finger = null
         s.still = 0
         s.nudged = false
-        NumState.goTo(if (s.toStack) "STACK" else if (f.toList) "LIST" else "NUMBER", why = "spread let go")
+        NumState.goTo(if (s.toStack) "STACK" else if (f.toList) "LIST" else "NUMBER",
+            anim = !(colorOs() && s.footerBottom != null && s.items.isEmpty() && f.toList && !s.toStack),
+            why = "spread let go")
         return true
     }
 
@@ -8751,8 +8978,21 @@ private class MiniPlayerController(
             s.closeFrom = if (colorOs() && !s.toStack) spreadRows(s).associateWith { row ->
                 val xy = IntArray(2)
                 (row.parent as? View)?.getLocationOnScreen(xy)
-                floatArrayOf(xy[0] + row.left + row.translationX + row.width / 2f, xy[1] + row.top + row.translationY)
+                val bounds = android.graphics.RectF(0f, 0f, row.width.toFloat(), rowHeight(row))
+                row.matrix.mapRect(bounds)
+                floatArrayOf(xy[0] + row.left + bounds.centerX(), xy[1] + row.top + bounds.top,
+                    bounds.width(), bounds.height())
             } else null
+            if (colorOs() && s.stackSeat == SEAT_BIG && !s.toStack) {
+                s.footerBottom = NumState.bottomOnKeyguard()
+                val footer = s.footerBottom
+                val home = s.home
+                val front = s.closeFrom?.values?.firstOrNull()
+                s.foldMorphEnd = if (footer != null && home != null && front != null && footer < home.y)
+                    ColorOsSpreadGeometry.foldMorphEnd(home.y, footer, front[1], front[3]) else null
+                s.footerFill = 1f
+                if (s.foldMorphEnd != null) notificationStack()?.let(::keepSpreadShown)
+            }
             startSpreadMorphs(s, toCards = false)
             s.phase = SPREAD_CLOSING
             s.since = android.os.SystemClock.uptimeMillis()
@@ -8762,7 +9002,8 @@ private class MiniPlayerController(
             s.letGoSent = false
             s.fold = null
             s.lastY = Int.MIN_VALUE
-            applySpread(s, spreadProgress(s, y))
+            // The captured fold pose already includes the user's downward pull.
+            applySpread(s, if (s.foldMorphEnd != null) 1f else spreadProgress(s, y))
             spreadTrace("spread closing (${if (folded) "folded" else "pulled"} over=${NumState.overScrollParts()} toward=$toward): " + describeSpread())
             return
         }
@@ -9666,6 +9907,16 @@ private class MiniPlayerController(
 
     /** [notificationStack], for MiniPlayerRuntime.stackForProbe. */
     fun stackForProbe(): ViewGroup? = notificationStack()
+
+    fun spreadMotionForProbe(): String? {
+        val s = spread ?: return null
+        val box = s.lead?.containerBox()
+        val row = s.leadRow
+        return "ph=${s.phase} p=${s.progress} fill=${s.footerFill} scroll=${NumState.position()} " +
+            "goal=${s.cardsY} held=${s.finger?.ended == false} v=${s.letGo?.velocity} " +
+            "box=${box?.y},${box?.w},${box?.h} dest=${s.lead?.nativeBoxY()} " +
+            "native=${row?.translationY},${row?.scaleX},${row?.transitionAlpha}"
+    }
 
     fun rowTree(match: String): String {
         val stack = notificationStack() ?: return "no stack"
@@ -12672,9 +12923,6 @@ private const val SPREAD_FADE_FROM = 0.22f
 private const val SPREAD_FADE_END = 0.03f
 private const val SPREAD_BLUR_FROM = 0.12f
 private const val SPREAD_FOLD_BLUR = 0.2f
-// A rear card blurs while narrower than this share of its width, up to this much of the full blur.
-private const val SPREAD_BLUR_CLEAR_FROM = 0.45f
-private const val SPREAD_BLUR_CLEAR_TO = 0.75f
 /** Rows past the stack's pile shown per frame as the spread takes them (spreadCardsTo). */
 private const val SPREAD_SHOW_PER_FRAME = 2
 /**
@@ -12683,9 +12931,7 @@ private const val SPREAD_SHOW_PER_FRAME = 2
  * gathered into HyperOS's pile as a second motion (the user, 2026-10-26).
  */
 private const val SPREAD_HANDOFF_FROM = 0f
-private const val SPREAD_HANDOFF_RESPONSE = 0.4f
-/** Rear cards that blur while small behind the capsule: the first ones out, the rest hidden by them. */
-private const val SPREAD_BLURRED_CARDS = 2
+private const val SPREAD_HANDOFF_RESPONSE = 0.18f
 private const val SPREAD_SMALL_BLUR = 0.6f
 // ColorOS ExtStateAnimParams CapsuleToStack dragMaxDistance / dragMaxAction (px at 560 dpi): how
 // far the capsule follows the finger.

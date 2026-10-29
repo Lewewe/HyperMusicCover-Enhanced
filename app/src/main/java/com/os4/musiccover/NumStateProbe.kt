@@ -34,6 +34,11 @@ object NumStateProbe {
     private const val LAYER_TYPE = 11090
 
     @JvmStatic fun run(ctx: Context, i: Intent): String {
+        if (i.getStringExtra("do") == "motion") {
+            val ms = i.getIntExtra("ms", 0)
+            if (ms > 0) startMotion(ms.coerceIn(100, 5000))
+            return motion.toString()
+        }
         val sb = StringBuilder("at=${SystemClock.uptimeMillis()}")
         val stack = MiniPlayerRuntime.stackForProbe() ?: return "$sb no stack (no mini player up?)"
         val model = runCatching { modelOf(stack) }.getOrElse { return "$sb no model: $it" }
@@ -59,6 +64,27 @@ object NumStateProbe {
         sb.append(" || ").append(NumState.describe())
         sb.append(" || ").append(describe(ctx, stack, model))
         return sb.toString()
+    }
+
+    private var motion = StringBuilder("not armed")
+    private var motionGeneration = 0
+
+    /** Explicitly armed only; keep samples in memory so log I/O cannot stall the measured frames. */
+    private fun startMotion(ms: Int) {
+        val generation = ++motionGeneration
+        val start = SystemClock.uptimeMillis()
+        motion = StringBuilder("motion start=$start limit=$ms\n")
+        android.view.Choreographer.getInstance().postFrameCallback(object : android.view.Choreographer.FrameCallback {
+            var samples = 0
+            override fun doFrame(frameTimeNanos: Long) {
+                if (generation != motionGeneration) return
+                val elapsed = SystemClock.uptimeMillis() - start
+                motion.append(elapsed).append(' ').append(MiniPlayerRuntime.spreadMotionForProbe()).append('\n')
+                if (elapsed < ms && ++samples < 600)
+                    android.view.Choreographer.getInstance().postFrameCallback(this)
+                else motion.append("done\n")
+            }
+        })
     }
 
     private fun modelOf(stack: ViewGroup): Any {
@@ -172,6 +198,7 @@ object NumStateProbe {
         part("scrollY") { Xp.callMethod(Xp.callMethod(Xp.getObjectField(model, "notifContainerRefactor"), "get"), "getOwnScrollY") }
         for (s in listOf("NUMBER", "STACK", "LIST")) part("to$s") { scrollFor(model, s) }
         part("info") { value(model, "getOnUpdateChildSampleStackInfo") }
+        part("bottom") { NumState.bottomOnKeyguard() }
         sb.append("|| count: ")
         find(stack.rootView) { it.javaClass.name.endsWith("NotificationNumStateView") }.forEach { v ->
             sb.append(box(v)).append(" text=").append(texts(v)).append("; ")
