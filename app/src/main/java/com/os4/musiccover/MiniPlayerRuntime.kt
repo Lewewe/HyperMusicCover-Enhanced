@@ -1750,6 +1750,8 @@ object MiniPlayerRuntime {
     /** The list is being scrolled from a card: a card held where it landed goes with it. */
     @JvmStatic fun releaseNativeScrollPin() = live().forEach { it.releaseNativeScrollPin() }
 
+    @JvmStatic fun prepareForSleep() = live().forEach { it.prepareForSleep() }
+
     /**
      * That row folds back into the row of islands, following the finger from [ev] on as the
      * media card does when it is pulled down into the pill.
@@ -2163,6 +2165,7 @@ private class MiniPlayerController(
         // The spread's morphs place the pill; out as the list, it is not drawn.
         if (spread != null) {
             view.setAnimationMatrix(null)
+            lastFollow.fill(0f)
             return
         }
         // A flight's morph is not the pill's: the pill (and the small island coming up beside
@@ -9088,6 +9091,11 @@ private class MiniPlayerController(
      * pull down toward the fold is the latter alone, the scroll not moving till the let-go.
      */
     private fun listPulled(): Boolean = stackDragged() || kotlin.math.abs(NumState.overScroll()) > 0.5f
+
+    fun prepareForSleep() {
+        // Give the open rows back before HyperOS starts its own AOD fold, as for a media swipe.
+        if (colorOs() && spread != null) endSpread(folded = false, why = "native AOD handoff")
+    }
 
     /**
      * Over: [folded] the islands are back in their places and the focus rows go back out of the

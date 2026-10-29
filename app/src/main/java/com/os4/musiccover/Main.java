@@ -1141,6 +1141,7 @@ public class Main extends XposedModule {
         try {
             Class<?> ks = Xp.findClass("com.android.systemui.keyguard.KeyguardService$2", cl);
             Xp.hookAll(ks, "onStartedGoingToSleep", chain -> {
+                main().post(() -> MiniPlayerRuntime.prepareForSleep());
                 Object result = chain.proceed();
                 main().post(new Runnable() {
                     @Override
@@ -1247,6 +1248,7 @@ public class Main extends XposedModule {
             Xp.hookAll(sContainerCls, "doAnimationToAod", chain -> {
                 Object[] args = chain.getArgs().toArray();
                 boolean toAod = args.length > 0 && Boolean.TRUE.equals(args[0]);
+                if (toAod) MiniPlayerRuntime.prepareForSleep();
                 if (clockHeld() && toAod) {
                     // Ahead of the broadcast, which is ~110ms behind: the display is no longer
                     // interactive, and any colour set in between must not get the cover's tint.
