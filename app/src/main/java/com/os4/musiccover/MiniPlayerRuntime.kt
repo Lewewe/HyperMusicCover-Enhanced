@@ -123,7 +123,6 @@ object MiniPlayerRuntime {
                 val result = chain.proceed()
                 val event = chain.args.firstOrNull() as? MotionEvent
                 val stack = chain.thisObject as? View
-                if (event != null && stack != null) noteStackSwipe(event, stack)
                 if (event?.actionMasked == MotionEvent.ACTION_MOVE && stack != null &&
                     runCatching { Xp.getObjectField(stack, "mIsBeingDragged") == true }.getOrDefault(false)) {
                     live().forEach { it.onNativeListScroll(stack) }
@@ -1044,6 +1043,8 @@ object MiniPlayerRuntime {
      */
     @JvmStatic fun routeTouch(ev: MotionEvent): Boolean { android.os.Trace.beginSection("MC t.route"); try {
         val action = ev.actionMasked
+        // Native hands-up can fold the list inside dispatch, before onScrollTouch returns.
+        stackForProbe()?.let { noteStackSwipe(ev, it) }
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) releasePress()
         lockPull = when (action) {
             MotionEvent.ACTION_MOVE -> ev.rawY - routedY
@@ -7415,6 +7416,7 @@ private class MiniPlayerController(
         // Read before the spread's rows come in (setSpread runs the pipeline on the next frame).
         s.focusBefore = NumState.focusCount()
         s.finger = finger
+        s.rearHandoff.listOpened(MiniPlayerRuntime.stackGesture)
         spread = s
         // A card held where it landed goes with the list from here.
         releaseNativeScrollPin()
@@ -7444,6 +7446,11 @@ private class MiniPlayerController(
                 && (s.phase == SPREAD_OPEN || s.phase == SPREAD_CLOSING)) {
                 endSpread(folded = false, why = "native pile")
                 return
+            }
+            if (colorOs() && (s.phase == SPREAD_OPENING || s.phase == SPREAD_OPEN) &&
+                !s.rearHandoff.scrolling && s.rearHandoff.scroll(MiniPlayerRuntime.stackGesture, MiniPlayerRuntime.stackSwipedUp)) {
+                spreadLate.toList().forEach(::showScrolledRow)
+                spreadTrace("spread rows released to user scroll while ph=${s.phase}")
             }
             when (s.phase) {
                 SPREAD_WAIT -> waitSpread(s)
@@ -7650,7 +7657,8 @@ private class MiniPlayerController(
                     // Land at LIST's position, not at an endpoint riding HyperOS's other spring.
                     val remaining = s.cardsY - (NumState.position() ?: s.islandsY)
                     CoverMorphMotion.Box(leadXY[0] - parent.scrollX + row.left + leadBounds.left,
-                        listTop ?: (leadXY[1] - parent.scrollY + row.top + leadBounds.top - remaining),
+                        listTop?.let { it + if (s.rearHandoff.scrolling) remaining else 0 }
+                            ?: (leadXY[1] - parent.scrollY + row.top + leadBounds.top - remaining),
                         leadBounds.width(), leadBounds.height())
                 } else if (toCards || s.foldMorphEnd == null || from == null || footer == null) null else
                     CoverMorphMotion.Box(from[0] - from[2] / 2f,
@@ -7760,7 +7768,8 @@ private class MiniPlayerController(
         if (colorOs() && s.lead == null && s.stackSeat == SEAT_BIG && s.phase != SPREAD_OPEN &&
             s.items.none { it.morph != null }) startSpreadLead(s, toCards = s.phase != SPREAD_CLOSING)
         val foldEnd = s.foldMorphEnd.takeIf { s.phase == SPREAD_CLOSING }
-        s.footerFill = if (foldEnd != null) ColorOsSpreadGeometry.foldGather(p, foldEnd) else
+        s.footerFill = if (foldEnd != null) ColorOsSpreadGeometry.foldGather(p, foldEnd)
+            else if (s.phase == SPREAD_OPENING && s.rearHandoff.scrolling) 1f else
             s.footerBottom?.takeUnless { s.openedFromPile }?.let { footer ->
             ColorOsSpreadGeometry.footerFill(s.home?.y ?: footer, footer,
                 s.leadRow?.let { rowHeight(it) * it.scaleX } ?: 1f, p,
@@ -8702,14 +8711,14 @@ private class MiniPlayerController(
         if (s.phase == SPREAD_OPENING && s.letGo?.let { kotlin.math.abs(p - it.target) > 0.001f } == true) return
         // A finished morph must not hand back to a native scroll still 100px short of LIST.
         if (s.phase == SPREAD_OPENING && s.letGo != null && s.footerBottom != null &&
-            s.items.isEmpty() && !s.toStack && kotlin.math.abs(y - s.cardsY) > dp(2f) &&
+            s.items.isEmpty() && !s.toStack && !s.rearHandoff.scrolling && kotlin.math.abs(y - s.cardsY) > dp(2f) &&
             android.os.SystemClock.uptimeMillis() - s.since < SPREAD_GIVE_UP_MS) return
         // At an end and the stack already reading that state, no finger on it: done now. The fold
         // overshoots - the scroll ran to -275 and took 700ms coming back to 0 - and waiting for it
         // to stand still held the media card out for all of it after the islands had landed
         // (the user's "pause" on a pull down, 2026-09-30). The finger by the stack's own drag
         // alone: the overshoot is a pull past the scroll too (os= in the frame log), not a finger.
-        if (!stackDragged()) {
+        if (!stackDragged() || s.rearHandoff.scrolling) {
             if (s.phase == SPREAD_CLOSING && p <= 0.02f && NumState.inNumber == true) {
                 endSpread(folded = true, why = "folded")
                 return
@@ -8938,11 +8947,6 @@ private class MiniPlayerController(
      * else moving it - a notification coming or going - is the list's own: its rest follows.
      */
     private fun watchOpen(s: Spread) {
-        if (colorOs() && !s.rearHandoff.scrolling &&
-            s.rearHandoff.scroll(MiniPlayerRuntime.stackGesture, MiniPlayerRuntime.stackSwipedUp)) {
-            spreadLate.toList().forEach(::showScrolledRow)
-            spreadTrace("spread rows released to user scroll")
-        }
         // Pulled on from our pile to the stack's list: the cards go to their list places.
         if (colorOs() && s.toStack && NumState.state() == "LIST") {
             s.toStack = false
@@ -9915,7 +9919,10 @@ private class MiniPlayerController(
         return "ph=${s.phase} p=${s.progress} fill=${s.footerFill} scroll=${NumState.position()} " +
             "goal=${s.cardsY} held=${s.finger?.ended == false} v=${s.letGo?.velocity} " +
             "box=${box?.y},${box?.w},${box?.h} dest=${s.lead?.nativeBoxY()} " +
-            "native=${row?.translationY},${row?.scaleX},${row?.transitionAlpha}"
+            "native=${row?.translationY},${row?.scaleX},${row?.transitionAlpha} " +
+            "gesture=${MiniPlayerRuntime.stackGesture} up=${MiniPlayerRuntime.stackSwipedUp} " +
+            "down=${MiniPlayerRuntime.stackPulledDown} drag=${stackDragged()} scrolling=${s.rearHandoff.scrolling} " +
+            "over=${NumState.overScroll()}"
     }
 
     fun rowTree(match: String): String {

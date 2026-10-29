@@ -45,7 +45,7 @@ internal class ColorOsSpreadHandoff {
     var scrolling = false
         private set
 
-    fun listOpened(gesture: Long) { openedGesture = gesture }
+    fun listOpened(gesture: Long) { if (openedGesture == null) openedGesture = gesture }
 
     /** The opening flick is not a second gesture scrolling an already open list. */
     fun scroll(gesture: Long, upward: Boolean): Boolean {

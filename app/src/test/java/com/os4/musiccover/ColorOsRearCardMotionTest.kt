@@ -8,6 +8,25 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ColorOsRearCardMotionTest {
+    @Test fun aSecondUpwardGestureTakesOverEvenBeforeOpeningFinishes() {
+        val handoff = ColorOsSpreadHandoff()
+        handoff.listOpened(10L)
+        assertTrue(!handoff.scroll(10L, true))
+        assertTrue(!handoff.scroll(11L, false))
+        assertTrue(handoff.scroll(11L, true))
+        handoff.listOpened(11L)
+        assertTrue(handoff.scrolling)
+        assertTrue(handoff.canReturnToNative(true, 1f, false, true))
+    }
+
+    @Test fun finishingOpeningCannotSwallowANewerTouchBeforeItsDirectionIsKnown() {
+        val handoff = ColorOsSpreadHandoff()
+        handoff.listOpened(20L)
+        handoff.listOpened(21L)
+        assertTrue(!handoff.scroll(21L, false))
+        assertTrue(handoff.scroll(21L, true))
+    }
+
     @Test fun footerGrowthLagsAShortFlickAndKeepsTheSameClockThroughRelease() {
         for (hz in listOf(60, 120)) for (index in listOf(0, 5, 30)) {
             val card = ColorOsRearCardMotion(startedOpen = false)
