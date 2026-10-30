@@ -7687,8 +7687,11 @@ private class MiniPlayerController(
                     // Land at LIST's position, not at an endpoint riding HyperOS's other spring.
                     val remaining = s.cardsY - (NumState.position() ?: s.islandsY)
                     CoverMorphMotion.Box(leadXY[0] - parent.scrollX + row.left + leadBounds.left,
-                        listTop?.let { it + if (s.rearHandoff.scrolling) remaining else 0 }
-                            ?: (leadXY[1] - parent.scrollY + row.top + leadBounds.top - remaining),
+                        // Scrolled by a second gesture: where the stack draws it now. With media playing the
+                        // stack scrolls without moving its position, and the first card stood still while
+                        // the list left, then the column vanished at hand-back (recording 2026-10-30).
+                        if (s.rearHandoff.scrolling) leadXY[1] - parent.scrollY + row.top + leadBounds.top
+                        else listTop ?: (leadXY[1] - parent.scrollY + row.top + leadBounds.top - remaining),
                         leadBounds.width(), leadBounds.height())
                 } else if (toCards || s.foldMorphEnd == null || from == null || footer == null) null else
                     CoverMorphMotion.Box(from[0] - from[2] / 2f,
