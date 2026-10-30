@@ -8,9 +8,11 @@ internal object ColorOsNotificationMotion {
     const val OPEN_RESPONSE = 0.54f
     const val OPEN_DAMPING = 0.999f
 
+    fun openingResponse(notificationCount: Int) = if (notificationCount in 1..3) 0.45f else OPEN_RESPONSE
+
     // Keep release speed below the non-overshooting spring's remaining stopping distance.
-    fun openingVelocity(progress: Float, velocity: Float): Float = velocity.coerceIn(0f,
-        minOf(4f, (1f - progress).coerceIn(0f, 1f) * (2f * Math.PI.toFloat() / OPEN_RESPONSE)))
+    fun openingVelocity(progress: Float, velocity: Float, response: Float = OPEN_RESPONSE): Float = velocity.coerceIn(0f,
+        minOf(4f, (1f - progress).coerceIn(0f, 1f) * (2f * Math.PI.toFloat() / response)))
 
     fun materialOut(progress: Float) = 1f - ease(0.08f, 0.425f, progress)
     fun nativeIn(progress: Float) = ease(0f, 0.08f, progress)

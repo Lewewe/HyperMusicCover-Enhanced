@@ -8,6 +8,30 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ColorOsSpreadGeometryTest {
+    @Test fun oneToThreeNotificationsFollowStraightEdgesUntilTheListAndReverseTheSameGuide() {
+        for (count in 1..3) for (cardTop in listOf(1293f, 1798f, 2057f)) {
+            val widths = (0..120).map { frame ->
+                val p = frame / 120f
+                val top = 2416f + (cardTop - 2416f) * p
+                val width = ColorOsSpreadGeometry.routeWidth(2416f, 622f, cardTop, 1128f, top, count)
+                assertEquals(622f + 506f * p, width, 0.001f)
+                if (frame < 120) assertTrue(width < 1128f)
+                width
+            }
+            assertEquals(622f, widths.first(), 0f)
+            assertEquals(1128f, widths.last(), 0f)
+            assertTrue(widths.asReversed().zipWithNext().all { (a, b) -> b < a })
+        }
+    }
+
+    @Test fun longerOrUnknownListsKeepTheirExistingEarlyFullWidthGuide() {
+        for (count in listOf(0, 4, 10, 100)) for (frame in 0..120) {
+            val top = 2416f - 618f * frame / 120f
+            assertEquals(ColorOsSpreadGeometry.routeWidth(2416f, 622f, 1798f, 1128f, top),
+                ColorOsSpreadGeometry.routeWidth(2416f, 622f, 1798f, 1128f, top, count), 0f)
+        }
+    }
+
     @Test fun closingMediaFollowsTheLeadBackToItsOriginalSeat() {
         var previous = 866f
         for (i in 0..120) {

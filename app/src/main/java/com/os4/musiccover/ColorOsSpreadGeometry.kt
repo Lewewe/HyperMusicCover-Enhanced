@@ -12,12 +12,14 @@ internal object ColorOsSpreadGeometry {
         from + (nativeTop - from) * progress.coerceIn(0f, 1f), leadTop - height - gap)
 
     /** Both card edges travel toward the pill along the same reversible, height-led guide. */
-    fun routeWidth(pillTop: Float, pillWidth: Float, cardTop: Float, cardWidth: Float, top: Float): Float {
+    fun routeWidth(pillTop: Float, pillWidth: Float, cardTop: Float, cardWidth: Float, top: Float,
+                   notificationCount: Int = 0): Float {
         val distance = pillTop - cardTop
         if (distance <= 1f) return cardWidth
         val p = ((pillTop - top) / distance).coerceIn(0f, 1f)
-        // Reach full width midway, then travel vertically; ease the join in either direction.
-        return pillWidth + (cardWidth - pillWidth) * footNarrowing(p / 0.55f)
+        // Short lists follow straight edges all the way; longer lists keep the early full width.
+        val widthProgress = if (notificationCount in 1..3) p else footNarrowing(p / 0.55f)
+        return pillWidth + (cardWidth - pillWidth) * widthProgress
     }
 
     // Keep the stagger bounded: the tail must not trail a fast flick into the shortcut row.

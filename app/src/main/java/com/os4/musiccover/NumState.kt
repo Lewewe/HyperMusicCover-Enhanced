@@ -246,6 +246,11 @@ internal object NumState {
         (Xp.getObjectField(info, "focusNotifCount") as Number).toInt()
     }.getOrNull()
 
+    fun normalCount(): Int? = runCatching {
+        val info = value(model() ?: return null, "getOnUpdateChildSampleStackInfo") ?: return null
+        (Xp.getObjectField(info, "normalNotifCount") as Number).toInt()
+    }.getOrNull()
+
     /**
      * The stack's pull past its scroll now (the model's overScrollAmount), 0 unread. A finger
      * pulling the list down toward the fold moves this, not the scroll: the scroll only follows

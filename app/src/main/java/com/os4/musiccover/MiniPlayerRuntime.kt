@@ -7249,6 +7249,7 @@ private class MiniPlayerController(
 
     private class Spread(val items: List<SpreadItem>, val stackSeat: Int) {
         val rearHandoff = ColorOsSpreadHandoff()
+        var notificationCount = 0
         var media: SpreadMedia? = null
         /** A second pull reveals rows outside our resting pile; they must join, not wait hidden. */
         var openedFromPile = false
@@ -7534,7 +7535,7 @@ private class MiniPlayerController(
         s.phase = SPREAD_OPENING
         // A flick released before row layout still needs the same continuous opening clock.
         if (colorOs() && held == null && s.footerBottom != null && s.stackSeat == SEAT_BIG) {
-            s.letGo = Jelly(if (s.items.isEmpty()) ColorOsNotificationMotion.OPEN_RESPONSE else SPREAD_ROW_RESPONSE,
+            s.letGo = Jelly(if (s.items.isEmpty()) ColorOsNotificationMotion.openingResponse(s.notificationCount) else SPREAD_ROW_RESPONSE,
                 if (s.items.isEmpty()) ColorOsNotificationMotion.OPEN_DAMPING else SPREAD_FOLD_DAMPING)
                 .apply { target = 1f }
         }
@@ -7554,6 +7555,7 @@ private class MiniPlayerController(
      * posed by the progress from then on. One with no card, or no place, fades where it is.
      */
     private fun startSpreadMorphs(s: Spread, toCards: Boolean) {
+        s.notificationCount = NumState.normalCount() ?: 0
         if (!toCards) beginSpreadMediaFold(s)
         val pill = player
         // Closing, the row is drawn again: its places fade in as the cards come down.
@@ -7662,7 +7664,7 @@ private class MiniPlayerController(
             widthAtY = home?.let { h -> { top ->
                 val from = s.closeFrom?.get(row)?.takeIf { !toCards && it.size >= 4 }
                 val parent = row.parent as? View
-                if (from != null) ColorOsSpreadGeometry.routeWidth(h.y, h.w, from[1], from[2], top)
+                if (from != null) ColorOsSpreadGeometry.routeWidth(h.y, h.w, from[1], from[2], top, s.notificationCount)
                 else if (parent != null) {
                     parent.getLocationOnScreen(leadXY)
                     leadBounds.set(0f, 0f, row.width.toFloat(), rowHeight(row))
@@ -7670,7 +7672,8 @@ private class MiniPlayerController(
                     val remaining = s.cardsY - (NumState.position() ?: s.islandsY)
                     ColorOsSpreadGeometry.routeWidth(h.y, h.w,
                         listTop ?: (leadXY[1] - parent.scrollY + row.top + leadBounds.top - remaining),
-                        leadBounds.width(), top)
+                        leadBounds.width(), top + if (toCards) s.leadNudge * (1f - s.progress) else 0f,
+                        s.notificationCount)
                 } else row.width.toFloat()
             } },
             nativeBox = {
@@ -7755,6 +7758,12 @@ private class MiniPlayerController(
         if (kotlin.math.abs(span) < 1f) return if (s.phase == SPREAD_CLOSING) 0f else 1f
         return ((y - s.islandsY) / span).coerceIn(0f, 1f)
     }
+
+    // A short native scroll must not finish the entire morph before a flick's finger lifts.
+    private fun spreadOpeningSpan(s: Spread): Float =
+        kotlin.math.abs(s.cardsY - s.islandsY).toFloat().let {
+            if (colorOs()) it.coerceAtLeast(dp(NOTE_SPAN_MIN_DP * 2f).toFloat()) else it
+        }
 
     private fun applySpread(s: Spread, p: Float) {
         s.progress = p
@@ -8215,7 +8224,8 @@ private class MiniPlayerController(
             if (footer != null) {
                 val top = cy - winH / 2f
                 val routeW = ColorOsSpreadGeometry.routeWidth(home.y, home.w,
-                    from?.get(1) ?: spreadDrawn.top, from?.get(2) ?: spreadDrawn.width(), top)
+                    from?.get(1) ?: spreadDrawn.top, from?.get(2) ?: spreadDrawn.width(), top,
+                    spread?.notificationCount ?: 0)
                 if (winW > routeW) {
                     winH *= routeW / winW
                     winW = routeW
@@ -8745,7 +8755,7 @@ private class MiniPlayerController(
         // opened, 0.8s in, and on its scroll the capsule stood still that long, then shot up
         // (frames of 2026-10-25).
         val held = s.finger?.takeIf { colorOs() && !it.ended && !it.base.isNaN() && s.phase == SPREAD_OPENING }
-        val span = kotlin.math.abs(s.cardsY - s.islandsY).toFloat()
+        val span = spreadOpeningSpan(s)
         // Let go, on from where the finger had it: read off the stack, which had not followed yet,
         // the capsule dropped from half way to its place in one frame (the user, 2026-10-25).
         val letGo = s.letGo?.takeIf { s.phase == SPREAD_OPENING }
@@ -8774,7 +8784,7 @@ private class MiniPlayerController(
         // Native idle is not morph idle: a quick flick can still have half its flight left.
         if (s.phase == SPREAD_OPENING && s.letGo?.let { kotlin.math.abs(p - it.target) > 0.001f } == true) return
         // A finished morph must not hand back to a native scroll still 100px short of LIST.
-        if (s.phase == SPREAD_OPENING && s.letGo != null && s.footerBottom != null &&
+        if (s.phase == SPREAD_OPENING && s.letGo?.target == 1f && s.footerBottom != null &&
             s.items.isEmpty() && !s.toStack && !s.rearHandoff.scrolling && kotlin.math.abs(y - s.cardsY) > dp(2f) &&
             android.os.SystemClock.uptimeMillis() - s.since < SPREAD_GIVE_UP_MS) return
         // At an end and the stack already reading that state, no finger on it: done now. The fold
@@ -8896,8 +8906,10 @@ private class MiniPlayerController(
     private fun followFinger(s: Spread, f: SpreadFinger) {
         if (f.base.isNaN()) return
         val span = s.cardsY - s.islandsY
-        val d = (f.pulled() - f.base).coerceAtLeast(0f).coerceAtMost(kotlin.math.abs(span).toFloat())
-        NumState.setScroll(s.islandsY + (if (span >= 0) d else -d).toInt())
+        val p = ((f.pulled() - f.base) / spreadOpeningSpan(s).coerceAtLeast(1f)).coerceIn(0f, 1f)
+        // Prepare the short native viewport; the lead morph still follows the finger's progress.
+        val scrollP = if (colorOs() && s.items.isEmpty() && kotlin.math.abs(span) < spreadOpeningSpan(s)) 1f else p
+        NumState.setScroll(s.islandsY + (span * scrollP).roundToInt())
     }
 
     /** The finger on a pulled-open spread moved (the pill's route, as noteDragMove). */
@@ -8951,15 +8963,16 @@ private class MiniPlayerController(
         }
         val smoothOpen = s.footerBottom != null && s.stackSeat == SEAT_BIG && s.items.isEmpty() && f.toList && !s.toStack
         if (colorOs()) s.letGo = Jelly(
-            if (smoothOpen) ColorOsNotificationMotion.OPEN_RESPONSE
+            if (smoothOpen) ColorOsNotificationMotion.openingResponse(s.notificationCount)
                 else if (s.footerBottom != null && s.stackSeat == SEAT_BIG) SPREAD_ROW_RESPONSE else SPREAD_FOLD_RESPONSE,
             if (smoothOpen) ColorOsNotificationMotion.OPEN_DAMPING else SPREAD_FOLD_DAMPING).apply {
             value = s.progress
             target = if (f.toList || s.toStack) 1f else 0f
             // Continue the finger's motion instead of braking to zero on the release frame.
-            val span = kotlin.math.abs(s.cardsY - s.islandsY).toFloat()
+            val span = spreadOpeningSpan(s)
             if (!cancelled && span >= 1f) velocity = (-velocityY / span).coerceIn(-4f, 4f)
-            if (smoothOpen) velocity = ColorOsNotificationMotion.openingVelocity(value, velocity)
+            if (smoothOpen) velocity = ColorOsNotificationMotion.openingVelocity(value, velocity,
+                ColorOsNotificationMotion.openingResponse(s.notificationCount))
         }
         s.finger = null
         s.still = 0
@@ -9995,7 +10008,7 @@ private class MiniPlayerController(
         val box = s.lead?.containerBox()
         val row = s.leadRow
         return "ph=${s.phase} p=${s.progress} fill=${s.footerFill} scroll=${NumState.position()} " +
-            "goal=${s.cardsY} held=${s.finger?.ended == false} v=${s.letGo?.velocity} " +
+            "goal=${s.cardsY} count=${s.notificationCount} held=${s.finger?.ended == false} v=${s.letGo?.velocity} " +
             "box=${box?.y},${box?.w},${box?.h} dest=${s.lead?.nativeBoxY()} " +
             "native=${row?.translationY},${row?.scaleX},${row?.transitionAlpha} " +
             "gesture=${MiniPlayerRuntime.stackGesture} up=${MiniPlayerRuntime.stackSwipedUp} " +

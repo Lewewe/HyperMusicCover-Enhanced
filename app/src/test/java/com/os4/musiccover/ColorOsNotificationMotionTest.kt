@@ -5,13 +5,14 @@ import org.junit.Test
 
 class ColorOsNotificationMotionTest {
     @Test fun openingDeceleratesNearTheListWithoutOvershootingOrHittingAClamp() {
-        for (hz in listOf(60, 120)) for (start in listOf(0f, 0.43f, 0.8f, 0.95f))
+        for (count in listOf(0, 1, 2, 3, 4)) for (hz in listOf(60, 120)) for (start in listOf(0f, 0.43f, 0.8f, 0.95f))
             for (speed in listOf(0f, 2f, 8f)) {
-                val spring = Jelly(ColorOsNotificationMotion.OPEN_RESPONSE, ColorOsNotificationMotion.OPEN_DAMPING)
+                val response = ColorOsNotificationMotion.openingResponse(count)
+                val spring = Jelly(response, ColorOsNotificationMotion.OPEN_DAMPING)
                     .apply {
                         value = start
                         target = 1f
-                        velocity = ColorOsNotificationMotion.openingVelocity(start, speed)
+                        velocity = ColorOsNotificationMotion.openingVelocity(start, speed, response)
                     }
                 repeat(hz * 2) {
                     val before = spring.value
@@ -24,6 +25,23 @@ class ColorOsNotificationMotionTest {
                 }
                 assertEquals(1f, spring.value, 0.001f)
             }
+    }
+
+    @Test fun shortListsArriveSoonerAndLongListsKeepTheirExistingTiming() {
+        fun settleFrames(count: Int): Int {
+            val spring = Jelly(ColorOsNotificationMotion.openingResponse(count), ColorOsNotificationMotion.OPEN_DAMPING)
+                .apply { value = 0.65f; target = 1f }
+            for (frame in 1..240) {
+                spring.step(1f / 120f)
+                if (spring.value >= 0.999f) return frame
+            }
+            error("opening did not settle")
+        }
+        val normal = settleFrames(4)
+        for (count in 1..3) assertTrue(settleFrames(count) < normal * 0.9f)
+        assertEquals(ColorOsNotificationMotion.OPEN_RESPONSE, ColorOsNotificationMotion.openingResponse(4), 0f)
+        assertEquals(normal, settleFrames(0))
+        assertEquals(normal, settleFrames(100))
     }
 
     @Test fun foldingFacesCrossfadeWithALightBlurThatClearsAtBothEnds() {
