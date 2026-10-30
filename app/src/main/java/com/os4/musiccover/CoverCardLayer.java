@@ -64,8 +64,10 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
     private long aodClockOverlapSince;
 
     /** Latch only a real, sustained AOD collision; wake restores the user's page choice. */
-    private boolean avoidAodClock(long nowNs, ClockCollapse.Phase phase, boolean compact) {
-        if (Main.screenOnCached() || phase != ClockCollapse.Phase.AOD || compact
+    private boolean avoidAodClock(long nowNs, ClockCollapse.Phase phase, boolean compact, boolean placing) {
+        // Not while the square is still flying to its AOD place: from a list scrolled over the
+        // player it starts above the screen and crosses the clock on the way (2026-10-30).
+        if (Main.screenOnCached() || phase != ClockCollapse.Phase.AOD || compact || placing
                 || opacity <= 0.05f || current == null || Float.isNaN(drawX)
                 || !ClockCollapse.clockBoundsOnScreen(aodClockBounds)) {
             aodClockOverlapSince = 0L;
@@ -1041,7 +1043,7 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
         }
         boolean treating = followSkipTreatment(dt);
         boolean placing = followPlace(phase, dt, response, target);
-        boolean checkingClock = avoidAodClock(nowNs, phase, compactArtwork);
+        boolean checkingClock = avoidAodClock(nowNs, phase, compactArtwork, placing);
         if (phase == ClockCollapse.Phase.AOD) {
             flipAngle = flipTarget;
             flipVelocity = 0f;
