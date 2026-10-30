@@ -3,7 +3,6 @@
 // Developed with the assistance of OpenAI Codex.
 package com.os4.musiccover
 
-import android.content.Context
 import android.view.View
 import java.lang.reflect.Method
 import java.util.WeakHashMap
@@ -14,11 +13,9 @@ internal object NativeNotificationMaterial {
         var refreshes = 0
     }
     private val bindings = WeakHashMap<View, Binding>()
-    private val effects = WeakHashMap<View, String>()
     private val blendColors = WeakHashMap<View, IntArray>()
     private val blendFactors = WeakHashMap<View, Float>()
     private var blendSetter: Method? = null
-    private var depth = 0
     private var refreshing = false
 
     fun install(loader: ClassLoader) {
@@ -57,24 +54,6 @@ internal object NativeNotificationMaterial {
                 chain.proceed()
             }
         }.onFailure { Xp.w("MCNativeMaterial: native binder unavailable: $it") }
-
-        // Probe diagnostics only: these effects do not become restoration recipes.
-        runCatching {
-            val helper = Xp.findClass(
-                "com.android.systemui.statusbar.notification.style.vieweffect.NotificationViewEffectHelper", loader)
-            val field = helper.getDeclaredField("notificationRowEffectsMap").apply { isAccessible = true }
-            val classes = (field.get(null) as Map<*, *>).values.filterNotNull().map { it.javaClass }.distinct()
-            for (cls in classes) Xp.hookAll(cls, "apply") { chain ->
-                val row = chain.args.firstOrNull() as? View
-                val context = chain.args.getOrNull(1) as? Context
-                val outer = depth == 0
-                depth++
-                val result = try { chain.proceed() } finally { depth-- }
-                if (outer && row != null && context != null)
-                    effects[row] = "${cls.simpleName}/${context.resources.configuration.uiMode}"
-                result
-            }
-        }.onFailure { Xp.w("MCNativeMaterial: effect probe unavailable: $it") }
     }
 
     /** The OEM API scales each blend colour's alpha while preserving its RGB and blend mode. */
@@ -121,7 +100,7 @@ internal object NativeNotificationMaterial {
             Xp.getObjectField(state, "isShowingKeyguardNotification")
         }.getOrNull()
         val bg = runCatching { Xp.getObjectField(row, "mBackgroundNormal") as? View }.getOrNull()
-        return "${effects[row] ?: "unknown"}/refresh=${binding?.refreshes}/keyguard=$keyguard" +
+        return "refresh=${binding?.refreshes}/keyguard=$keyguard" +
             "/blend=${bg?.let { blendColors[it]?.size }}/${bg?.let { blendFactors[it] }}"
     }
 }

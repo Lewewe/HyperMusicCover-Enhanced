@@ -8396,12 +8396,13 @@ private class MiniPlayerController(
     private val spreadKeepShown = android.view.ViewTreeObserver.OnPreDrawListener {
         for (row in spreadForced.keys) if (row.visibility == View.INVISIBLE) MiniPlayerRuntime.showSpreadRow(row)
         // Native animations update rows after Choreographer; pose them last on both legs.
-        spread?.takeIf { it.phase == SPREAD_CLOSING && it.foldMorphEnd != null }?.let { s ->
+        val s = spread
+        // applySpread poses the media card too; only otherwise is it posed here.
+        if (s != null && s.phase == SPREAD_CLOSING && s.foldMorphEnd != null)
             applySpread(s, s.fold?.value?.coerceAtLeast(-0.05f) ?: s.progress)
-        }
-        spread?.takeIf { it.phase == SPREAD_OPENING && it.footerBottom != null && it.items.isEmpty() }
-            ?.let { applySpread(it, it.progress) }
-        spread?.takeIf { it.media != null }?.let(::poseSpreadMedia)
+        else if (s != null && s.phase == SPREAD_OPENING && s.footerBottom != null && s.items.isEmpty())
+            applySpread(s, s.progress)
+        else if (s?.media != null) poseSpreadMedia(s)
         true
     }
 
