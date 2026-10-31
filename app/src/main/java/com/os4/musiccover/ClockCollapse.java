@@ -784,16 +784,21 @@ final class ClockCollapse {
                 Main.density(), nativeBottom, media, ClockPageSize.nativeTarget());
     }
 
-    /** A long native clock may leave no initial morph endpoint until its collapse starts. */
-    static float compactContentBottomFor(View layer) {
+    /**
+     * A long native clock may leave no initial morph endpoint until its collapse starts. Sized as
+     * ClockPageSize will size it for this artwork: a landscape cover that fits keeps the native
+     * clock, so the compact size landed it above its card, which then jumped down (2026-10-31).
+     */
+    static float compactContentBottomFor(View layer, float aspect) {
         Live m = ARTWORK_FIT;
         if (!measure(m)) return Float.NaN;
         float full = fullUnitFor(sPhase, m);
         float reference = sizeBase(m, full);
         float requested = Float.isNaN(Main.sClockSize) ? Main.sClockHeightDp * Main.density()
                 : Main.sClockSize * reference;
+        boolean nativeSize = CoverCardStyle.usesNativeClock(aspect) && nativeLandscapeFits(aspect);
         float unit = ClockSizePolicy.coverUnit(requested, reference, full,
-                1f, Main.MIN_CLOCK_K, 0f);
+                CoverCardStyle.clockScale(aspect), Main.MIN_CLOCK_K, nativeSize ? 1f : 0f);
         if (unit > full) unit = full;
         float bottom = artworkContentBottom(m, unit);
         View g = firstTarget();

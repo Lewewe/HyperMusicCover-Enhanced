@@ -7675,7 +7675,7 @@ public class Main extends XposedModule {
         if (r == null && sScreenOn) {
             r = effectiveCoverStyle().place(layer.getWidth(), layer.getHeight(),
                     layer.getResources().getDisplayMetrics().density,
-                    ClockCollapse.compactContentBottomFor(layer) - xy[1],
+                    ClockCollapse.compactContentBottomFor(layer, aspect) - xy[1],
                     ClockCollapse.unzoomY(layer, mediaTop) - xy[1], aspect);
         }
         return r == null ? null : CoverMorphMotion.cardBox(xy[0] + r.x,
