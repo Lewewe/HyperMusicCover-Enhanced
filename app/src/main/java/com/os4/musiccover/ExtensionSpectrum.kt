@@ -30,7 +30,9 @@ import android.os.Parcel
  * alive effects mode; then the line count and per
  * line the text, start and end ms, whether it is the duet's other singer, the word timing (three
  * int arrays, null for a line-timed file), and the romanisation and translation rows exactly as
- * the lock screen shows them (null when switched off or absent). An empty set means none.
+ * the lock screen shows them (null when switched off or absent); last, whether Gentle lyric flow
+ * is on (1 or 0), after the lines so an extension that stops reading there still parses. An
+ * empty set means none.
  *
  * Only the extension signed like this module is served.
  */
@@ -228,7 +230,8 @@ object ExtensionSpectrum {
         val pkg = LockLyrics.activePlayerPackage()
         val title = LockLyrics.activeTitle()
         val look = "$version|$pkg|$title|${style.sizeSp}|${style.weight}|${LockLyrics.sAlign}|" +
-            "${LockLyrics.sDepthBlur}|${LockLyrics.sAliveFx}|$below|${LockLyrics.sOnlineTranslateMode}"
+            "${LockLyrics.sDepthBlur}|${LockLyrics.sAliveFx}|$below|${LockLyrics.sOnlineTranslateMode}|" +
+            "${LockLyrics.sRapidGroups}"
         if (look == sentLyrics) return
         sentLyrics = look
         val lines = LockLyrics.lines()
@@ -254,6 +257,7 @@ object ExtensionSpectrum {
                 p.writeString(if (below and LockLyrics.BELOW_ROMA != 0) l.renderedRoma() else null)
                 p.writeString(if (below and LockLyrics.BELOW_TRANS != 0) LyricView.translationFor(l) else null)
             }
+            p.writeInt(if (LockLyrics.sRapidGroups) 1 else 0)
             s.transact(TX_LYRICS, p, null, IBinder.FLAG_ONEWAY)
         } catch (t: Throwable) {
             Xp.w(TAG + "lyrics not sent: $t")
