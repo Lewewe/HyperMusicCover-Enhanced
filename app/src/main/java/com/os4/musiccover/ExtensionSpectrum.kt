@@ -24,12 +24,20 @@ import android.os.Parcel
  * composed by [CoverCompose.cardBackground] - the cropped cover blurred under its own colour
  * regions, the very backdrop the lock screen shows - at a landscape size, sent once per track.
  *
+ * The current lyric goes along as code [TX_LYRICS] whenever [LockLyrics] settles a new set or
+ * its look settings change, so the extension draws it the way the user set HMC-E's lyrics up:
+ * size sp, weight, alignment, depth blur %, alive effects mode; then the line count and per
+ * line the text, start and end ms, whether it is the duet's other singer, the word timing (three
+ * int arrays, null for a line-timed file), and the romanisation and translation rows exactly as
+ * the lock screen shows them (null when switched off or absent). An empty set means none.
+ *
  * Only the extension signed like this module is served.
  */
 object ExtensionSpectrum {
     const val PKG = "com.yzc26623.HyperImmersive"
     private const val TX_LEVELS = IBinder.FIRST_CALL_TRANSACTION
     private const val TX_BACKDROP = IBinder.FIRST_CALL_TRANSACTION + 1
+    private const val TX_LYRICS = IBinder.FIRST_CALL_TRANSACTION + 2
     /** Landscape backdrop size; it is a blur of colour, so a quarter of the screen is plenty. */
     private const val BACKDROP_W = 664
     private const val BACKDROP_H = 305
@@ -80,6 +88,7 @@ object ExtensionSpectrum {
             if (sink != null) {
                 artFromSession()
                 pushBackdrop()
+                pushLyrics()
                 main.postDelayed(this, 300L)
             }
         }
@@ -87,7 +96,7 @@ object ExtensionSpectrum {
 
     private fun begin(b: IBinder) {
         // A new sink (the extension restarted) has seen no backdrop yet.
-        if (sink !== b) sentKey = ""
+        if (sink !== b) { sentKey = ""; sentLyrics = "" }
         if (sink == null) { sink = b; main.removeCallbacks(recolor); recolor.run() }
         main.removeCallbacks(expire)
         main.postDelayed(expire, EXPIRE_MS)
@@ -205,6 +214,47 @@ object ExtensionSpectrum {
                 p.recycle()
                 bmp.recycle()
             }
+        }
+    }
+
+    private var sentLyrics = ""
+
+    private fun pushLyrics() {
+        val s = sink ?: return
+        val version = LockLyrics.version()
+        val style = LockLyrics.sStyle
+        val below = LockLyrics.below()
+        val look = "$version|${style.sizeSp}|${style.weight}|${LockLyrics.sAlign}|" +
+            "${LockLyrics.sDepthBlur}|${LockLyrics.sAliveFx}|$below|${LockLyrics.sOnlineTranslateMode}"
+        if (look == sentLyrics) return
+        sentLyrics = look
+        val lines = LockLyrics.lines()
+        val p = Parcel.obtain()
+        try {
+            p.writeInt(version)
+            p.writeFloat(style.sizeSp)
+            p.writeInt(style.weight)
+            p.writeInt(LockLyrics.sAlign)
+            p.writeInt(LockLyrics.sDepthBlur)
+            p.writeInt(LockLyrics.sAliveFx)
+            p.writeInt(lines.size)
+            for (l in lines) {
+                p.writeString(l.text)
+                p.writeInt(l.start)
+                p.writeInt(l.end)
+                p.writeInt(if (l.opposite) 1 else 0)
+                p.writeIntArray(l.sylStart)
+                p.writeIntArray(l.sylEnd)
+                p.writeIntArray(l.charEnd)
+                p.writeString(if (below and LockLyrics.BELOW_ROMA != 0) l.renderedRoma() else null)
+                p.writeString(if (below and LockLyrics.BELOW_TRANS != 0) LyricView.translationFor(l) else null)
+            }
+            s.transact(TX_LYRICS, p, null, IBinder.FLAG_ONEWAY)
+        } catch (t: Throwable) {
+            Xp.w(TAG + "lyrics not sent: $t")
+            sentLyrics = ""
+        } finally {
+            p.recycle()
         }
     }
 
