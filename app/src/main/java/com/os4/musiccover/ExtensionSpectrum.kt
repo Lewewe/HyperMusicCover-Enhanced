@@ -26,7 +26,8 @@ import android.os.Parcel
  *
  * The current lyric goes along as code [TX_LYRICS] whenever [LockLyrics] settles a new set or
  * its look settings change, so the extension draws it the way the user set HMC-E's lyrics up:
- * size sp, weight, alignment, depth blur %, alive effects mode; then the line count and per
+ * the player package and title the lyric belongs to, size sp, weight, alignment, depth blur %,
+ * alive effects mode; then the line count and per
  * line the text, start and end ms, whether it is the duet's other singer, the word timing (three
  * int arrays, null for a line-timed file), and the romanisation and translation rows exactly as
  * the lock screen shows them (null when switched off or absent). An empty set means none.
@@ -224,7 +225,9 @@ object ExtensionSpectrum {
         val version = LockLyrics.version()
         val style = LockLyrics.sStyle
         val below = LockLyrics.below()
-        val look = "$version|${style.sizeSp}|${style.weight}|${LockLyrics.sAlign}|" +
+        val pkg = LockLyrics.activePlayerPackage()
+        val title = LockLyrics.activeTitle()
+        val look = "$version|$pkg|$title|${style.sizeSp}|${style.weight}|${LockLyrics.sAlign}|" +
             "${LockLyrics.sDepthBlur}|${LockLyrics.sAliveFx}|$below|${LockLyrics.sOnlineTranslateMode}"
         if (look == sentLyrics) return
         sentLyrics = look
@@ -232,6 +235,8 @@ object ExtensionSpectrum {
         val p = Parcel.obtain()
         try {
             p.writeInt(version)
+            p.writeString(pkg)
+            p.writeString(title)
             p.writeFloat(style.sizeSp)
             p.writeInt(style.weight)
             p.writeInt(LockLyrics.sAlign)

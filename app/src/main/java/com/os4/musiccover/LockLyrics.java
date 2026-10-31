@@ -1235,6 +1235,19 @@ final class LockLyrics {
         return pos < 0 ? 0 : (int) Math.min(pos, Integer.MAX_VALUE);
     }
 
+    /** The title of the track the lyric belongs to, for an extension to match its own against. */
+    static String activeTitle() {
+        MediaController controller = sController;
+        if (sDemo || controller == null) return "";
+        try {
+            android.media.MediaMetadata md = Main.sessionMetadata(controller);
+            String t = md == null ? null : md.getString(android.media.MediaMetadata.METADATA_KEY_TITLE);
+            return t == null ? "" : t;
+        } catch (Throwable t) {
+            return "";
+        }
+    }
+
     static String activePlayerPackage() {
         if (sDemo) return "";
         MediaController controller = sController;
