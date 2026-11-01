@@ -42,6 +42,7 @@ import com.os4.musiccover.updater.UpdateInstaller
 import com.os4.musiccover.updater.InstallOutcome
 import kotlinx.coroutines.CancellationException
 import top.yukonga.miuix.kmp.preference.ArrowPreference
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -270,7 +271,7 @@ private fun HyperCanvasContent(isBlurEnabled: Boolean, isCurrent: Boolean, extra
                         Column(Modifier.weight(1f)) {
                             Row(modifier = Modifier.padding(bottom = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("HyperCanvas", fontSize = 15.sp, maxLines = 1,
                                     modifier = Modifier.weight(1f, fill = false))
                                 HyperCanvasBetaBadge()
@@ -377,7 +378,8 @@ private fun HyperCanvasContent(isBlurEnabled: Boolean, isCurrent: Boolean, extra
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        SmallTitle("HyperCanvas")
+                        // Its default end margin of 28 dp would hold the pill far from the name.
+                        SmallTitle("HyperCanvas", insideMargin = PaddingValues(start = 28.dp, top = 8.dp, end = 8.dp, bottom = 8.dp))
                         HyperCanvasBetaBadge()
                     }
                     versionLabel?.let { label ->
@@ -461,9 +463,9 @@ private fun canvasScopesGranted(state: Bundle): Boolean = state.getBoolean("scop
 @Composable
 private fun HyperCanvasBetaBadge() {
     val color = MiuixTheme.colorScheme.onSurfaceVariantSummary
-    Text("Beta", fontSize = 9.sp, lineHeight = 11.sp, color = color,
+    Text("Beta", fontSize = 11.sp, color = color,
         modifier = Modifier.border(1.dp, color.copy(alpha = .6f), RoundedCornerShape(50))
-            .padding(horizontal = 8.dp, vertical = 4.dp))
+            .padding(horizontal = 7.dp, vertical = 2.dp))
 }
 
 /** HyperImmersive's state, read again every couple of seconds while it is on screen. */
