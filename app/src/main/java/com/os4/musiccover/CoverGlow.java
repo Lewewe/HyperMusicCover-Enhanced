@@ -109,7 +109,7 @@ final class CoverGlow {
         float[] hsv = new float[3];
         Color.colorToHSV(color, hsv);
         hsv[1] = Math.min(1f, hsv[1] * 2f + 0.15f);
-        hsv[2] = i % 2 == 0 ? 0.55f : 0.95f;
+        hsv[2] = i % 2 == 0 ? 0.42f : 0.75f;
         return Color.HSVToColor(hsv);
     }
 
