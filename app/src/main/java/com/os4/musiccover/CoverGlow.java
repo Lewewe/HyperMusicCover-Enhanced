@@ -62,6 +62,8 @@ final class CoverGlow extends View implements Choreographer.FrameCallback {
         return art != null && !art.isRecycled() && Main.coverModeOn()
                 && Main.effectiveCoverStyle().mode == CoverCardStyle.CARD
                 && !Main.sHidePlayerBackground && Main.screenOnCached()
+                // Its layer shows behind the shade pulled down unlocked too: only with the square.
+                && Main.coverCardVisible()
                 && ClockCollapse.phase() != ClockCollapse.Phase.AOD;
     }
 
