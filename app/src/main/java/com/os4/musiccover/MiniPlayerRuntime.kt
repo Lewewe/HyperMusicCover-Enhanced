@@ -6199,7 +6199,11 @@ private class MiniPlayerController(
      * 2026-09-25). Null when it is neither.
      */
     fun cardHeldDy(card: View): Float? {
-        spread?.media?.takeIf { viewWithin(it.native, card) }?.let { return it.dy }
+        spread?.let { s -> s.media?.takeIf { viewWithin(it.native, card) }?.let {
+            // Native translation can change before the cover's pre-draw reads this offset.
+            poseSpreadMedia(s)
+            return it.dy
+        } }
         pinned?.get()?.takeIf { viewWithin(it, card) }?.let { v ->
             return if (pinnedAt != null) pinnedAt!! - v.translationY else pinY.value - v.translationY
         }
@@ -7245,6 +7249,7 @@ private class MiniPlayerController(
         var top = from
         var closingFrom: Float? = null
         var closeAt = 1f
+        var closeOverlap: Float? = null
     }
 
     private class Spread(val items: List<SpreadItem>, val stackSeat: Int) {
@@ -7831,11 +7836,19 @@ private class MiniPlayerController(
         val top = media.xy[1] - parent.scrollY + native.top + native.translationY
         val lead = s.lead?.containerBox()
         val closing = s.phase == SPREAD_CLOSING
+        val height = rowHeight(native) * native.scaleY
+        val gap = dp(8f).toFloat()
+        if (closing && lead != null && media.closeOverlap == null) {
+            // Keep the overlap the pull left (the card dragged over the notification) until the
+            // player reaches its native seat, instead of snapping it back up.
+            media.closeOverlap = ((media.closingFrom ?: top) + height + gap -
+                lead.y).coerceAtLeast(0f)
+        }
         media.dy = ColorOsSpreadGeometry.mediaTop(media.from,
             if (closing) media.closingFrom ?: top else top,
             if (closing) s.progress / media.closeAt else s.progress,
-            lead?.y ?: Float.POSITIVE_INFINITY, rowHeight(native) * native.scaleY,
-            dp(8f).toFloat()) - top
+            lead?.y ?: Float.POSITIVE_INFINITY, height, gap,
+            if (closing) media.closeOverlap ?: 0f else 0f) - top
         media.top = top + media.dy
         media.matrix.setTranslate(0f, media.dy)
         media.saved?.let { media.matrix.preConcat(it) }
@@ -7849,6 +7862,7 @@ private class MiniPlayerController(
         parent.getLocationOnScreen(media.xy)
         media.closingFrom = media.xy[1] - parent.scrollY + native.top + native.translationY + media.dy
         media.closeAt = s.progress.coerceAtLeast(0.001f)
+        media.closeOverlap = null
     }
 
     private fun releaseSpreadMedia(s: Spread) {

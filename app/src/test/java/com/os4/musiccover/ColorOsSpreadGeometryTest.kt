@@ -8,6 +8,22 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ColorOsSpreadGeometryTest {
+    @Test fun foldingFromAPulledPlayerRestoresClearanceWithoutJumping() {
+        val from = 1600f
+        val overlap = from + 582f + 26f - 2066f
+        var previous = from
+        for (i in 0..120) {
+            val p = 1f - i / 120f
+            val lead = 2066f + 350f * ((1f - p - 0.1f) / 0.9f).coerceAtLeast(0f)
+            val top = ColorOsSpreadGeometry.mediaTop(1709f, from, p, lead, 582f, 26f, overlap)
+            if (i == 0) assertEquals(from, top, 0.001f)
+            assertTrue(top >= previous - 0.001f)
+            assertTrue(top - previous < 4f)
+            previous = top
+        }
+        assertEquals(1709f, previous, 0f)
+    }
+
     @Test fun oneToThreeNotificationsFollowStraightEdgesUntilTheListAndReverseTheSameGuide() {
         for (count in 1..3) for (cardTop in listOf(1293f, 1798f, 2057f)) {
             val widths = (0..120).map { frame ->
