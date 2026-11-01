@@ -12,6 +12,8 @@
     <string name="cover_style_card">方形卡片</string>
     <string name="cover_flip">切歌时翻转封面</string>
     <string name="cover_flip_summary">切歌时（手动或自动），大封面会像媒体卡片一样翻转到新封面</string>
+    <string name="cover_glow_drift">背景颜色流动</string>
+    <string name="cover_glow_drift_summary">封面的颜色在大封面背后缓慢流动，关闭后保持静止</string>
     <string name="cover_clock_section">封面与时钟</string>
     <string name="clock_size">大封面时的时钟大小</string>
     <string name="clock_force_colon">时钟强制显示冒号</string>

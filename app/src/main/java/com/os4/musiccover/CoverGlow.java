@@ -26,7 +26,7 @@ final class CoverGlow extends View implements Choreographer.FrameCallback {
      * faint, a drift of them could not be seen. Smaller and stronger here.
      */
     private static final float RADIUS_SCALE = 0.65f;
-    private static final float ALPHA_SCALE = 2.4f;
+    private static final float ALPHA_SCALE = 2.0f;
     /** Time constant of the fade in and out, in seconds. */
     private static final float FADE_TAU = 0.2f;
     private static final float[] FALLOFF = {1f, 0.8f, 0.45f, 0.15f, 0f};
@@ -38,6 +38,7 @@ final class CoverGlow extends View implements Choreographer.FrameCallback {
     private float[][] regions = new float[0][];
     private RadialGradient[] shaders = new RadialGradient[0];
     private int shaderSize = -1;
+    private boolean shaderDrift;
     private int[] colors = new int[0];
     private float level;
     private long lastFrame;
@@ -80,8 +81,8 @@ final class CoverGlow extends View implements Choreographer.FrameCallback {
         int visibility = level > 0f ? VISIBLE : GONE;
         if (getVisibility() != visibility) setVisibility(visibility);
         if (level > 0f) invalidate();
-        // Running while shown or fading; a held-off glow only needs kick() to come back.
-        if (level > 0f || want > 0f) {
+        // Running while drifting or fading; a still or held-off glow only needs kick() to come back.
+        if (level != want || want > 0f && Main.sGlowDrift) {
             scheduled = true;
             Choreographer.getInstance().postFrameCallback(this);
         }
@@ -101,12 +102,22 @@ final class CoverGlow extends View implements Choreographer.FrameCallback {
         int w = getWidth(), h = getHeight();
         if (w <= 0 || h <= 0 || regions.length == 0 || level <= 0f) return;
         float side = Math.max(w, h);
-        if (shaderSize != (int) side) {
+        boolean drift = Main.sGlowDrift;
+        if (shaderSize != (int) side || shaderDrift != drift) {
             shaderSize = (int) side;
+            shaderDrift = drift;
             shaders = new RadialGradient[regions.length];
             for (int i = 0; i < regions.length; i++) {
+                if (!drift) {
+                    // Motion off: the still regions the backdrop used to have baked in, as they were.
+                    int rgb = colors[i % colors.length] & 0x00ffffff;
+                    int color = (Math.round(regions[i][3] * 255f) << 24) | rgb;
+                    shaders[i] = new RadialGradient(regions[i][0] * w, regions[i][1] * h,
+                            regions[i][2] * side, color, rgb, Shader.TileMode.CLAMP);
+                    continue;
+                }
                 int rgb = vivid(colors[i % colors.length], i) & 0x00ffffff;
-                float alpha = Math.min(0.9f, regions[i][3] * ALPHA_SCALE);
+                float alpha = Math.min(0.75f, regions[i][3] * ALPHA_SCALE);
                 // Eased falloff: a linear one shows the disc's edge.
                 int[] stops = new int[FALLOFF.length];
                 for (int k = 0; k < stops.length; k++) {
@@ -119,6 +130,11 @@ final class CoverGlow extends View implements Choreographer.FrameCallback {
         float t = SystemClock.uptimeMillis() / 1000f;
         paint.setAlpha(Math.round(255f * level));
         for (int i = 0; i < regions.length; i++) {
+            if (!drift) {
+                paint.setShader(shaders[i]);
+                canvas.drawRect(0f, 0f, w, h, paint);
+                continue;
+            }
             // Two out-of-step waves per axis (periods 23-61s) never repeat a path: each region roams
             // the whole screen slowly. The region's own place only seeds its phases.
             float ax = regions[i][0] * 6.3f, ay = regions[i][1] * 6.3f;
@@ -147,7 +163,7 @@ final class CoverGlow extends View implements Choreographer.FrameCallback {
         float[] hsv = new float[3];
         android.graphics.Color.colorToHSV(color, hsv);
         hsv[1] = Math.min(1f, hsv[1] * 2f + 0.15f);
-        hsv[2] = i % 2 == 0 ? 0.35f : 0.95f;
+        hsv[2] = i % 2 == 0 ? 0.55f : 0.95f;
         return android.graphics.Color.HSVToColor(hsv);
     }
 

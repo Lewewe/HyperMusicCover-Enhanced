@@ -12,6 +12,8 @@
     <string name="cover_style_card">Square card</string>
     <string name="cover_flip">Flip the cover on track change</string>
     <string name="cover_flip_summary">When the track changes, by a skip or on its own, the big cover art turns over to the new art like the media card does</string>
+    <string name="cover_glow_drift">Moving background colours</string>
+    <string name="cover_glow_drift_summary">Colours from the artwork drift slowly behind the big cover art. Off, they stand still</string>
     <string name="cover_clock_section">Cover &amp; clock</string>
     <string name="clock_size">Clock size with big cover art</string>
     <string name="clock_force_colon">Always show the clock colon</string>

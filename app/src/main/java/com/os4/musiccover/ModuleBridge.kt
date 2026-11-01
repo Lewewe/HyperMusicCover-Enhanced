@@ -114,6 +114,8 @@ object ModuleBridge {
         val fodAfterFace: Boolean = false,
         /** The big cover art turns over on a track change while shrunk. See Main.sCoverFlip. */
         val coverFlip: Boolean = false,
+        /** The colour regions over the big cover's backdrop drift. See Main.sGlowDrift. */
+        val glowDrift: Boolean = true,
         /**
          * Keep cover mode's small clock in the full-screen always-on display, instead of letting
          * it grow back into the OEM's own AOD clock. On, and not a setting.
@@ -507,6 +509,9 @@ object ModuleBridge {
 
     fun setCoverFlip(context: Context, on: Boolean) =
         send(context, "coverflip") { putExtra("on", on) }
+
+    fun setGlowDrift(context: Context, on: Boolean) =
+        send(context, "glowdrift") { putExtra("on", on) }
 
     /** See the note above [setClockHeight]: no row offers this any more, the op still works. */
     fun setAodSmall(context: Context, on: Boolean) =
@@ -935,6 +940,7 @@ object ModuleBridge {
             hideFingerprint = b.getBoolean("hidefp", false),
             fodAfterFace = b.getBoolean("fodface", false),
             coverFlip = b.getBoolean("coverflip", false),
+            glowDrift = b.getBoolean("glowdrift", true),
             aodSmall = b.getBoolean("aodsmall", true),
             forceColon = b.getBoolean("colon", false),
             depthOpen = b.getBoolean("depthopen", true),

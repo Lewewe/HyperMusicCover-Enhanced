@@ -461,6 +461,16 @@ private fun CoverGroup(
                 ModuleBridge.setCoverFlip(context, it)
             },
         )
+        SwitchPreference(
+            title = stringResource(R.string.cover_glow_drift),
+            summary = stringResource(R.string.cover_glow_drift_summary),
+            checked = module.glowDrift,
+            enabled = enabled && module.coverStyle == 1 && !module.hidePlayerBackground,
+            onCheckedChange = {
+                onChange(module.copy(glowDrift = it))
+                ModuleBridge.setGlowDrift(context, it)
+            },
+        )
         val miniConfig = JSONObject(module.miniConfig)
         SwitchPreference(
             title = stringResource(R.string.mini_media_collapsed),
