@@ -2504,6 +2504,7 @@ public class Main extends XposedModule {
                         boolean composes = i.getBooleanExtra("composes", false);
                         // A restarted wallpaper process has forgotten the lyrics' blur.
                         LockLyrics.resendBlur();
+                        CoverGlow.resend();
                         if (composes != sWpComposes) {
                             sWpComposes = composes;
                             Xp.log(TAG + "wallpaper process "

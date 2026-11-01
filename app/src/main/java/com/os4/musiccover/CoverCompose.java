@@ -199,7 +199,7 @@ final class CoverCompose {
             backdrop.recycle();
         }
         android.graphics.Canvas canvas = new android.graphics.Canvas(soft);
-        // The artwork's colour regions are drawn live over this, drifting: see CoverGlow.
+        // The artwork's colour regions are drawn live over this: see WallpaperGlow.
         // The backdrop stays five percentage points lighter than the temporary 20% cover shade.
         canvas.drawColor(0x26000000);
         return soft;

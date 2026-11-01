@@ -1,160 +1,104 @@
 package com.os4.musiccover;
 
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.Matrix;
-import android.graphics.Paint;
-import android.graphics.RadialGradient;
-import android.graphics.Shader;
-import android.os.SystemClock;
+import android.graphics.Color;
 import android.view.Choreographer;
-import android.view.View;
 
 /**
- * The artwork's colour regions over the big cover's blurred backdrop, drifting slowly.
+ * Decides what the wallpaper process draws over the big cover's blurred backdrop: WallpaperGlow.
  *
- * They used to be baked into the backdrop bitmap (CoverCompose.cardBackdrop) at places chosen
- * once per track, so nothing ever moved. Drawn here they wander on slow, out-of-step paths while
- * the lock screen is lit, and fade out with the screen going to the AOD.
+ * With the drift on, the artwork's colour regions roam while the lock screen is lit and fade out
+ * with the screen going to the AOD. With it off they stand where they used to be baked into the
+ * backdrop bitmap, as they were, the AOD included.
  */
-final class CoverGlow extends View implements Choreographer.FrameCallback {
-    /** How far a region wanders from the centre, as a share of the screen's width and height. */
-    private static final float WANDER = 0.45f;
+final class CoverGlow {
+    private CoverGlow() {}
+
     /**
-     * The baked regions (CoverBackdropPalette) were sized and toned for a still image: huge and
-     * faint, a drift of them could not be seen. Smaller and stronger here.
+     * The regions (CoverBackdropPalette) were sized and toned for a still image: huge and faint,
+     * a drift of them could not be seen. Smaller and stronger when they move.
      */
     private static final float RADIUS_SCALE = 0.65f;
     private static final float ALPHA_SCALE = 2.0f;
-    /** Time constant of the fade in and out, in seconds. */
-    private static final float FADE_TAU = 0.2f;
-    private static final float[] FALLOFF = {1f, 0.8f, 0.45f, 0.15f, 0f};
-    private static final float[] FALLOFF_AT = {0f, 0.25f, 0.5f, 0.75f, 1f};
+    /** Going to the AOD is seen a few frames late at most; no need to look on every vsync. */
+    private static final long POLL_MS = 66L;
 
-    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Matrix matrix = new Matrix();
-    private Bitmap art;
-    private float[][] regions = new float[0][];
-    private RadialGradient[] shaders = new RadialGradient[0];
-    private int shaderSize = -1;
-    private boolean shaderDrift;
-    private int[] colors = new int[0];
-    private float level;
-    private long lastFrame;
-    private boolean scheduled;
+    private static Bitmap sArt;
+    private static float[][] sRegions;
+    private static int[] sColors;
+    private static float[] sSpec;
+    private static boolean sSpecDrift;
+    private static boolean sPolling;
+    private static boolean sSentOn, sSentDrift;
+    private static float[] sSentSpec;
 
-    CoverGlow(Context context) {
-        super(context);
-        setWillNotDraw(false);
-        setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
-    }
-
-    /** Something it shows by may have changed: start looking again. */
-    void kick() {
-        if (scheduled || !isAttachedToWindow()) return;
-        scheduled = true;
-        lastFrame = 0L;
-        Choreographer.getInstance().postFrameCallback(this);
-    }
-
-    private static boolean wanted(Bitmap art) {
-        return art != null && !art.isRecycled() && Main.coverModeOn()
-                && Main.effectiveCoverStyle().mode == CoverCardStyle.CARD
-                && !Main.sHidePlayerBackground && Main.screenOnCached()
-                // Its layer shows behind the shade pulled down unlocked too: only with the square.
-                && Main.coverCardVisible()
-                && ClockCollapse.phase() != ClockCollapse.Phase.AOD;
-    }
-
-    @Override public void doFrame(long nowNs) {
-        scheduled = false;
-        if (!isAttachedToWindow()) return;
+    /** Something it goes by may have changed. Main thread. */
+    static void kick() {
         Bitmap now = CoverCardLayer.currentArt();
-        if (now != art) {
-            art = now;
+        if (now != sArt) {
+            sArt = now;
             if (now != null && !now.isRecycled()) palette(now);
         }
-        float dt = lastFrame == 0L ? 0f : Math.min(0.1f, (nowNs - lastFrame) / 1e9f);
-        lastFrame = nowNs;
-        float want = wanted(art) ? 1f : 0f;
-        level += (want - level) * (dt <= 0f ? 0f : (float) (1.0 - Math.exp(-dt / FADE_TAU)));
-        if (Math.abs(want - level) < 0.01f) level = want;
-        int visibility = level > 0f ? VISIBLE : GONE;
-        if (getVisibility() != visibility) setVisibility(visibility);
-        if (level > 0f) invalidate();
-        // Running while drifting or fading; a still or held-off glow only needs kick() to come back.
-        if (level != want || want > 0f && Main.sGlowDrift) {
-            scheduled = true;
-            Choreographer.getInstance().postFrameCallback(this);
+        boolean base = now != null && !now.isRecycled() && sRegions != null && Main.coverModeOn()
+                && Main.effectiveCoverStyle().mode == CoverCardStyle.CARD
+                && !Main.sHidePlayerBackground;
+        boolean drift = Main.sGlowDrift;
+        boolean on = base && (!drift || (Main.screenOnCached() && Main.coverCardVisible()
+                && ClockCollapse.phase() != ClockCollapse.Phase.AOD));
+        if (sRegions != null && (sSpec == null || sSpecDrift != drift)) {
+            sSpec = spec(drift);
+            sSpecDrift = drift;
+        }
+        if (on != sSentOn || drift != sSentDrift || sSpec != sSentSpec) {
+            sSentOn = on;
+            sSentDrift = drift;
+            sSentSpec = sSpec;
+            send(on, drift, sSpec);
+        }
+        // Only a drifting glow has anything to notice by itself; a held-off one is kicked back.
+        if (on && drift && !sPolling) {
+            sPolling = true;
+            Choreographer.getInstance().postFrameCallbackDelayed(frame -> {
+                sPolling = false;
+                kick();
+            }, POLL_MS);
         }
     }
 
-    private void palette(Bitmap src) {
+    /** A restarted wallpaper process has forgotten all of it. */
+    static void resend() {
+        sSentSpec = null;
+        kick();
+    }
+
+    private static void palette(Bitmap src) {
         Bitmap sample = Bitmap.createScaledBitmap(src, 32, 32, true);
         int[] pixels = new int[32 * 32];
         sample.getPixels(pixels, 0, 32, 0, 0, 32, 32);
         if (sample != src) sample.recycle();
-        colors = CoverBackdropPalette.colors(pixels);
-        regions = CoverBackdropPalette.regions(colors);
-        shaderSize = -1;
+        sColors = CoverBackdropPalette.colors(pixels);
+        sRegions = CoverBackdropPalette.regions(sColors);
+        sSpec = null;
     }
 
-    @Override protected void onDraw(Canvas canvas) {
-        int w = getWidth(), h = getHeight();
-        if (w <= 0 || h <= 0 || regions.length == 0 || level <= 0f) return;
-        float side = Math.max(w, h);
-        boolean drift = Main.sGlowDrift;
-        if (shaderSize != (int) side || shaderDrift != drift) {
-            shaderSize = (int) side;
-            shaderDrift = drift;
-            shaders = new RadialGradient[regions.length];
-            for (int i = 0; i < regions.length; i++) {
-                if (!drift) {
-                    // Motion off: the still regions the backdrop used to have baked in, as they were.
-                    int rgb = colors[i % colors.length] & 0x00ffffff;
-                    int color = (Math.round(regions[i][3] * 255f) << 24) | rgb;
-                    shaders[i] = new RadialGradient(regions[i][0] * w, regions[i][1] * h,
-                            regions[i][2] * side, color, rgb, Shader.TileMode.CLAMP);
-                    continue;
-                }
-                int rgb = vivid(colors[i % colors.length], i) & 0x00ffffff;
-                float alpha = Math.min(0.75f, regions[i][3] * ALPHA_SCALE);
-                // Eased falloff: a linear one shows the disc's edge.
-                int[] stops = new int[FALLOFF.length];
-                for (int k = 0; k < stops.length; k++) {
-                    stops[k] = (Math.round(alpha * FALLOFF[k] * 255f) << 24) | rgb;
-                }
-                shaders[i] = new RadialGradient(0f, 0f, regions[i][2] * RADIUS_SCALE * side, stops,
-                        FALLOFF_AT, Shader.TileMode.CLAMP);
-            }
+    private static float[] spec(boolean drift) {
+        float[] out = new float[WallpaperGlow.REGIONS * WallpaperGlow.STRIDE];
+        for (int i = 0; i < WallpaperGlow.REGIONS; i++) {
+            float[] region = sRegions[i];
+            int s = i * WallpaperGlow.STRIDE;
+            int color = sColors[i % sColors.length];
+            if (drift) color = vivid(color, i);
+            out[s] = region[0];
+            out[s + 1] = region[1];
+            out[s + 2] = drift ? region[2] * RADIUS_SCALE : region[2];
+            out[s + 3] = drift ? Math.min(0.75f, region[3] * ALPHA_SCALE) : region[3];
+            out[s + 4] = Color.red(color) / 255f;
+            out[s + 5] = Color.green(color) / 255f;
+            out[s + 6] = Color.blue(color) / 255f;
         }
-        float t = SystemClock.uptimeMillis() / 1000f;
-        paint.setAlpha(Math.round(255f * level));
-        for (int i = 0; i < regions.length; i++) {
-            if (!drift) {
-                paint.setShader(shaders[i]);
-                canvas.drawRect(0f, 0f, w, h, paint);
-                continue;
-            }
-            // Two out-of-step waves per axis (periods 23-61s) never repeat a path: each region roams
-            // the whole screen slowly. The region's own place only seeds its phases.
-            float ax = regions[i][0] * 6.3f, ay = regions[i][1] * 6.3f;
-            float cx = w * (0.5f + WANDER * (0.6f * wave(t, 41f + 11f * i, ax) + 0.4f * wave(t, 23f + 5f * i, ay)));
-            float cy = h * (0.5f + WANDER * (0.6f * wave(t, 47f + 7f * i, ay) + 0.4f * wave(t, 29f + 9f * i, ax)));
-            // Stretched and slowly turning, so it reads as a wash of colour, not a circle.
-            matrix.setScale(1.5f, 0.75f);
-            matrix.postRotate(t * 360f / (53f + 17f * i) + i * 60f);
-            matrix.postTranslate(cx, cy);
-            shaders[i].setLocalMatrix(matrix);
-            paint.setShader(shaders[i]);
-            canvas.drawRect(0f, 0f, w, h, paint);
-        }
-        paint.setShader(null);
-    }
-
-    private static float wave(float t, float period, float phase) {
-        return (float) Math.sin(2 * Math.PI * t / period + phase);
+        return out;
     }
 
     /**
@@ -163,20 +107,19 @@ final class CoverGlow extends View implements Choreographer.FrameCallback {
      */
     private static int vivid(int color, int i) {
         float[] hsv = new float[3];
-        android.graphics.Color.colorToHSV(color, hsv);
+        Color.colorToHSV(color, hsv);
         hsv[1] = Math.min(1f, hsv[1] * 2f + 0.15f);
         hsv[2] = i % 2 == 0 ? 0.55f : 0.95f;
-        return android.graphics.Color.HSVToColor(hsv);
+        return Color.HSVToColor(hsv);
     }
 
-    @Override protected void onAttachedToWindow() {
-        super.onAttachedToWindow();
-        kick();
-    }
-
-    @Override protected void onDetachedFromWindow() {
-        Choreographer.getInstance().removeFrameCallback(this);
-        scheduled = false;
-        super.onDetachedFromWindow();
+    private static void send(boolean on, boolean drift, float[] spec) {
+        Context c = Main.sAppCtx;
+        if (c == null) return;
+        Intent out = CoverPush.wallpaperIntent("glow");
+        out.putExtra("on", on);
+        out.putExtra("drift", drift);
+        if (spec != null) out.putExtra("spec", spec);
+        ProbeGuard.send(c, out);
     }
 }

@@ -936,15 +936,17 @@ public class WallpaperProbe {
                 Object r = chain.proceed();
                 if (chain.getThisObject() != sKeyguardRenderer) return r;
                 GpuFade f = sGpuFade;
-                if (f == null && sGlTex == 0) return r;
-                try {
-                    drawGpuFade(chain.getThisObject(), f);
-                } catch (Throwable t) {
-                    sGpuFadeBroken = true;
-                    Xp.w(TAG + "gpu fade draw failed, using the CPU fade from now on: "
-                            + Log.getStackTraceString(t));
-                    if (f != null) abortGpuFade(f);
+                if (f != null || sGlTex != 0) {
+                    try {
+                        drawGpuFade(chain.getThisObject(), f);
+                    } catch (Throwable t) {
+                        sGpuFadeBroken = true;
+                        Xp.w(TAG + "gpu fade draw failed, using the CPU fade from now on: "
+                                + Log.getStackTraceString(t));
+                        if (f != null) abortGpuFade(f);
+                    }
                 }
+                WallpaperGlow.draw();
                 return r;
             });
             sDrawHooked = true;
@@ -1803,7 +1805,10 @@ public class WallpaperProbe {
                         + (carried == null ? " " + i.getExtras() : " jpg=" + carried.length + "B"));
                 try {
                     if (i.hasExtra("video")) noteLockWallpaper(i.getBooleanExtra("video", false));
-                    if ("cls".equals(op)) {
+                    if ("glow".equals(op)) {
+                        WallpaperGlow.set(i.getBooleanExtra("on", false),
+                                i.getBooleanExtra("drift", true), i.getFloatArrayExtra("spec"));
+                    } else if ("cls".equals(op)) {
                         dumpClass(i.getStringExtra("name"), i.getStringExtra("grep"));
                     } else if ("bmp".equals(op)) {
                         traceBitmaps(i.getStringExtra("name"));
@@ -2716,7 +2721,7 @@ public class WallpaperProbe {
     }
 
     /** A redraw of what is uploaded, with no reload - the GPU fade's per-frame request. */
-    private static void requestFrame(boolean keepAlive) {
+    static void requestFrame(boolean keepAlive) {
         Object eng = sKeyguardEngine;
         if (eng != null && !frameRequest(eng, keepAlive)) reportNoFrameRequest(eng);
     }
