@@ -31,6 +31,18 @@ object IslandIphoneGestures {
     private const val BASE = "miui.systemui.dynamicisland.window.content.DynamicIslandBaseContentView"
     private const val UPDATER = "miui.systemui.dynamicisland.anim.ui.animator.IslandPropertyUpdater"
     private const val CAMERA_GAP_DP = 6f
+    // ConstraintLayout.LayoutParams.UNSET and PARENT_ID.
+    private const val UNSET = -1
+    private const val PARENT = 0
+    // iPhone's expanded player, measured: a 1111 px card with 202 px artwork 67 px in, corners of
+    // 48, and text 55 px from it, title and artist both of about 50.
+    private const val ART_WIDTH = 202f / 1111f
+    private const val ART_INSET = 67f / 1111f
+    private const val ART_RADIUS = 48f / 202f
+    private const val TEXT_GAP = 55f / 1111f
+    private const val TEXT_SIZE = 50f / 1111f
+    // The 60 px iPhone keeps under the artwork, less the 9 left under it on a 1161 px card.
+    private const val CARD_EXTRA = 51f / 1161f
     private const val MEDIA_CARD =
         "com.android.systemui.statusbar.notification.mediaisland.PlayerIslandConstraintLayout"
     private const val ANIM = "com.android.systemui.statusbar.notification.DynamicIslandWindowAnimController"
@@ -295,8 +307,21 @@ object IslandIphoneGestures {
                     if (native != null && args.getOrNull(0) == native)
                         args[0] = field(owner, "expandedViewMaxWidth")
                 }.onFailure { Xp.w("Island expanded width failed: $it") }
-                val result = chain.proceed(args)
                 val content = call(chain.args.getOrNull(2), "getView") as? View
+                if (owner != null && content != null) runCatching {
+                    // HyperOS clamps to this maximum; only a music card at the camera passes it.
+                    nativeMaxHeight.remove(owner)?.let { Xp.setObjectField(owner, "expandedViewMaxHeight", it) }
+                    if (content.javaClass.name != MEDIA_CARD) return@runCatching
+                    val native = nativeCardHeight(content)
+                    val width = args.getOrNull(0) as? Int ?: return@runCatching
+                    val height = if (liftedLayout(owner) != null) native + cardExtra(width) else native
+                    args[1] = height
+                    if (height != native) {
+                        nativeMaxHeight[owner] = field(owner, "expandedViewMaxHeight") as Int
+                        Xp.setObjectField(owner, "expandedViewMaxHeight", height)
+                    }
+                }.onFailure { Xp.w("Island expanded height failed: $it") }
+                val result = chain.proceed(args)
                 if (owner != null && content != null) watchContent(owner, content)
                 result
             }
@@ -538,16 +563,159 @@ object IslandIphoneGestures {
                     widen -> {
                         Xp.setObjectField(view, "calWidth", size)
                         widenedCards[view] = true
+                        runCatching { shapeCard(view, size) }
+                            .onFailure { Xp.w("Island media card shape failed: $it") }
                     }
                     view in widenedCards && !top -> {
                         widenedCards.remove(view)
                         runCatching { Xp.callMethod(view, "calSizeByDensity") }
+                        runCatching { shapeCard(view, null) }
+                            .onFailure { Xp.w("Island media card shape failed: $it") }
                     }
                 }
                 chain.proceed()
             }
         }.onFailure { Xp.w("Island media card width unavailable: $it") }
     }
+
+    private class Box(val width: Int, val height: Int, val top: Int, val start: Int)
+
+    private fun boxOf(view: View): Box {
+        val lp = view.layoutParams as android.view.ViewGroup.MarginLayoutParams
+        return Box(lp.width, lp.height, lp.topMargin, lp.marginStart)
+    }
+
+    private fun place(view: View, box: Box): Boolean {
+        val lp = view.layoutParams as android.view.ViewGroup.MarginLayoutParams
+        if (lp.width == box.width && lp.height == box.height && lp.topMargin == box.top &&
+            lp.marginStart == box.start) return false
+        lp.width = box.width
+        lp.height = box.height
+        lp.topMargin = box.top
+        lp.marginStart = box.start
+        // Set back, or the start margin is never resolved into the left one it lays out by.
+        view.layoutParams = lp
+        return true
+    }
+
+    /** A control hung from the artwork's bottom is hung from the card's top instead, or back. */
+    private fun hang(view: View, under: Int): Boolean {
+        val lp = view.layoutParams
+        if (field(lp, "topToBottom") == under) return false
+        Xp.setObjectField(lp, "topToBottom", under)
+        Xp.setObjectField(lp, "topToTop", if (under == UNSET) PARENT else UNSET)
+        return true
+    }
+
+    private fun resize(text: android.widget.TextView, px: Float): Boolean {
+        if (Math.abs(text.textSize - px) < 0.5f) return false
+        text.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, px)
+        return true
+    }
+
+    /** HyperOS's own layout of a music card, for giving it back; ConstraintSets reset it too. */
+    private class CardShape(val art: View, val image: View, val title: android.widget.TextView,
+        val artist: android.widget.TextView, val controls: List<View>) {
+        val artBox = boxOf(art)
+        val imageBox = boxOf(image)
+        val titleBox = boxOf(title)
+        val artistBox = boxOf(artist)
+        val controlBoxes = controls.map { boxOf(it) }
+        val anchors = controls.map { field(it.layoutParams, "topToBottom") as Int }
+        val titleSize = title.textSize
+        val artistSize = artist.textSize
+        val artOutline = art.outlineProvider
+        val imageOutline = image.outlineProvider
+        var width = 0
+        var radius = 0f
+        val rounded = object : android.view.ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: android.graphics.Outline) =
+                outline.setRoundRect(0, 0, view.width, view.height, radius)
+        }
+    }
+
+    private val cardShapes = WeakHashMap<View, CardShape>()
+
+    private fun cardView(card: View, name: String): View? = card.findViewById(
+        card.resources.getIdentifier(name, "id", card.context.packageName))
+
+    /**
+     * Artwork and title as on iPhone's expanded player, in its proportions to the card. Controls
+     * and progress keep their order and spacing. [width] is the card's, null gives it all back.
+     */
+    private fun shapeCard(card: View, width: Int?) {
+        val shape = cardShapes[card] ?: run {
+            if (width == null) return
+            val art = cardView(card, "album_art") ?: return
+            val image = cardView(card, "album_art_image") ?: return
+            val title = cardView(card, "header_title") as? android.widget.TextView ?: return
+            val artist = cardView(card, "header_artist") as? android.widget.TextView ?: return
+            val controls = listOf(cardView(card, "actions") ?: return, cardView(card, "action0") ?: return)
+            CardShape(art, image, title, artist, controls).also { cardShapes[card] = it }
+        }
+        var changed = false
+        val nativeHeight = nativeCardHeight(card)
+        if (width == null) {
+            cardShapes.remove(card)
+            Xp.setObjectField(card, "calHeight", nativeHeight)
+            changed = place(shape.art, shape.artBox) or place(shape.image, shape.imageBox) or
+                place(shape.title, shape.titleBox) or place(shape.artist, shape.artistBox) or
+                resize(shape.title, shape.titleSize) or resize(shape.artist, shape.artistSize)
+            shape.controls.forEachIndexed { i, control ->
+                changed = hang(control, shape.anchors[i]) or place(control, shape.controlBoxes[i]) or changed
+            }
+            shape.title.includeFontPadding = true
+            shape.artist.includeFontPadding = true
+            shape.art.outlineProvider = shape.artOutline
+            shape.image.outlineProvider = shape.imageOutline
+        } else {
+            // Open and close animations measure it smaller; the artwork keeps the full card's size.
+            shape.width = maxOf(shape.width, width)
+            val w = shape.width.toFloat()
+            val size = Math.round(w * ART_WIDTH)
+            val inset = Math.round(w * ART_INSET)
+            // iPhone's two lines sit closer than these fonts' padding allows.
+            shape.title.includeFontPadding = false
+            shape.artist.includeFontPadding = false
+            changed = resize(shape.title, w * TEXT_SIZE) or resize(shape.artist, w * TEXT_SIZE)
+            val top = inset + (size - shape.title.lineHeight - shape.artist.lineHeight) / 2
+            changed = place(shape.art, Box(size, size, inset, inset)) or
+                place(shape.image, Box(size, size, 0, 0)) or
+                place(shape.title, Box(shape.titleBox.width, shape.titleBox.height, top, Math.round(w * TEXT_GAP))) or
+                place(shape.artist, Box(shape.artistBox.width, shape.artistBox.height, 0, Math.round(w * TEXT_GAP))) or
+                changed
+            // The card grows by what the artwork needs clear below it; the controls move with it.
+            val extra = cardExtra(shape.width)
+            Xp.setObjectField(card, "calHeight", nativeHeight + extra)
+            val bottom = shape.artBox.top + shape.artBox.height + extra
+            shape.controls.forEachIndexed { i, control ->
+                val box = shape.controlBoxes[i]
+                changed = hang(control, UNSET) or
+                    place(control, Box(box.width, box.height, bottom + box.top, box.start)) or changed
+            }
+            shape.radius = size * ART_RADIUS
+            if (shape.art.outlineProvider !== shape.rounded) {
+                shape.art.outlineProvider = shape.rounded
+                shape.image.outlineProvider = shape.rounded
+            }
+        }
+        // ConstraintLayout rereads its children only when it is itself asked to lay out again.
+        if (changed) {
+            shape.art.requestLayout()
+            card.requestLayout()
+        }
+    }
+
+    /** HyperOS's own maximum expanded height of each island whose music card passes it. */
+    private val nativeMaxHeight = WeakHashMap<View, Int>()
+
+    /** HyperOS's own height of each music card, read before this module first changes it. */
+    private val cardHeights = WeakHashMap<View, Int>()
+
+    private fun nativeCardHeight(card: View): Int =
+        cardHeights.getOrPut(card) { field(card, "calHeight") as Int }
+
+    private fun cardExtra(width: Int): Int = Math.round(width * CARD_EXTRA)
 
     private fun rememberLaunch(owner: Any, pkg: String?) {
         launch = null
