@@ -536,8 +536,9 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
      * Its dim and blur, what the OEM gives its own background views, was tried first and was
      * not it. Read every frame of the window, so it is the finger's own curve.
      *
-     * Not in the doze - the square fades with the wallpaper there, see SLEEP_FADE_S - and not
-     * under the pad, which keeps the square and blurs it (followBouncer).
+     * Not in the doze - the square fades with the wallpaper there, see SLEEP_FADE_S. Under the
+     * pad it goes as the pad comes, blurring on the way (followBouncer): kept blurred, it stood
+     * on the PIN screen, where nothing else of the lock screen is (2026-11-01).
      */
     private View fadeSource;
     private static int sFadeSourceId = -1;
@@ -554,7 +555,8 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
                 src = sFadeSourceId == 0 ? null : getRootView().findViewById(sFadeSourceId);
                 fadeSource = src;
             }
-            if (src != null) a = Math.max(src.getTransitionAlpha(), bouncerP);
+            if (src != null) a = src.getTransitionAlpha();
+            a = Math.min(a, 1f - bouncerP);
         }
         if (getTransitionAlpha() != a) setTransitionAlpha(a);
     }
