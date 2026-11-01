@@ -461,6 +461,8 @@
     <string name="experiments_iphone">iPhone-ify</string>
     <string name="island_iphone_gestures">iPhone-style island gestures</string>
     <string name="island_iphone_gestures_summary">Hold to expand Super Island, tap to open its app. Turn off to restore HyperOS gestures.</string>
+    <string name="mesh_backdrop">Mesh gradient background</string>
+    <string name="mesh_backdrop_summary">Fill the lock screen behind the big cover art with a mesh gradient made from the artwork colours. Shown on the lit lock screen, not the AOD</string>
     <string name="island_iphone_top">Expanded island at the camera</string>
     <string name="island_iphone_top_summary">Open the expanded Super Island from the camera, over the status bar, as on iPhone. Portrait phones only.</string>
     <string name="island_iphone_radius">Expanded island corners</string>

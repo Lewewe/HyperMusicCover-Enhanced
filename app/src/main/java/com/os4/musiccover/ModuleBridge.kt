@@ -116,6 +116,8 @@ object ModuleBridge {
         val coverFlip: Boolean = false,
         /** The colour regions over the big cover's backdrop drift. See Main.sGlowDrift. */
         val glowDrift: Boolean = true,
+        /** A mesh gradient fills the big cover's backdrop. See Main.sMeshBackdrop. */
+        val meshBackdrop: Boolean = false,
         /**
          * Keep cover mode's small clock in the full-screen always-on display, instead of letting
          * it grow back into the OEM's own AOD clock. On, and not a setting.
@@ -512,6 +514,9 @@ object ModuleBridge {
 
     fun setGlowDrift(context: Context, on: Boolean) =
         send(context, "glowdrift") { putExtra("on", on) }
+
+    fun setMeshBackdrop(context: Context, on: Boolean) =
+        send(context, "meshbackdrop") { putExtra("on", on) }
 
     /** See the note above [setClockHeight]: no row offers this any more, the op still works. */
     fun setAodSmall(context: Context, on: Boolean) =
@@ -941,6 +946,7 @@ object ModuleBridge {
             fodAfterFace = b.getBoolean("fodface", false),
             coverFlip = b.getBoolean("coverflip", false),
             glowDrift = b.getBoolean("glowdrift", true),
+            meshBackdrop = b.getBoolean("meshbackdrop", false),
             aodSmall = b.getBoolean("aodsmall", true),
             forceColon = b.getBoolean("colon", false),
             depthOpen = b.getBoolean("depthopen", true),

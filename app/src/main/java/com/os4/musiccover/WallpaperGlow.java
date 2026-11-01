@@ -27,6 +27,8 @@ final class WallpaperGlow {
     /** Floats a region takes in the spec: centre x, y, radius, alpha, red, green, blue. */
     static final int STRIDE = 7;
     static final int REGIONS = 3;
+    /** Control colours of the mesh, three floats each; a spec of that length draws the mesh. */
+    static final int MESH = 16;
     /** How far a region wanders from the centre, as a share of the screen's width and height. */
     private static final float WANDER = 0.45f;
     /** Time constant of the fade in and out, and of a new track's colours, in seconds. */
@@ -69,6 +71,36 @@ final class WallpaperGlow {
             + "  gl_FragColor = vec4((c + (n - 0.5) * a / 255.0) * uLevel, a * uLevel);\n"
             + "}\n";
 
+    /**
+     * One bicubic Bezier patch over a 4x4 grid of colours, its coordinates bent by slow waves.
+     * A single patch has no seams, and evaluating it here costs no vertex data.
+     */
+    private static final String MESH_FRAGMENT =
+            "precision highp float;\n"
+            + "uniform vec2 uSize;\n"
+            + "uniform float uLevel, uWarp;\n"
+            + "uniform vec4 uPhase;\n"
+            + "uniform vec3 uGrid[16];\n"
+            + "vec4 bern(float t) {\n"
+            + "  float s = 1.0 - t;\n"
+            + "  return vec4(s * s * s, 3.0 * s * s * t, 3.0 * s * t * t, t * t * t);\n"
+            + "}\n"
+            + "void main() {\n"
+            + "  vec2 p = vec2(gl_FragCoord.x, uSize.y - gl_FragCoord.y) / uSize;\n"
+            + "  vec2 q = p + uWarp * 0.14 * vec2(sin(p.y * 3.1 + uPhase.x) + 0.5 * sin(p.x * 4.3 + uPhase.y),\n"
+            + "                                   sin(p.x * 2.7 + uPhase.z) + 0.5 * sin(p.y * 3.7 + uPhase.w));\n"
+            + "  q = clamp(q, 0.0, 1.0);\n"
+            + "  vec4 u = bern(q.x), v = bern(q.y);\n"
+            + "  vec3 c = vec3(0.0);\n"
+            + "  for (int j = 0; j < 4; j++) {\n"
+            + "    vec3 row = vec3(0.0);\n"
+            + "    for (int i = 0; i < 4; i++) row += u[i] * uGrid[j * 4 + i];\n"
+            + "    c += v[j] * row;\n"
+            + "  }\n"
+            + "  float n = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));\n"
+            + "  gl_FragColor = vec4((c + (n - 0.5) / 255.0) * uLevel, uLevel);\n"
+            + "}\n";
+
     // Main thread.
     private static boolean sOn, sDrift, sLooping;
     private static float[] sTarget;
@@ -84,6 +116,7 @@ final class WallpaperGlow {
     private static volatile boolean sBroken;
     private static EGLContext sCtx;
     private static int sProgram, uHeight, uLevel, uEased, uCentre, uAxes, uRadius, uColour;
+    private static int sMeshProgram, uMeshSize, uMeshLevel, uMeshWarp, uMeshPhase, uMeshGrid;
     private static final float[] sCentres = new float[2 * REGIONS];
     private static final float[] sAxesV = new float[4 * REGIONS];
     private static final float[] sRadii = new float[REGIONS];
@@ -101,9 +134,10 @@ final class WallpaperGlow {
             sOn = on;
             sDrift = drift;
             sDrawDrift = drift;
-            if (spec != null && spec.length == REGIONS * STRIDE) {
+            if (spec != null && (spec.length == REGIONS * STRIDE || spec.length == MESH * 3)) {
                 sTarget = spec;
-                if (sSpec == null || sLevel <= 0f) sSpec = spec.clone();
+                // Regions and mesh do not ease into each other; a switch simply cuts over.
+                if (sSpec == null || sLevel <= 0f || sSpec.length != spec.length) sSpec = spec.clone();
             }
             startLoop();
         });
@@ -176,6 +210,7 @@ final class WallpaperGlow {
         if (!ctx.equals(sCtx)) {
             // A program goes with its context, and the engine rebuilds the context at will.
             sProgram = build();
+            sMeshProgram = buildMesh();
             sCtx = ctx;
         }
 
@@ -195,16 +230,26 @@ final class WallpaperGlow {
         sBlend[3] = one[0];
         GLES20.glGetIntegerv(GLES20.GL_VIEWPORT, sViewport, 0);
 
-        pose(spec, sViewport[2], sViewport[3], sDrawDrift);
-
-        GLES20.glUseProgram(sProgram);
-        GLES20.glUniform1f(uHeight, sViewport[3]);
-        GLES20.glUniform1f(uLevel, level);
-        GLES20.glUniform1f(uEased, sDrawDrift ? 1f : 0f);
-        GLES20.glUniform2fv(uCentre, REGIONS, sCentres, 0);
-        GLES20.glUniform4fv(uAxes, REGIONS, sAxesV, 0);
-        GLES20.glUniform1fv(uRadius, REGIONS, sRadii, 0);
-        GLES20.glUniform4fv(uColour, REGIONS, sColours, 0);
+        if (spec.length == MESH * 3) {
+            double t = SystemClock.uptimeMillis() / 1000.0;
+            GLES20.glUseProgram(sMeshProgram);
+            GLES20.glUniform2f(uMeshSize, sViewport[2], sViewport[3]);
+            GLES20.glUniform1f(uMeshLevel, level);
+            GLES20.glUniform1f(uMeshWarp, sDrawDrift ? 1f : 0f);
+            // Worked out here so the shader's floats never see a large time.
+            GLES20.glUniform4f(uMeshPhase, phase(t, 37.0), phase(t, 53.0), phase(t, 43.0), phase(t, 29.0));
+            GLES20.glUniform3fv(uMeshGrid, MESH, spec, 0);
+        } else {
+            pose(spec, sViewport[2], sViewport[3], sDrawDrift);
+            GLES20.glUseProgram(sProgram);
+            GLES20.glUniform1f(uHeight, sViewport[3]);
+            GLES20.glUniform1f(uLevel, level);
+            GLES20.glUniform1f(uEased, sDrawDrift ? 1f : 0f);
+            GLES20.glUniform2fv(uCentre, REGIONS, sCentres, 0);
+            GLES20.glUniform4fv(uAxes, REGIONS, sAxesV, 0);
+            GLES20.glUniform1fv(uRadius, REGIONS, sRadii, 0);
+            GLES20.glUniform4fv(uColour, REGIONS, sColours, 0);
+        }
 
         GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
         GLES20.glEnableVertexAttribArray(ATTR);
@@ -262,9 +307,23 @@ final class WallpaperGlow {
         return (float) Math.sin(2.0 * Math.PI * ((t / period) % 1.0) + phase);
     }
 
-    private static int build() {
+    private static float phase(double t, double period) {
+        return (float) (2.0 * Math.PI * ((t / period) % 1.0));
+    }
+
+    private static int buildMesh() {
+        int p = link(MESH_FRAGMENT);
+        uMeshSize = GLES20.glGetUniformLocation(p, "uSize");
+        uMeshLevel = GLES20.glGetUniformLocation(p, "uLevel");
+        uMeshWarp = GLES20.glGetUniformLocation(p, "uWarp");
+        uMeshPhase = GLES20.glGetUniformLocation(p, "uPhase");
+        uMeshGrid = GLES20.glGetUniformLocation(p, "uGrid");
+        return p;
+    }
+
+    private static int link(String fragment) {
         int vs = compile(GLES20.GL_VERTEX_SHADER, VERTEX);
-        int fs = compile(GLES20.GL_FRAGMENT_SHADER, FRAGMENT);
+        int fs = compile(GLES20.GL_FRAGMENT_SHADER, fragment);
         int p = GLES20.glCreateProgram();
         GLES20.glAttachShader(p, vs);
         GLES20.glAttachShader(p, fs);
@@ -274,6 +333,11 @@ final class WallpaperGlow {
         GLES20.glDeleteShader(fs);
         GLES20.glGetProgramiv(p, GLES20.GL_LINK_STATUS, sInt, 0);
         if (sInt[0] == 0) throw new IllegalStateException("link: " + GLES20.glGetProgramInfoLog(p));
+        return p;
+    }
+
+    private static int build() {
+        int p = link(FRAGMENT);
         uHeight = GLES20.glGetUniformLocation(p, "uHeight");
         uLevel = GLES20.glGetUniformLocation(p, "uLevel");
         uEased = GLES20.glGetUniformLocation(p, "uEased");

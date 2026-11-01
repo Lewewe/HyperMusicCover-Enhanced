@@ -28,6 +28,7 @@ object SettingsBackup {
     private const val KEY_FOD_AFTER_FACE = "fingerprintAfterFace"
     private const val KEY_COVER_FLIP = "coverFlip"
     private const val KEY_GLOW_DRIFT = "glowDrift"
+    private const val KEY_MESH_BACKDROP = "meshBackdrop"
     private const val KEY_DEPTH_OPEN = "depthLimitRemoved"
     private const val KEY_FORCE_COLON = "forceClockColon"
     private const val KEY_MEDIA_BAR_GLOW = "mediaBarGlow"
@@ -103,6 +104,7 @@ object SettingsBackup {
             json.put(KEY_FOD_AFTER_FACE, module.fodAfterFace)
             json.put(KEY_COVER_FLIP, module.coverFlip)
             json.put(KEY_GLOW_DRIFT, module.glowDrift)
+            json.put(KEY_MESH_BACKDROP, module.meshBackdrop)
             json.put(KEY_FORCE_COLON, module.forceColon)
             json.put(KEY_DEPTH_OPEN, module.depthOpen)
             json.put(KEY_MEDIA_BAR_GLOW, module.mediaBarGlow)
@@ -172,6 +174,9 @@ object SettingsBackup {
             }
             if (obj.has(KEY_GLOW_DRIFT)) {
                 ModuleBridge.setGlowDrift(context, obj.getBoolean(KEY_GLOW_DRIFT))
+            }
+            if (obj.has(KEY_MESH_BACKDROP)) {
+                ModuleBridge.setMeshBackdrop(context, obj.getBoolean(KEY_MESH_BACKDROP))
             }
             if (obj.has(KEY_FORCE_COLON)) {
                 ModuleBridge.setForceColon(context, obj.getBoolean(KEY_FORCE_COLON))
