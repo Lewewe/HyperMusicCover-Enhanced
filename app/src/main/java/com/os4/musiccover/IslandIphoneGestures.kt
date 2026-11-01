@@ -190,7 +190,11 @@ object IslandIphoneGestures {
                 val owner = chain.args.getOrNull(1) ?: chain.args.firstOrNull()
                     ?: return@hookAll chain.proceed()
                 if (!canExpand(owner)) return@hookAll chain.proceed()
-                if (expand(owner)) null else chain.proceed()
+                // This path has no long-click handler of HyperOS's to give the feedback.
+                if (expand(owner)) {
+                    (owner as? View)?.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    null
+                } else chain.proceed()
             }
             // Optional: builds without direct-intent routing already expand on onIslandClick.
             if (declares(content, "interceptClickForDirectIntent"))
@@ -1003,7 +1007,6 @@ object IslandIphoneGestures {
         return try {
             releaseClicks[owner] = true
             Xp.callMethod(owner, "onIslandClick")
-            (owner as? View)?.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
             true
         } catch (t: Throwable) {
             releaseClicks.remove(owner)
