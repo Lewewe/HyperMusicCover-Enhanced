@@ -104,6 +104,8 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
     private float lastClock = Float.NaN, lastMedia = Float.NaN;
 
     private final Wash wash;
+    /** The backdrop's drifting colour regions, just under the square. */
+    private final CoverGlow glow;
     /** Dozed under the OEM's big clock and not yet back to a settled lock screen; see doFrame. */
     private boolean afterBigClock;
     /** 0..1, how far the square has grown out of RISE_FROM; 1 everywhere but the big clock. */
@@ -135,6 +137,7 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
         super(context);
         setTag("HMCBigCoverArtwork");
         wash = new Wash(context);
+        glow = new CoverGlow(context);
         setClickable(false);
         setFocusable(false);
     }
@@ -173,6 +176,13 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
         }
         // Called on every entry; bringToFront lays the layer out again, so only when needed.
         if (layer.getChildAt(layer.getChildCount() - 1) != v) v.bringToFront();
+        if (v.glow.getParent() != layer || layer.indexOfChild(v.glow) != layer.indexOfChild(v) - 1) {
+            if (v.glow.getParent() instanceof ViewGroup) {
+                ((ViewGroup) v.glow.getParent()).removeView(v.glow);
+            }
+            layer.addView(v.glow, layer.indexOfChild(v), new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
         // Beside keyguard_root_view rather than inside it: the doze zooms that view to 0.95 and
         // its bounds clip after the zoom, so nothing under it reaches the screen edge - a
         // counter-scaled wash in the layer was measured still cut to 95%. Just below it keeps
@@ -559,6 +569,7 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
             a = Math.min(a, 1f - bouncerP);
         }
         if (getTransitionAlpha() != a) setTransitionAlpha(a);
+        if (glow.getTransitionAlpha() != a) glow.setTransitionAlpha(a);
     }
 
     private void hideImmediately() {
@@ -946,6 +957,7 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
     }
 
     @Override public void doFrame(long nowNs) { android.os.Trace.beginSection("MC coverCardFrame"); try {
+        glow.kick();
         if (!ticking || !isAttachedToWindow()) { stop(); return; }
         float dt = lastFrame == 0L ? 1f / 60f
                 : Math.min(0.05f, Math.max(0f, (nowNs - lastFrame) / 1e9f));

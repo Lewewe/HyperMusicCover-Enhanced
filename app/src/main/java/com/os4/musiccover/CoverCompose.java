@@ -198,25 +198,8 @@ final class CoverCompose {
         } finally {
             backdrop.recycle();
         }
-        // Sample the entire cover, including colors outside the cropped background.
-        Bitmap sample = Bitmap.createScaledBitmap(src, 32, 32, true);
-        int[] pixels = new int[32 * 32];
-        sample.getPixels(pixels, 0, 32, 0, 0, 32, 32);
-        if (sample != src) sample.recycle();
-        int[] colors = CoverBackdropPalette.colors(pixels);
-        float[][] regions = CoverBackdropPalette.regions(colors);
         android.graphics.Canvas canvas = new android.graphics.Canvas(soft);
-        for (int i = 0; i < regions.length; i++) {
-            float[] region = regions[i];
-            int rgb = colors[i % colors.length] & 0x00ffffff;
-            int color = (Math.round(region[3] * 255f) << 24) | rgb;
-            paint.setShader(new android.graphics.RadialGradient(
-                    region[0] * soft.getWidth(), region[1] * soft.getHeight(),
-                    region[2] * Math.max(soft.getWidth(), soft.getHeight()),
-                    color, rgb, android.graphics.Shader.TileMode.CLAMP));
-            canvas.drawRect(0, 0, soft.getWidth(), soft.getHeight(), paint);
-        }
-        paint.setShader(null);
+        // The artwork's colour regions are drawn live over this, drifting: see CoverGlow.
         // The backdrop stays five percentage points lighter than the temporary 20% cover shade.
         canvas.drawColor(0x26000000);
         return soft;
