@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Keep the supplied mark inside the adaptive icon safe area without altering the PNG. -->
-<inset xmlns:android="http://schemas.android.com/apk/res/android"
-    android:insetLeft="16.6667%"
-    android:insetTop="16.6667%"
-    android:insetRight="16.6667%"
-    android:insetBottom="16.6667%">
-    <bitmap android:src="@drawable/ic_app_mark" android:gravity="fill" />
-</inset>
+<!-- Artwork above the control bar. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:scaleX="0.88" android:scaleY="0.88" android:pivotX="54" android:pivotY="54">
+        <path
+            android:fillColor="#B3FFFFFF"
+            android:pathData="M40.5,26.8h27a4.2,4.2 0,0 1,4.2,4.2v27a4.2,4.2 0,0 1,-4.2,4.2h-27a4.2,4.2 0,0 1,-4.2,-4.2v-27a4.2,4.2 0,0 1,4.2,-4.2zM40.5,64.2h27a4.2,4.2 0,0 1,4.2,4.2v8.6a4.2,4.2 0,0 1,-4.2,4.2h-27a4.2,4.2 0,0 1,-4.2,-4.2v-8.6a4.2,4.2 0,0 1,4.2,-4.2z" />
+    </group>
+</vector>

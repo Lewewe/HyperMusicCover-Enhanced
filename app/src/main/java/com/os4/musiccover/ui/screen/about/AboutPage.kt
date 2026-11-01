@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
@@ -476,14 +477,15 @@ private fun AboutContent(
                         onClick = onIconTap,
                     ),
             ) {
+                // The launcher icon's layers: 108 dp wide, of which the middle 72 show.
                 Image(
-                    modifier = Modifier.size(100.dp),
-                    painter = painterResource(R.drawable.ic_about_logo),
+                    modifier = Modifier.requiredSize(150.dp),
+                    painter = painterResource(R.drawable.ic_launcher_background),
                     contentDescription = null,
                 )
                 Image(
-                    modifier = Modifier.size(100.dp),
-                    painter = painterResource(R.drawable.ic_app_mark),
+                    modifier = Modifier.requiredSize(150.dp),
+                    painter = painterResource(R.drawable.ic_launcher_foreground),
                     contentDescription = null,
                 )
             }
