@@ -471,4 +471,19 @@
         <item quantity="one">%d more tap to enable the A/B tab</item>
         <item quantity="other">%d more taps to enable the A/B tab</item>
     </plurals>
+    <string name="hyperimmersive_list_summary">StandBy: a full-screen clock, music and widgets while the phone charges on its side</string>
+    <string name="hyperimmersive_title">StandBy</string>
+    <string name="hyperimmersive_summary">Turn the phone on its side while it charges to show StandBy</string>
+    <string name="hyperimmersive_watching">Running</string>
+    <string name="hyperimmersive_stopped">Stopped</string>
+    <string name="hyperimmersive_blur">Blurred artwork background</string>
+    <string name="hyperimmersive_blur_summary">While music plays, its cover fills the background</string>
+    <string name="hyperimmersive_preview">Preview StandBy</string>
+    <string name="hyperimmersive_preview_summary">Open StandBy now</string>
+    <string name="hyperimmersive_grant">Grant permissions (root)</string>
+    <string name="hyperimmersive_grant_summary">Notification access: %1$s · Background start: %2$s · Notifications: %3$s</string>
+    <string name="hyperimmersive_allowed">allowed</string>
+    <string name="hyperimmersive_missing">missing</string>
+    <string name="hyperimmersive_grant_failed">Could not grant them. Check root access.</string>
+    <string name="hyperimmersive_note">To keep the system gestures and bars out of StandBy, enable HyperImmersive in LSPosed with System UI in its scope.</string>
 </resources>

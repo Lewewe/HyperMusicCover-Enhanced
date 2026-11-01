@@ -478,4 +478,19 @@
     <plurals name="ab_tab_taps_left">
         <item quantity="other">再点击 %d 次即可启用 A/B 标签页</item>
     </plurals>
+    <string name="hyperimmersive_list_summary">待机显示：手机横放充电时显示全屏时钟、音乐与小组件</string>
+    <string name="hyperimmersive_title">待机显示</string>
+    <string name="hyperimmersive_summary">充电时将手机横放即可显示待机界面</string>
+    <string name="hyperimmersive_watching">运行中</string>
+    <string name="hyperimmersive_stopped">已停止</string>
+    <string name="hyperimmersive_blur">模糊封面背景</string>
+    <string name="hyperimmersive_blur_summary">播放音乐时以封面填充背景</string>
+    <string name="hyperimmersive_preview">预览待机界面</string>
+    <string name="hyperimmersive_preview_summary">立即打开待机界面</string>
+    <string name="hyperimmersive_grant">授予权限（Root）</string>
+    <string name="hyperimmersive_grant_summary">通知使用权：%1$s · 后台启动：%2$s · 通知：%3$s</string>
+    <string name="hyperimmersive_allowed">已允许</string>
+    <string name="hyperimmersive_missing">未允许</string>
+    <string name="hyperimmersive_grant_failed">无法授予权限，请检查 Root 权限。</string>
+    <string name="hyperimmersive_note">如需在待机界面中屏蔽系统手势和状态栏，请在 LSPosed 中启用 HyperImmersive 并勾选系统界面作用域。</string>
 </resources>

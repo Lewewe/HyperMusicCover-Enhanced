@@ -50,6 +50,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.os4.musiccover.HyperCanvasBridge
+import com.os4.musiccover.HyperImmersiveBridge
 import com.os4.musiccover.ModuleBridge
 import com.os4.musiccover.R
 import com.os4.musiccover.ui.screen.features.ValueSlider
@@ -69,14 +70,27 @@ import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
 internal fun ExtensionsPageView(isBlurEnabled: Boolean, isCurrent: Boolean, extraBottomPadding: Dp) {
     var selectedExtension by rememberSaveable { mutableStateOf<String?>(null) }
     BackHandler(enabled = isCurrent && selectedExtension != null) { selectedExtension = null }
-    HyperCanvasContent(isBlurEnabled, isCurrent, extraBottomPadding,
-        showDetails = selectedExtension == "hypercanvas",
-        onOpen = { selectedExtension = "hypercanvas" }, onBack = { selectedExtension = null })
+    AnimatedContent(targetState = selectedExtension == "hyperimmersive", label = "StandBy navigation",
+        transitionSpec = {
+            val direction = if (targetState) 1 else -1
+            (slideInHorizontally(tween(280)) { it / 6 * direction } + fadeIn(tween(220))) togetherWith
+                (slideOutHorizontally(tween(280)) { -it / 8 * direction } + fadeOut(tween(160)))
+        }) { standby ->
+        if (standby) HyperImmersivePage(isBlurEnabled, isCurrent, extraBottomPadding,
+            onBack = { selectedExtension = null })
+        else HyperCanvasContent(isBlurEnabled, isCurrent, extraBottomPadding,
+            showDetails = selectedExtension == "hypercanvas",
+            onOpen = { selectedExtension = "hypercanvas" }, onBack = { selectedExtension = null },
+            moreExtensions = {
+                item { HyperImmersiveCard(isCurrent, onOpen = { selectedExtension = "hyperimmersive" }) }
+            })
+    }
 }
 
 @Composable
 private fun HyperCanvasContent(isBlurEnabled: Boolean, isCurrent: Boolean, extraBottomPadding: Dp,
-    showDetails: Boolean, onOpen: () -> Unit, onBack: () -> Unit) {
+    showDetails: Boolean, onOpen: () -> Unit, onBack: () -> Unit,
+    moreExtensions: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) {
     val context = LocalContext.current
     val resources = LocalResources.current
     val scope = rememberCoroutineScope()
@@ -356,6 +370,7 @@ private fun HyperCanvasContent(isBlurEnabled: Boolean, isCurrent: Boolean, extra
                     }
                 }
             }
+            moreExtensions()
         } else {
         item {
             Row(Modifier.fillMaxWidth().padding(end = 16.dp),
@@ -449,4 +464,126 @@ private fun HyperCanvasBetaBadge() {
     Text("Beta", fontSize = 9.sp, lineHeight = 11.sp, color = color,
         modifier = Modifier.border(1.dp, color.copy(alpha = .6f), RoundedCornerShape(50))
             .padding(horizontal = 8.dp, vertical = 4.dp))
+}
+
+/** HyperImmersive's state, read again every couple of seconds while it is on screen. */
+@Composable
+private fun rememberStandbyState(isCurrent: Boolean): MutableState<Bundle> {
+    val context = LocalContext.current
+    val state = remember { mutableStateOf(Bundle()) }
+    LaunchedEffect(isCurrent) {
+        if (isCurrent) while (true) {
+            state.value = HyperImmersiveBridge.query(context)
+            delay(2000L)
+        }
+    }
+    return state
+}
+
+@Composable
+private fun StandbyIcon() {
+    val context = LocalContext.current
+    val icon = remember {
+        runCatching { context.packageManager.getApplicationIcon(HyperImmersiveBridge.PACKAGE) }
+            .getOrElse { context.packageManager.defaultActivityIcon }
+    }
+    AndroidView(modifier = Modifier.size(42.dp),
+        factory = { android.widget.ImageView(it).apply {
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        } },
+        update = { it.setImageDrawable(icon) })
+}
+
+/** The StandBy extension in the list; only when it is installed - it is not downloaded here. */
+@Composable
+private fun HyperImmersiveCard(isCurrent: Boolean, onOpen: () -> Unit) {
+    val state by rememberStandbyState(isCurrent)
+    if (!state.getBoolean("installed")) return
+    Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+        Row(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StandbyIcon()
+            Column(Modifier.weight(1f)) {
+                Text("HyperImmersive", fontSize = 15.sp, maxLines = 1, modifier = Modifier.padding(bottom = 6.dp))
+                state.getString("version")?.let { v ->
+                    Text(stringResource(R.string.extension_installed_version, v), fontSize = 12.sp, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.alpha(.7f))
+                }
+                Text(stringResource(R.string.hyperimmersive_list_summary), fontSize = 12.sp, modifier = Modifier.alpha(.7f))
+            }
+            Text("›", fontSize = 24.sp)
+        }
+    }
+}
+
+@Composable
+private fun HyperImmersivePage(isBlurEnabled: Boolean, isCurrent: Boolean, extraBottomPadding: Dp, onBack: () -> Unit) {
+    val context = LocalContext.current
+    val resources = LocalResources.current
+    val scope = rememberCoroutineScope()
+    var state by rememberStandbyState(isCurrent)
+    var grantMessage by remember { mutableStateOf("") }
+    var granting by remember { mutableStateOf(false) }
+    fun set(key: String, on: Boolean) {
+        state = Bundle(state).apply { putBoolean(key, on) }
+        scope.launch { HyperImmersiveBridge.configure(context, key, on).takeIf { it.size() > 0 }?.let { state = it } }
+    }
+    val enabled = state.getBoolean("enabled")
+    PageScaffold(title = "HyperImmersive", isBlurEnabled = isBlurEnabled,
+        extraBottomPadding = extraBottomPadding, onBack = onBack) {
+        item {
+            Row(Modifier.fillMaxWidth().padding(end = 16.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Column(Modifier.weight(1f)) {
+                    SmallTitle("HyperImmersive")
+                    state.getString("version")?.let { v ->
+                        Text(stringResource(R.string.extension_installed_version, v), fontSize = 12.sp, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 28.dp, bottom = 8.dp).alpha(.7f))
+                    }
+                }
+                val watching = state.getBoolean("watching")
+                val color = if (watching) Color(0xFF388E3C) else Color(0xFFD64545)
+                Text(stringResource(if (watching) R.string.hyperimmersive_watching else R.string.hyperimmersive_stopped),
+                    color = color, fontSize = 11.sp,
+                    modifier = Modifier.border(1.dp, color, RoundedCornerShape(50)).padding(horizontal = 9.dp, vertical = 4.dp))
+            }
+        }
+        item {
+            Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                SwitchPreference(title = stringResource(R.string.hyperimmersive_title),
+                    summary = stringResource(R.string.hyperimmersive_summary),
+                    checked = enabled, onCheckedChange = { set("enabled", it) })
+                SwitchPreference(title = stringResource(R.string.hyperimmersive_blur),
+                    summary = stringResource(R.string.hyperimmersive_blur_summary),
+                    checked = state.getBoolean("blurBackdrop"), enabled = enabled,
+                    onCheckedChange = { set("blurBackdrop", it) })
+                ArrowPreference(title = stringResource(R.string.hyperimmersive_preview),
+                    summary = stringResource(R.string.hyperimmersive_preview_summary),
+                    onClick = { scope.launch { HyperImmersiveBridge.preview(context) } })
+            }
+        }
+        item {
+            Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                fun yes(key: String) = resources.getString(
+                    if (state.getBoolean(key)) R.string.hyperimmersive_allowed else R.string.hyperimmersive_missing)
+                ArrowPreference(title = stringResource(R.string.hyperimmersive_grant),
+                    summary = grantMessage.ifEmpty {
+                        stringResource(R.string.hyperimmersive_grant_summary,
+                            yes("notificationAccess"), yes("backgroundStart"), yes("notifications"))
+                    },
+                    enabled = !granting,
+                    onClick = {
+                        granting = true
+                        grantMessage = ""
+                        scope.launch {
+                            if (!HyperImmersiveBridge.grant()) grantMessage = resources.getString(R.string.hyperimmersive_grant_failed)
+                            state = HyperImmersiveBridge.query(context)
+                            granting = false
+                        }
+                    })
+            }
+        }
+        item { Text(stringResource(R.string.hyperimmersive_note), modifier = Modifier.padding(16.dp)) }
+    }
 }

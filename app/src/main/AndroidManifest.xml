@@ -15,6 +15,7 @@
     <queries>
         <package android:name="org.lsposed.manager" />
         <package android:name="com.yzc26623.HyperCanvas" />
+        <package android:name="com.yzc26623.HyperImmersive" />
         <!-- Whether a lyric provider module is installed, for the notice on the lyrics page.
              Declared because package visibility is filtered from Android 11 on: without this the
              lookup throws NameNotFound even when the package is there. -->
