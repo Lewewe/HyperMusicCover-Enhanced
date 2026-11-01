@@ -36,6 +36,19 @@ class MediaCardConfigTest {
         assertEquals(0, changed.getValue("island.cover"))
         assertEquals(0, changed.getValue("notification.background"))
     }
+    @Test fun expandedIslandDefaultsToOledAndCanBeGlass() {
+        val oled = MediaCardConfig.ISLAND_THEME_OLED
+        val glass = MediaCardConfig.ISLAND_THEME_GLASS
+        assertEquals(oled, MediaCardConfig.parse(null).getValue("island.theme"))
+        // What older versions saved: system and dark are black now, the removed light is glass.
+        assertEquals(oled, MediaCardConfig.parse("""{"island.theme":0}""").getValue("island.theme"))
+        assertEquals(oled, MediaCardConfig.parse("""{"island.theme":2}""").getValue("island.theme"))
+        assertEquals(glass, MediaCardConfig.parse("""{"island.theme":1}""").getValue("island.theme"))
+        val saved = MediaCardConfig.parse(null) + ("island.theme" to glass)
+        assertEquals(saved, MediaCardConfig.parse(MediaCardConfig.encode(saved)))
+        // The notification keeps its three themes.
+        assertEquals(2, MediaCardConfig.parse("""{"notification.theme":2}""").getValue("notification.theme"))
+    }
     @Test fun malformedAndOutOfRangeSettingsAreBounded() {
         assertEquals(MediaCardConfig.parse(null), MediaCardConfig.parse("not json"))
         val values = MediaCardConfig.parse("""{"notification.blur":100,"island.cover":-9,"island.background":7,"notification.hideSource":2,"unknown":99}""")

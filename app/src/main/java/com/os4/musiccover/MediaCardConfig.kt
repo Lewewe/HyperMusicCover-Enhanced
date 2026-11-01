@@ -21,6 +21,14 @@ object MediaCardConfig {
         else -> top to bottom
     }
 
+    /**
+     * The expanded island is pure black, the default, or HyperOS's Soft Glass. Every saved config
+     * holds this key, so 0 had to be black for it to reach them; of the old values, dark (2) also
+     * means black and light (1), which is gone, means glass.
+     */
+    const val ISLAND_THEME_OLED = 0
+    const val ISLAND_THEME_GLASS = 1
+
     val scopes = listOf("notification", "island")
     val defaults = linkedMapOf("cover" to 0, "scrollText" to 0, "hideSource" to 0, "hideDevice" to 0,
         "background" to 0, "theme" to 0, "flow" to 0, "pauseRestore" to 1,
@@ -39,12 +47,16 @@ object MediaCardConfig {
         else -> value.coerceIn(0, 1)
     }
 
+    fun limitKey(key: String, value: Int): Int =
+        if (key == "island.theme") (if (value == ISLAND_THEME_GLASS) value else ISLAND_THEME_OLED)
+        else limit(key.substringAfter('.'), value)
+
     fun parse(json: String?): Map<String, Int> {
         val obj = runCatching { JSONObject(json ?: "{}") }.getOrNull()
         return buildMap {
             for (scope in scopes) for ((name, default) in defaults) {
                 val key = "$scope.$name"
-                put(key, limit(name, obj?.optInt(key, default) ?: default))
+                put(key, limitKey(key, obj?.optInt(key, default) ?: default))
             }
         }
     }
@@ -52,7 +64,7 @@ object MediaCardConfig {
     fun encode(values: Map<String, Int>): String = JSONObject().also { out ->
         for (scope in scopes) for ((name, default) in defaults) {
             val key = "$scope.$name"
-            out.put(key, limit(name, values[key] ?: default))
+            out.put(key, limitKey(key, values[key] ?: default))
         }
     }.toString()
 

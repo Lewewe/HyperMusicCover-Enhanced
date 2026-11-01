@@ -121,7 +121,8 @@ internal fun MediaCardPageView(isBlurEnabled: Boolean, refreshKey: Int, onBack: 
                         val style = values.getValue("$scope.background")
                         if (style == 0) {
                             MediaChoice(scope, "theme", R.string.media_theme,
-                                listOf(R.string.media_theme_system, R.string.media_theme_light, R.string.media_theme_dark), values, module.alive, push)
+                                if (scope == "island") listOf(R.string.media_theme_oled, R.string.media_theme_glass)
+                                else listOf(R.string.media_theme_system, R.string.media_theme_light, R.string.media_theme_dark), values, module.alive, push)
                             MediaChoice(scope, "flow", R.string.media_flow,
                                 listOf(R.string.media_style_native, R.string.media_flow_dynamic, R.string.media_flow_cover, R.string.media_flow_artwork, R.string.media_flow_disabled), values, module.alive, push)
                             if (values.getValue("$scope.flow") in 1..3) {

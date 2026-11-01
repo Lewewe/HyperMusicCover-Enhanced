@@ -73,7 +73,7 @@ object MediaCardRuntime {
 
     @JvmStatic fun set(key: String?, value: Int) {
         if (key == null || key !in values) return
-        values = values + (key to MediaCardConfig.limit(key.substringAfter('.'), value))
+        values = values + (key to MediaCardConfig.limitKey(key, value))
         if (waveKey(key)) {
             applyWaveStyle()
             IslandAudioVisualizer.configure(on("island", "visualizer"), on("island", "hideWaveDevice"))
@@ -88,6 +88,11 @@ object MediaCardRuntime {
     }
 
     private fun setting(scope: String, name: String) = values.getValue("$scope.$name")
+
+    /** The forced theme as the notification's numbers have it: 0 native, 1 light, 2 dark. */
+    private fun forcedTheme(scope: String): Int = setting(scope, "theme").let {
+        if (scope != "island") it else if (it == MediaCardConfig.ISLAND_THEME_GLASS) 0 else 2
+    }
 
     /** The visualizer's own settings: none of them is a card appearance override. */
     private fun waveKey(key: String): Boolean = key.endsWith(".visualizer") || key.endsWith("outputWave") ||
@@ -404,8 +409,8 @@ object MediaCardRuntime {
         }
 
         private fun applyTheme() {
-            val theme = setting(scope, "theme")
-            if (scope == "island") safely("island theme") { islandTheme.apply(field(holder, "player") as? View, theme) }
+            val theme = forcedTheme(scope)
+            if (scope == "island") safely("island theme") { islandTheme.apply(field(holder, "player") as? View, theme == 2) }
             if (originalContext != null) owner.get()?.let { controller ->
                 val desired = if (theme == 0) originalContext else themed(originalContext, theme)
                 val current = field(controller, "context") as? Context
@@ -565,7 +570,7 @@ object MediaCardRuntime {
         private fun showNativeFlow(api: NativeMusicBgApi, palette: MediaAmbientFlowPalette, mode: Int) {
             if (overlay == null || !api.accepts(overlay!!) || overlayMode != mode) {
                 removeOverlay(false)
-                attachOverlay(api.createView(if (setting(scope, "theme") == 0) album.context else themed(album.context, setting(scope, "theme"))))
+                attachOverlay(api.createView(if (forcedTheme(scope) == 0) album.context else themed(album.context, forcedTheme(scope))))
                 overlayMode = mode
             }
             val view = overlay ?: return
@@ -590,7 +595,7 @@ object MediaCardRuntime {
         }
 
         private fun playing() = field(media, "isPlaying") == true
-        private fun tone(): MediaFlowTone = when (setting(scope, "theme")) {
+        private fun tone(): MediaFlowTone = when (forcedTheme(scope)) {
             1 -> MediaFlowTone.LIGHT
             2 -> MediaFlowTone.DARK
             else -> if ((originalContext ?: album.context).resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES)

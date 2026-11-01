@@ -8,4 +8,4 @@ Upstream project license: GPL-3.0, retained in `HyperLyrics-Enhanced-LICENSE.txt
 
 Settings are independent for notification/lock-screen cards and expanded Hyper Island cards. Defaults preserve the native appearance. Animation stops when hidden or the display is off. Original material, outlines, visibility and foreground colors are restored when customization is disabled.
 
-Forced island light/dark themes use the themed native island drawable after clearing incompatible bionics blending. Returning to System restores the native material. This compatibility path does not import the reference module's notification-glass hook stack.
+The expanded island offers OLED black, the default, or HyperOS Soft Glass. OLED black is a black layer under the native background motion and over the untouched material, so both options keep Background motion. Returning to Soft Glass removes the layer. This compatibility path does not import the reference module's notification-glass hook stack.
