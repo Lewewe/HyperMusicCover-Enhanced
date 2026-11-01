@@ -31,6 +31,16 @@ object IslandIphoneGestures {
     private const val BASE = "miui.systemui.dynamicisland.window.content.DynamicIslandBaseContentView"
     private const val UPDATER = "miui.systemui.dynamicisland.anim.ui.animator.IslandPropertyUpdater"
     private const val CAMERA_GAP_DP = 6f
+    private const val GESTURE = "miui.systemui.dynamicisland.anim.ui.animator.IslandGestureAnimator"
+    private const val MEDIA_BINDER =
+        "com.android.systemui.statusbar.notification.mediaisland.MiuiIslandMediaViewBinderImpl"
+    private const val HOLD_LIMIT_MS = 3000L
+    private const val HOLD_SETTLE_MS = 220f
+    // iPhone's artwork while paused, measured frame by frame from a recording.
+    private const val PAUSED_SCALE = 0.87f
+    private const val PAUSED_DIM = 0.49f
+    private const val PAUSE_MS = 400L
+    private const val PLAY_MS = 350L
     // ConstraintLayout.LayoutParams.UNSET and PARENT_ID.
     private const val UNSET = -1
     private const val PARENT = 0
@@ -41,6 +51,8 @@ object IslandIphoneGestures {
     private const val ART_RADIUS = 48f / 202f
     private const val TEXT_GAP = 55f / 1111f
     private const val TEXT_SIZE = 50f / 1111f
+    // The waveform's centre sits at 153 on iPhone's card and 123.5 on HyperOS's, both 1161 px wide.
+    private const val WAVE_DROP = 29.5f / 1161f
     // The 60 px iPhone keeps under the artwork, less the 9 left under it on a 1161 px card.
     private const val CARD_EXTRA = 51f / 1161f
     private const val MEDIA_CARD =
@@ -199,8 +211,78 @@ object IslandIphoneGestures {
                 result
             }
             installExpandedTop(loader)
+            installHold(loader)
             Xp.log("Island gestures installed")
         }.onFailure { Xp.w("Island gestures hooks unavailable: $it") }
+    }
+
+    /** The island being held, or settling after it. */
+    private class Hold(val view: View, val start: Long, val duration: Long) {
+        var released = 0L
+        var animator: ValueAnimator? = null
+    }
+
+    private val holds = WeakHashMap<View, Hold>()
+
+    /**
+     * A held compact island grows steadily from its top edge until it bursts open, as on iPhone,
+     * in place of the shrink HyperOS plays on press. Released or expanding, it settles back.
+     */
+    private fun installHold(loader: ClassLoader) {
+        val gesture = runCatching { Xp.findClass(GESTURE, loader) }.getOrNull() ?: return
+        if (!declares(gesture, "onPress") || !declares(gesture, "resetPress")) return
+        runCatching {
+            Xp.hookAll(gesture, "onPress") { chain ->
+                val view = chain.args.firstOrNull() as? View ?: return@hookAll chain.proceed()
+                if (!compact(view)) return@hookAll chain.proceed()
+                startHold(view)
+                null
+            }
+            Xp.hookAll(gesture, "resetPress") { chain ->
+                (chain.args.firstOrNull() as? View)?.let { holds[it]?.let(::releaseHold) }
+                chain.proceed()
+            }
+        }.onFailure { Xp.w("Island hold animation unavailable: $it") }
+    }
+
+    private fun startHold(view: View) {
+        holds[view]?.animator?.cancel()
+        val hold = Hold(view, SystemClock.uptimeMillis(),
+            android.view.ViewConfiguration.getLongPressTimeout().toLong())
+        holds[view] = hold
+        islandBounds(view)?.let {
+            view.pivotX = it.exactCenterX()
+            view.pivotY = it.top.toFloat()
+        }
+        hold.animator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 1000L
+            repeatCount = ValueAnimator.INFINITE
+            addUpdateListener { stepHold(hold) }
+            start()
+        }
+    }
+
+    private fun releaseHold(hold: Hold) {
+        if (hold.released == 0L) hold.released = SystemClock.uptimeMillis()
+    }
+
+    private fun stepHold(hold: Hold) {
+        val now = SystemClock.uptimeMillis()
+        val ms = now - hold.start
+        // shortcut: a press HyperOS never resets settles after this long, rather than held for good.
+        if (ms > HOLD_LIMIT_MS) releaseHold(hold)
+        val settled = if (hold.released == 0L) 0f else (now - hold.released) / HOLD_SETTLE_MS
+        if (settled >= 1f) {
+            hold.animator?.cancel()
+            holds.remove(hold.view)
+            hold.view.scaleX = 1f
+            hold.view.scaleY = 1f
+            return
+        }
+        val left = (1f - settled) * (1f - settled)
+        val scale = 1f + (IslandGesturePolicy.holdScale(ms, hold.duration) - 1f) * left
+        hold.view.scaleX = scale
+        hold.view.scaleY = scale
     }
 
     /**
@@ -576,6 +658,21 @@ object IslandIphoneGestures {
                 chain.proceed()
             }
         }.onFailure { Xp.w("Island media card width unavailable: $it") }
+        val binder = runCatching { Xp.findClass(MEDIA_BINDER, loader) }.getOrNull() ?: return
+        if (!declares(binder, "bindMediaData")) return
+        runCatching {
+            Xp.hookAll(binder, "bindMediaData") { chain ->
+                val result = chain.proceed()
+                runCatching {
+                    val holder = field(chain.thisObject ?: return@runCatching, "holder") ?: return@runCatching
+                    val image = field(holder, "albumImageView") as? android.widget.ImageView
+                        ?: return@runCatching
+                    val paused = field(chain.args.firstOrNull() ?: return@runCatching, "isPlaying") == false
+                    artPaused(image, paused && top)
+                }.onFailure { Xp.w("Island artwork state failed: $it") }
+                result
+            }
+        }.onFailure { Xp.w("Island artwork state unavailable: $it") }
     }
 
     private class Box(val width: Int, val height: Int, val top: Int, val start: Int)
@@ -615,17 +712,19 @@ object IslandIphoneGestures {
 
     /** HyperOS's own layout of a music card, for giving it back; ConstraintSets reset it too. */
     private class CardShape(val art: View, val image: View, val title: android.widget.TextView,
-        val artist: android.widget.TextView, val controls: List<View>) {
+        val artist: android.widget.TextView, val wave: View, val controls: List<View>) {
         val artBox = boxOf(art)
         val imageBox = boxOf(image)
         val titleBox = boxOf(title)
         val artistBox = boxOf(artist)
+        val waveBox = boxOf(wave)
         val controlBoxes = controls.map { boxOf(it) }
         val anchors = controls.map { field(it.layoutParams, "topToBottom") as Int }
         val titleSize = title.textSize
         val artistSize = artist.textSize
         val artOutline = art.outlineProvider
         val imageOutline = image.outlineProvider
+        val imageClip = image.clipToOutline
         var width = 0
         var radius = 0f
         val rounded = object : android.view.ViewOutlineProvider() {
@@ -651,7 +750,8 @@ object IslandIphoneGestures {
             val title = cardView(card, "header_title") as? android.widget.TextView ?: return
             val artist = cardView(card, "header_artist") as? android.widget.TextView ?: return
             val controls = listOf(cardView(card, "actions") ?: return, cardView(card, "action0") ?: return)
-            CardShape(art, image, title, artist, controls).also { cardShapes[card] = it }
+            val wave = cardView(card, "media_seamless") ?: return
+            CardShape(art, image, title, artist, wave, controls).also { cardShapes[card] = it }
         }
         var changed = false
         val nativeHeight = nativeCardHeight(card)
@@ -660,6 +760,7 @@ object IslandIphoneGestures {
             Xp.setObjectField(card, "calHeight", nativeHeight)
             changed = place(shape.art, shape.artBox) or place(shape.image, shape.imageBox) or
                 place(shape.title, shape.titleBox) or place(shape.artist, shape.artistBox) or
+                place(shape.wave, shape.waveBox) or
                 resize(shape.title, shape.titleSize) or resize(shape.artist, shape.artistSize)
             shape.controls.forEachIndexed { i, control ->
                 changed = hang(control, shape.anchors[i]) or place(control, shape.controlBoxes[i]) or changed
@@ -667,7 +768,9 @@ object IslandIphoneGestures {
             shape.title.includeFontPadding = true
             shape.artist.includeFontPadding = true
             shape.art.outlineProvider = shape.artOutline
+            artPaused(shape.image as android.widget.ImageView, false)
             shape.image.outlineProvider = shape.imageOutline
+            shape.image.clipToOutline = shape.imageClip
         } else {
             // Open and close animations measure it smaller; the artwork keeps the full card's size.
             shape.width = maxOf(shape.width, width)
@@ -683,6 +786,8 @@ object IslandIphoneGestures {
                 place(shape.image, Box(size, size, 0, 0)) or
                 place(shape.title, Box(shape.titleBox.width, shape.titleBox.height, top, Math.round(w * TEXT_GAP))) or
                 place(shape.artist, Box(shape.artistBox.width, shape.artistBox.height, 0, Math.round(w * TEXT_GAP))) or
+                place(shape.wave, Box(shape.waveBox.width, shape.waveBox.height,
+                    shape.waveBox.top + Math.round(w * WAVE_DROP), shape.waveBox.start)) or
                 changed
             // The card grows by what the artwork needs clear below it; the controls move with it.
             val extra = cardExtra(shape.width)
@@ -697,6 +802,8 @@ object IslandIphoneGestures {
             if (shape.art.outlineProvider !== shape.rounded) {
                 shape.art.outlineProvider = shape.rounded
                 shape.image.outlineProvider = shape.rounded
+                // Paused it shrinks inside the artwork's clip, and needs its own corners.
+                shape.image.clipToOutline = true
             }
         }
         // ConstraintLayout rereads its children only when it is itself asked to lay out again.
@@ -716,6 +823,45 @@ object IslandIphoneGestures {
         cardHeights.getOrPut(card) { field(card, "calHeight") as Int }
 
     private fun cardExtra(width: Int): Int = Math.round(width * CARD_EXTRA)
+
+    private class ArtMotion(val paused: Boolean, val animator: ValueAnimator?, val level: () -> Float)
+
+    private val artMotions = WeakHashMap<View, ArtMotion>()
+
+    /**
+     * iPhone's artwork steps back and dims while paused; the first state seen is just placed. On
+     * the image, not albumView: HyperOS's song-change flip keeps that at scaleX -1 once turned.
+     */
+    private fun artPaused(image: android.widget.ImageView, paused: Boolean) {
+        val motion = artMotions[image]
+        if (motion?.paused == paused) return
+        motion?.animator?.cancel()
+        val to = if (paused) 1f else 0f
+        var level = motion?.level?.invoke() ?: to
+        fun apply() {
+            val scale = 1f - (1f - PAUSED_SCALE) * level
+            image.scaleX = scale
+            image.scaleY = scale
+            if (level == 0f) image.clearColorFilter()
+            else image.setColorFilter(Math.round(255 * PAUSED_DIM * level) shl 24,
+                android.graphics.PorterDuff.Mode.SRC_ATOP)
+        }
+        if (motion == null) {
+            apply()
+            artMotions[image] = ArtMotion(paused, null) { level }
+            return
+        }
+        val animator = ValueAnimator.ofFloat(level, to).apply {
+            duration = if (paused) PAUSE_MS else PLAY_MS
+            interpolator = PathInterpolator(0.25f, 0.1f, 0.25f, 1f)
+            addUpdateListener {
+                level = it.animatedValue as Float
+                apply()
+            }
+            start()
+        }
+        artMotions[image] = ArtMotion(paused, animator) { level }
+    }
 
     private fun rememberLaunch(owner: Any, pkg: String?) {
         launch = null

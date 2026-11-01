@@ -4,6 +4,12 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class IslandGesturePolicyTest {
+    @Test public void holdGrowsToItsLimitAndStays() {
+        assertEquals(1f, IslandGesturePolicy.holdScale(0L, 400L), 0.001f);
+        assertEquals(1.06f, IslandGesturePolicy.holdScale(200L, 400L), 0.001f);
+        assertEquals(1.12f, IslandGesturePolicy.holdScale(400L, 400L), 0.001f);
+        assertEquals(1.12f, IslandGesturePolicy.holdScale(5000L, 400L), 0.001f);
+    }
     @Test public void toggleOffPreservesEveryNativeState() {
         for (String state : new String[] {"BigIsland", "SmallIsland", "ShowOnceBigIsland", "Expanded", null})
             assertFalse(IslandGesturePolicy.remap(false, state));

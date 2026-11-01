@@ -9,6 +9,8 @@ public final class IslandGesturePolicy {
     public static final int DEFAULT_RADIUS_DP = 50;
     public static final int MIN_RADIUS_DP = 12;
     public static final int MAX_RADIUS_DP = 64;
+    /** A held island grows steadily until it expands; the reference clip starts too late to measure. */
+    private static final float HOLD_GROW = 0.12f;
 
     private IslandGesturePolicy() {
     }
@@ -42,6 +44,11 @@ public final class IslandGesturePolicy {
     /** How far a row starting at [contentTop] must move down to sit [gap] below the lens. */
     static float cameraPadding(float lensBottom, float contentTop, float gap) {
         return Math.max(0f, lensBottom + gap - contentTop);
+    }
+
+    /** How much a held island has grown, reaching its limit as it expands. */
+    static float holdScale(long ms, long holdMs) {
+        return 1f + HOLD_GROW * Math.max(0f, Math.min(1f, ms / (float) holdMs));
     }
 
     /**
