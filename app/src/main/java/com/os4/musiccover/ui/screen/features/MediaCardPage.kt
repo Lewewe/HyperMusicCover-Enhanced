@@ -120,9 +120,14 @@ internal fun MediaCardPageView(isBlurEnabled: Boolean, refreshKey: Int, onBack: 
                                 R.string.media_background_radial, R.string.media_background_linear, R.string.media_background_soft), values, module.alive, push)
                         val style = values.getValue("$scope.background")
                         if (style == 0) {
-                            MediaChoice(scope, "theme", R.string.media_theme,
-                                if (scope == "island") listOf(R.string.media_theme_oled, R.string.media_theme_glass)
-                                else listOf(R.string.media_theme_system, R.string.media_theme_light, R.string.media_theme_dark), values, module.alive, push)
+                            if (scope == "island") WindowDropdownPreference(title = stringResource(R.string.media_theme),
+                                items = listOf(stringResource(R.string.media_theme_default), stringResource(R.string.media_theme_oled)),
+                                // At the camera the card is always OLED black; the saved choice returns with the switch off.
+                                selectedIndex = if (module.islandIphoneTop || values.getValue("island.theme") == MediaCardConfig.ISLAND_THEME_OLED) 1 else 0,
+                                enabled = module.alive && !module.islandIphoneTop,
+                                onSelectedIndexChange = { push("island.theme", if (it == 1) MediaCardConfig.ISLAND_THEME_OLED else MediaCardConfig.ISLAND_THEME_DEFAULT) })
+                            else MediaChoice(scope, "theme", R.string.media_theme,
+                                listOf(R.string.media_theme_system, R.string.media_theme_light, R.string.media_theme_dark), values, module.alive, push)
                             MediaChoice(scope, "flow", R.string.media_flow,
                                 listOf(R.string.media_style_native, R.string.media_flow_dynamic, R.string.media_flow_cover, R.string.media_flow_artwork, R.string.media_flow_disabled), values, module.alive, push)
                             if (values.getValue("$scope.flow") in 1..3) {

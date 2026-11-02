@@ -38,13 +38,13 @@ class MediaCardConfigTest {
     }
     @Test fun expandedIslandDefaultsToOledAndCanBeGlass() {
         val oled = MediaCardConfig.ISLAND_THEME_OLED
-        val glass = MediaCardConfig.ISLAND_THEME_GLASS
-        assertEquals(oled, MediaCardConfig.parse(null).getValue("island.theme"))
-        // What older versions saved: system and dark are black now, the removed light is glass.
-        assertEquals(oled, MediaCardConfig.parse("""{"island.theme":0}""").getValue("island.theme"))
+        val native = MediaCardConfig.ISLAND_THEME_DEFAULT
+        assertEquals(native, MediaCardConfig.parse(null).getValue("island.theme"))
+        // What older versions saved: dark stays black, the rest are HyperOS's own.
+        assertEquals(native, MediaCardConfig.parse("""{"island.theme":0}""").getValue("island.theme"))
         assertEquals(oled, MediaCardConfig.parse("""{"island.theme":2}""").getValue("island.theme"))
-        assertEquals(glass, MediaCardConfig.parse("""{"island.theme":1}""").getValue("island.theme"))
-        val saved = MediaCardConfig.parse(null) + ("island.theme" to glass)
+        assertEquals(native, MediaCardConfig.parse("""{"island.theme":1}""").getValue("island.theme"))
+        val saved = MediaCardConfig.parse(null) + ("island.theme" to oled)
         assertEquals(saved, MediaCardConfig.parse(MediaCardConfig.encode(saved)))
         // The notification keeps its three themes.
         assertEquals(2, MediaCardConfig.parse("""{"notification.theme":2}""").getValue("notification.theme"))

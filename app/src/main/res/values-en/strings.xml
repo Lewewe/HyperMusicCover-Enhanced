@@ -363,7 +363,7 @@
     <string name="media_theme">Background theme</string>
     <string name="media_theme_system">Follow system</string>
     <string name="media_theme_light">Light</string>
-    <string name="media_theme_glass">Soft Glass</string>
+    <string name="media_theme_default">Default</string>
     <string name="media_theme_oled">OLED black</string>
     <string name="media_theme_dark">Dark</string>
     <string name="media_flow">Background motion</string>

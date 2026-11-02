@@ -82,7 +82,9 @@ object IslandIphoneGestures {
     @JvmStatic fun topEnabled(): Boolean = top
     /** Read on every expansion, so a change applies from the next one without a restart. */
     @JvmStatic fun configureTop(on: Boolean) {
+        val changed = top != on
         top = on
+        if (changed) MediaCardRuntime.islandThemeForced()
         main.post { resizeFullWidthCards() }
         replaceAllText()
     }

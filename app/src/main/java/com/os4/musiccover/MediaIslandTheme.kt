@@ -2,9 +2,11 @@
  * Adapted from HyperLyrics-Enhanced, revision 912df58. */
 package com.os4.musiccover
 
+import android.content.Context
 import android.graphics.Color
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import java.lang.ref.WeakReference
 
 /**
@@ -26,7 +28,7 @@ internal class MediaIslandTheme {
         val target = card ?: return
         if (black?.get()?.parent === target) return
         restore()
-        val layer = View(target.context).apply {
+        val layer = BlackLayer(target.context, target).apply {
             setBackgroundColor(Color.BLACK)
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
@@ -37,5 +39,27 @@ internal class MediaIslandTheme {
     fun restore() {
         black?.get()?.let { (it.parent as? ViewGroup)?.removeView(it) }
         black = null
+    }
+
+    /**
+     * Comes and goes on the card's own alpha, which HyperOS sets on every frame: as one motion with
+     * its fade to the material, the same curve as the Default theme's and no step of its own after.
+     */
+    private class BlackLayer(context: Context, private val card: View) : View(context) {
+        private val follow = ViewTreeObserver.OnPreDrawListener {
+            alpha = card.alpha
+            true
+        }
+
+        override fun onAttachedToWindow() {
+            super.onAttachedToWindow()
+            alpha = card.alpha
+            viewTreeObserver.addOnPreDrawListener(follow)
+        }
+
+        override fun onDetachedFromWindow() {
+            viewTreeObserver.removeOnPreDrawListener(follow)
+            super.onDetachedFromWindow()
+        }
     }
 }

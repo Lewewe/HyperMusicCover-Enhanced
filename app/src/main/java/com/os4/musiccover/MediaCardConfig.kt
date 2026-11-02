@@ -22,12 +22,12 @@ object MediaCardConfig {
     }
 
     /**
-     * The expanded island is pure black, the default, or HyperOS's Soft Glass. Every saved config
-     * holds this key, so 0 had to be black for it to reach them; of the old values, dark (2) also
-     * means black and light (1), which is gone, means glass.
+     * The expanded island is HyperOS's own, the default, or pure black. Every saved config holds this
+     * key, so 0 has to be HyperOS's for it to reach them; dark (2) always meant black, and the 1 left
+     * by the removed light theme and by Soft Glass, as this choice was once called, means HyperOS's.
      */
-    const val ISLAND_THEME_OLED = 0
-    const val ISLAND_THEME_GLASS = 1
+    const val ISLAND_THEME_DEFAULT = 0
+    const val ISLAND_THEME_OLED = 2
 
     val scopes = listOf("notification", "island")
     val defaults = linkedMapOf("cover" to 0, "scrollText" to 0, "hideSource" to 0, "hideDevice" to 0,
@@ -48,7 +48,7 @@ object MediaCardConfig {
     }
 
     fun limitKey(key: String, value: Int): Int =
-        if (key == "island.theme") (if (value == ISLAND_THEME_GLASS) value else ISLAND_THEME_OLED)
+        if (key == "island.theme") (if (value == ISLAND_THEME_OLED) value else ISLAND_THEME_DEFAULT)
         else limit(key.substringAfter('.'), value)
 
     fun parse(json: String?): Map<String, Int> {

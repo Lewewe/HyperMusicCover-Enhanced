@@ -371,7 +371,7 @@
     <string name="media_theme">背景主题</string>
     <string name="media_theme_system">跟随系统</string>
     <string name="media_theme_light">浅色</string>
-    <string name="media_theme_glass">Soft Glass</string>
+    <string name="media_theme_default">默认</string>
     <string name="media_theme_oled">OLED 纯黑</string>
     <string name="media_theme_dark">深色</string>
     <string name="media_flow">背景动态效果</string>
