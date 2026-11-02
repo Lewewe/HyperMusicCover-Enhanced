@@ -307,7 +307,7 @@ private fun HyperCanvasContent(isBlurEnabled: Boolean, isCurrent: Boolean, extra
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("HyperCanvas", fontSize = 15.sp, maxLines = 1,
                                     modifier = Modifier.weight(1f, fill = false))
-                                HyperCanvasBetaBadge()
+                                ExtensionStageBadge("Beta")
                             }
                             versionLabel?.let { label ->
                                 Text(label, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -414,7 +414,7 @@ private fun HyperCanvasContent(isBlurEnabled: Boolean, isCurrent: Boolean, extra
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         // Its default end margin of 28 dp would hold the pill far from the name.
                         SmallTitle("HyperCanvas", insideMargin = PaddingValues(start = 28.dp, top = 8.dp, end = 8.dp, bottom = 8.dp))
-                        HyperCanvasBetaBadge()
+                        ExtensionStageBadge("Beta")
                     }
                     versionLabel?.let { label ->
                         Text(label, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -497,9 +497,9 @@ private fun canvasScopesGranted(state: Bundle): Boolean = state.getBoolean("scop
     (state.getInt("setupProtocol") < 1 && state.getString("scopeState") == "ready")
 
 @Composable
-private fun HyperCanvasBetaBadge() {
+private fun ExtensionStageBadge(stage: String) {
     val color = MiuixTheme.colorScheme.onSurfaceVariantSummary
-    Text("Beta", fontSize = 11.sp, color = color,
+    Text(stage, fontSize = 11.sp, color = color,
         modifier = Modifier.border(1.dp, color.copy(alpha = .6f), RoundedCornerShape(50))
             .padding(horizontal = 7.dp, vertical = 2.dp))
 }
@@ -590,7 +590,7 @@ private fun StandbyTimeRow(title: String, summary: String, stored: Int, range: I
 @Composable
 private fun rememberStandbyState(isCurrent: Boolean): MutableState<Bundle> {
     val context = LocalContext.current
-    val state = remember { mutableStateOf(Bundle().apply { putBoolean("unread", true) }) }
+    val state = remember { mutableStateOf(Bundle()) }
     LaunchedEffect(isCurrent) {
         if (isCurrent) while (true) {
             state.value = HyperImmersiveBridge.query(context)
@@ -620,20 +620,28 @@ private fun StandbyIcon() {
 private fun HyperImmersiveCard(isCurrent: Boolean, onOpen: () -> Unit) {
     val state by rememberStandbyState(isCurrent)
     val context = LocalContext.current
-    // Until its first answer the package says what the card will show, so the card does not blink.
-    val packaged = remember {
-        runCatching { context.packageManager.getPackageInfo(HyperImmersiveBridge.PACKAGE, 0).versionName }
-            .getOrNull()
-    }
-    val unread = state.getBoolean("unread")
-    if (!state.getBoolean("installed") && !(unread && packaged != null)) return
+    // The package, not its answers: a process starting or being updated has none to give yet.
+    // Looked at again with each read of the state, so an update or removal shows.
+    val pm = context.packageManager
+    val packaged = remember(state) {
+        runCatching {
+            if (pm.checkSignatures(context.packageName, HyperImmersiveBridge.PACKAGE) ==
+                android.content.pm.PackageManager.SIGNATURE_MATCH) pm.getPackageInfo(HyperImmersiveBridge.PACKAGE, 0) else null
+        }.getOrNull()
+    } ?: return
     Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
         Row(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(16.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StandbyIcon()
             Column(Modifier.weight(1f)) {
-                Text("HyperImmersive", fontSize = 15.sp, maxLines = 1, modifier = Modifier.padding(bottom = 6.dp))
-                (state.getString("version") ?: packaged)?.let { v ->
+                Row(modifier = Modifier.padding(bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("HyperImmersive", fontSize = 15.sp, maxLines = 1,
+                        modifier = Modifier.weight(1f, fill = false))
+                    ExtensionStageBadge("Alpha")
+                }
+                packaged.versionName?.let { v ->
                     Text(stringResource(R.string.extension_installed_version, v), fontSize = 12.sp, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.alpha(.7f))
                 }
@@ -663,7 +671,11 @@ private fun HyperImmersivePage(isBlurEnabled: Boolean, isCurrent: Boolean, extra
             Row(Modifier.fillMaxWidth().padding(end = 16.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(Modifier.weight(1f)) {
-                    SmallTitle("HyperImmersive")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Its default end margin of 28 dp would hold the pill far from the name.
+                        SmallTitle("HyperImmersive", insideMargin = PaddingValues(start = 28.dp, top = 8.dp, end = 8.dp, bottom = 8.dp))
+                        ExtensionStageBadge("Alpha")
+                    }
                     state.getString("version")?.let { v ->
                         Text(stringResource(R.string.extension_installed_version, v), fontSize = 12.sp, maxLines = 1,
                             overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 28.dp, bottom = 8.dp).alpha(.7f))
