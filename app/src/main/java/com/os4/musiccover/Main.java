@@ -2082,6 +2082,7 @@ public class Main extends XposedModule {
                     + "\nislandiphonegestures=" + (IslandIphoneGestures.enabled() ? 1 : 0)
                     + "\nislandiphonetop=" + (IslandIphoneGestures.topEnabled() ? 1 : 0)
                     + "\nislandiphoneradius=" + IslandIphoneGestures.radiusDp()
+                    + "\nislandiphonefocusblack=" + (IslandIphoneGestures.focusBlack() ? 1 : 0)
                     + "\nspicylyrics=" + (LockLyrics.sSpicyLyricsEnabled ? 1 : 0)
                     + "\nproviderqq=" + (LockLyrics.sProviderQq ? 1 : 0)
                     + "\nprovidernetease=" + (LockLyrics.sProviderNetease ? 1 : 0)
@@ -2237,6 +2238,7 @@ public class Main extends XposedModule {
                         else if ("islandiphonegestures".equals(k)) IslandIphoneGestures.configure("1".equals(v));
                         else if ("islandiphonetop".equals(k)) IslandIphoneGestures.configureTop("1".equals(v));
                         else if ("islandiphoneradius".equals(k)) IslandIphoneGestures.configureRadius(Integer.parseInt(v));
+                        else if ("islandiphonefocusblack".equals(k)) IslandIphoneGestures.configureFocusBlack("1".equals(v));
                         else if ("spicylyrics".equals(k)) LockLyrics.sSpicyLyricsEnabled = "1".equals(v);
                         else if ("providerqq".equals(k)) LockLyrics.sProviderQq = "1".equals(v);
                         else if ("providernetease".equals(k)) LockLyrics.sProviderNetease = "1".equals(v);
@@ -2712,6 +2714,9 @@ public class Main extends XposedModule {
                         saveStateSoon();
                     } else if ("islandiphonetop".equals(op)) {
                         IslandIphoneGestures.configureTop(i.getBooleanExtra("on", false));
+                        saveStateSoon();
+                    } else if ("islandiphonefocusblack".equals(op)) {
+                        IslandIphoneGestures.configureFocusBlack(i.getBooleanExtra("on", true));
                         saveStateSoon();
                     } else if ("islandiphoneradius".equals(op)) {
                         IslandIphoneGestures.configureRadius(
@@ -3269,6 +3274,7 @@ public class Main extends XposedModule {
                         out.putBoolean("islandiphonegestures", IslandIphoneGestures.enabled());
                         out.putBoolean("islandiphonetop", IslandIphoneGestures.topEnabled());
                         out.putInt("islandiphoneradius", IslandIphoneGestures.radiusDp());
+                        out.putBoolean("islandiphonefocusblack", IslandIphoneGestures.focusBlack());
                         out.putBoolean("spicylyrics", LockLyrics.sSpicyLyricsEnabled);
                         out.putBoolean("providerqq", LockLyrics.sProviderQq);
                         out.putBoolean("providernetease", LockLyrics.sProviderNetease);

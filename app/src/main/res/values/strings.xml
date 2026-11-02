@@ -467,6 +467,8 @@
     <string name="mesh_backdrop_summary">Fill the lock screen behind the big cover art with a mesh gradient made from the artwork colours. Shown on the lit lock screen, not the AOD</string>
     <string name="island_iphone_top">Expanded island at the camera</string>
     <string name="island_iphone_top_summary">Open the expanded Super Island from the camera, over the status bar, as on iPhone. Portrait phones only.</string>
+    <string name="island_iphone_focus_black">Black background for other islands</string>
+    <string name="island_iphone_focus_black_summary">Cards at the camera other than music, which is always black. Turn off for HyperOS\'s own background.</string>
     <string name="island_iphone_radius">Expanded island corners</string>
     <string name="island_iphone_radius_summary">Rounder corners follow the screen edge. Text under the camera moves down and text in the corners moves inward. The marker matches the Xiaomi 17 Pro\'s screen corners, as on iPhone.</string>
     <string name="ab_tab_unlocked">A/B tab enabled</string>

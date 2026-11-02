@@ -164,6 +164,7 @@ object ModuleBridge {
         val islandIphoneGestures: Boolean = false,
         val islandIphoneTop: Boolean = false,
         val islandIphoneRadius: Int = IslandGesturePolicy.DEFAULT_RADIUS_DP,
+        val islandIphoneFocusBlack: Boolean = true,
         val spicyLyricsEnabled: Boolean = true,
         val providerQq: Boolean = true,
         val providerNetease: Boolean = true,
@@ -605,6 +606,9 @@ object ModuleBridge {
     fun setIslandIphoneTop(context: Context, on: Boolean) =
         send(context, "islandiphonetop") { putExtra("on", on) }
 
+    fun setIslandIphoneFocusBlack(context: Context, on: Boolean) =
+        send(context, "islandiphonefocusblack") { putExtra("on", on) }
+
     fun setIslandIphoneRadius(context: Context, dp: Int) =
         send(context, "islandiphoneradius") { putExtra("v", IslandGesturePolicy.radius(dp)) }
 
@@ -979,6 +983,7 @@ object ModuleBridge {
             islandIphoneTop = b.getBoolean("islandiphonetop", false),
             islandIphoneRadius = IslandGesturePolicy.radius(
                 b.getInt("islandiphoneradius", IslandGesturePolicy.DEFAULT_RADIUS_DP)),
+            islandIphoneFocusBlack = b.getBoolean("islandiphonefocusblack", true),
             spicyLyricsEnabled = b.getBoolean("spicylyrics", true),
             providerQq = b.getBoolean("providerqq", true),
             providerNetease = b.getBoolean("providernetease", true),

@@ -45,6 +45,7 @@ object SettingsBackup {
     private const val KEY_ISLAND_IPHONE_GESTURES = "islandIphoneGestures"
     private const val KEY_ISLAND_IPHONE_TOP = "islandIphoneTop"
     private const val KEY_ISLAND_IPHONE_RADIUS = "islandIphoneRadius"
+    private const val KEY_ISLAND_IPHONE_FOCUS_BLACK = "islandIphoneFocusBlack"
     private const val KEY_LYRICS_ROMA = "lyricsRomanisation"
     private const val KEY_LYRICS_GROUPS = "lyricsGentleFlow"
     private const val KEY_LYRICS_SEARCH = "lyricsSearchMode"
@@ -122,6 +123,7 @@ object SettingsBackup {
             json.put(KEY_ISLAND_IPHONE_GESTURES, module.islandIphoneGestures)
             json.put(KEY_ISLAND_IPHONE_TOP, module.islandIphoneTop)
             json.put(KEY_ISLAND_IPHONE_RADIUS, module.islandIphoneRadius)
+            json.put(KEY_ISLAND_IPHONE_FOCUS_BLACK, module.islandIphoneFocusBlack)
             json.put(KEY_LYRICS_ROMA, module.lyricsRoma)
             json.put(KEY_LYRICS_GROUPS, module.lyricsGroups)
             json.put(KEY_LYRICS_SEARCH, module.lyricsSearchMode)
@@ -246,6 +248,9 @@ object SettingsBackup {
             }
             if (obj.has(KEY_ISLAND_IPHONE_TOP)) {
                 ModuleBridge.setIslandIphoneTop(context, obj.getBoolean(KEY_ISLAND_IPHONE_TOP))
+            }
+            if (obj.has(KEY_ISLAND_IPHONE_FOCUS_BLACK)) {
+                ModuleBridge.setIslandIphoneFocusBlack(context, obj.getBoolean(KEY_ISLAND_IPHONE_FOCUS_BLACK))
             }
             if (obj.has(KEY_ISLAND_IPHONE_RADIUS)) {
                 ModuleBridge.setIslandIphoneRadius(context, obj.getInt(KEY_ISLAND_IPHONE_RADIUS))

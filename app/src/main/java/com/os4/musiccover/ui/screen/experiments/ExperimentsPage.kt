@@ -77,6 +77,16 @@ internal fun ExperimentsPageView(isBlurEnabled: Boolean, isCurrent: Boolean,
                         ModuleBridge.setIslandIphoneTop(context, it)
                     },
                 )
+                SwitchPreference(
+                    title = stringResource(R.string.island_iphone_focus_black),
+                    summary = stringResource(R.string.island_iphone_focus_black_summary),
+                    checked = module.islandIphoneFocusBlack,
+                    enabled = module.alive && module.islandIphoneTop,
+                    onCheckedChange = {
+                        module = module.copy(islandIphoneFocusBlack = it)
+                        ModuleBridge.setIslandIphoneFocusBlack(context, it)
+                    },
+                )
                 ValueSlider(
                     title = stringResource(R.string.island_iphone_radius),
                     summary = stringResource(R.string.island_iphone_radius_summary),

@@ -25,7 +25,12 @@ internal class MediaIslandTheme {
             if (parent.javaClass.name == "miui.systemui.dynamicisland.view.DynamicIslandExpandedView") card = parent as? ViewGroup
             parent = parent.parent as? View
         }
-        val target = card ?: return
+        applyCard(card ?: return, true)
+    }
+
+    /** For a card with no player inside to find it from. */
+    fun applyCard(target: ViewGroup, oled: Boolean) {
+        if (!oled) { restore(); return }
         if (black?.get()?.parent === target) return
         restore()
         val layer = BlackLayer(target.context, target).apply {

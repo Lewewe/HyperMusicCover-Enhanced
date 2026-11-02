@@ -475,6 +475,8 @@
     <string name="mesh_backdrop_summary">用封面颜色生成的网格渐变填满大封面背后的锁屏，只在亮屏时显示，息屏显示时不显示</string>
     <string name="island_iphone_top">展开的灵动岛贴近摄像头</string>
     <string name="island_iphone_top_summary">像 iPhone 一样从摄像头处展开超级岛，覆盖状态栏。仅限竖屏手机。</string>
+    <string name="island_iphone_focus_black">其他灵动岛使用黑色背景</string>
+    <string name="island_iphone_focus_black_summary">摄像头处除音乐以外的卡片，音乐卡片始终为黑色。关闭后使用 HyperOS 原本的背景。</string>
     <string name="island_iphone_radius">展开灵动岛圆角</string>
     <string name="island_iphone_radius_summary">圆角与屏幕边缘对齐。摄像头下方的文字会下移，角落里的文字会内收。标记处与小米 17 Pro 屏幕圆角同心，与 iPhone 一致。</string>
     <string name="ab_tab_unlocked">已启用 A/B 标签页</string>
