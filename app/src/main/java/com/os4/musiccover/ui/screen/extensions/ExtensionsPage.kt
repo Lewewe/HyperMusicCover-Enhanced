@@ -18,6 +18,25 @@ import androidx.compose.foundation.layout.size
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.border
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import com.os4.musiccover.ui.component.DropdownItem
+import com.os4.musiccover.ui.component.MenuPopupDefaults
+import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.ListPopupColumn
+import top.yukonga.miuix.kmp.basic.PopupPositionProvider
+import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.sizeIn
@@ -113,9 +132,12 @@ private fun HyperCanvasContent(isBlurEnabled: Boolean, isCurrent: Boolean, extra
     var setupMessage by remember { mutableStateOf("") }
     var restartFailed by remember { mutableStateOf(false) }
     var returningFromLsposed by rememberSaveable { mutableStateOf(false) }
+    // Coming back, the extension's process may be new, and LSPosed takes a moment to reach it.
+    var settlingUntil by remember { mutableLongStateOf(System.currentTimeMillis() + CANVAS_SETTLE_MS) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) settlingUntil = System.currentTimeMillis() + CANVAS_SETTLE_MS
             if (event == Lifecycle.Event.ON_RESUME && !setupBusy &&
                 (returningFromLsposed || (installedVersion != null && !canvasScopesGranted(state)))) {
                 returningFromLsposed = false
@@ -170,7 +192,7 @@ private fun HyperCanvasContent(isBlurEnabled: Boolean, isCurrent: Boolean, extra
             setupNow = System.currentTimeMillis()
             installedVersion = HyperCanvasRelease.installedVersion(context)
             downloadedVersion = HyperCanvasRelease.downloadedVersion(context)
-            delay(2500L)
+            delay(if (setupNow < settlingUntil) 500L else 2500L)
         }
     }
     fun push(key: String, value: Int) {
@@ -188,9 +210,20 @@ private fun HyperCanvasContent(isBlurEnabled: Boolean, isCurrent: Boolean, extra
     val enabled = state.getBoolean("enabled")
     val setupStage = HyperCanvasSetup.stage(installedVersion != null, state.getInt("setupProtocol"),
         canvasScopesGranted(state), state.getBoolean("setupReady"),
-        if (restartFailed) 0L else state.getLong("setupStartedAt"), setupNow, installed, legacyCanvasActive(state))
+        if (restartFailed) 0L else state.getLong("setupStartedAt"), setupNow, installed, legacyCanvasActive(state)).let {
+            val unknown = it == HyperCanvasSetup.Stage.CHECKING ||
+                (it == HyperCanvasSetup.Stage.PERMISSIONS && !state.getBoolean("frameworkConnected"))
+            when {
+                unknown && setupNow < settlingUntil -> HyperCanvasSetup.Stage.CHECKING
+                // No answer for this long: the request is the one thing left to offer.
+                it == HyperCanvasSetup.Stage.CHECKING -> HyperCanvasSetup.Stage.PERMISSIONS
+                else -> it
+            }
+        }
     val canOpenSettings = setupStage == HyperCanvasSetup.Stage.READY && !setupBusy
-    LaunchedEffect(canOpenSettings) { if (showDetails && !canOpenSettings) onBack() }
+    LaunchedEffect(canOpenSettings, setupStage) {
+        if (showDetails && !canOpenSettings && setupStage != HyperCanvasSetup.Stage.CHECKING) onBack()
+    }
     val status = when {
         blocked -> R.string.hypercanvas_background_blocked
         !installed -> R.string.hypercanvas_missing
@@ -314,7 +347,8 @@ private fun HyperCanvasContent(isBlurEnabled: Boolean, isCurrent: Boolean, extra
                     }
                     if (downloadStatus.isNotEmpty() && !fetching && installedVersion == null)
                         Text(downloadStatus, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-                    if (installedVersion != null && setupStage != HyperCanvasSetup.Stage.READY) {
+                    if (installedVersion != null && setupStage != HyperCanvasSetup.Stage.READY &&
+                        setupStage != HyperCanvasSetup.Stage.CHECKING) {
                         val setupTitle = when (setupStage) {
                             HyperCanvasSetup.Stage.RESTART -> R.string.hypercanvas_setup_restart
                             HyperCanvasSetup.Stage.VERIFYING -> R.string.hypercanvas_setup_verifying
@@ -453,6 +487,8 @@ private fun HyperCanvasContent(isBlurEnabled: Boolean, isCurrent: Boolean, extra
     }
 }
 
+private const val CANVAS_SETTLE_MS = 4_000L
+
 /** Older extensions expose hook receipts and their live LSPosed connection state. */
 private fun legacyCanvasActive(state: Bundle): Boolean = state.getString("scopeState") == "ready" &&
     state.getLong("systemSeen") > 0L
@@ -468,11 +504,93 @@ private fun HyperCanvasBetaBadge() {
             .padding(horizontal = 7.dp, vertical = 2.dp))
 }
 
+/**
+ * A delay of StandBy's, in seconds: a number on the left, its unit on the right, both at the
+ * row's end. What is typed applies as soon as it is in range; leaving the box puts anything else
+ * back in range. 0 means never, with a warning under the row.
+ */
+@Composable
+private fun StandbyTimeRow(title: String, summary: String, stored: Int, range: IntRange,
+                           enabled: Boolean, onChange: (Int) -> Unit) {
+    var minutes by remember { mutableStateOf(stored % 60 == 0) }
+    fun shown(value: Int) = (if (minutes) value / 60 else value).toString()
+    var text by remember { mutableStateOf(shown(stored)) }
+    var showUnits by remember { mutableStateOf(false) }
+    var focused by remember { mutableStateOf(false) }
+    val focus = LocalFocusManager.current
+    fun typed() = text.toIntOrNull()?.let { if (minutes) it * 60 else it }
+    fun settled(): Int {
+        val value = typed() ?: stored
+        if (value == 0) return 0
+        return value.coerceIn(if (minutes) maxOf(range.first, 60) else range.first, range.last)
+    }
+    fun settle() {
+        val value = settled()
+        text = shown(value)
+        onChange(value)
+    }
+    // The page reads the state again every couple of seconds: only a real change moves the box.
+    LaunchedEffect(stored) {
+        if (!focused && typed() != stored) {
+            minutes = stored % 60 == 0
+            text = shown(stored)
+        }
+    }
+    val unitNames = listOf(stringResource(R.string.hyperimmersive_idle_unit_seconds),
+        stringResource(R.string.hyperimmersive_idle_unit_minutes))
+    val colors = MiuixTheme.colorScheme
+    val shape = RoundedCornerShape(10.dp)
+    BasicComponent(title = title, summary = summary, enabled = enabled,
+        endActions = {
+            Row(Modifier.alpha(if (enabled) 1f else .5f), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                BasicTextField(value = text, enabled = enabled, singleLine = true,
+                    onValueChange = { new ->
+                        text = new.filter(Char::isDigit).take(5)
+                        typed()?.takeIf { it in range || it == 0 }?.let(onChange)
+                    },
+                    textStyle = TextStyle(color = colors.onSurface, fontSize = 15.sp, textAlign = TextAlign.Center),
+                    cursorBrush = SolidColor(colors.primary),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
+                    modifier = Modifier.width(76.dp).clip(shape).background(colors.secondaryContainer)
+                        .padding(vertical = 9.dp)
+                        .onFocusChanged {
+                            if (focused && !it.isFocused) settle()
+                            focused = it.isFocused
+                        })
+                Box {
+                    Text(unitNames[if (minutes) 1 else 0], fontSize = 15.sp, maxLines = 1,
+                        modifier = Modifier.clip(shape).background(colors.secondaryContainer)
+                            .clickable(enabled = enabled) { focus.clearFocus(); showUnits = true }
+                            .padding(horizontal = 12.dp, vertical = 9.dp))
+                    OverlayListPopup(show = showUnits,
+                        popupPositionProvider = MenuPopupDefaults.MenuPositionProvider,
+                        alignment = PopupPositionProvider.Align.TopEnd,
+                        onDismissRequest = { showUnits = false }) {
+                        ListPopupColumn {
+                            unitNames.forEachIndexed { index, name ->
+                                DropdownItem(text = name, optionSize = unitNames.size, index = index,
+                                    onSelectedIndexChange = {
+                                        showUnits = false
+                                        minutes = index == 1
+                                        settle()
+                                    })
+                            }
+                        }
+                    }
+                }
+            }
+        })
+    if (stored == 0) Text(stringResource(R.string.hyperimmersive_never_warning), color = Color(0xFFD64545), fontSize = 12.sp,
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp))
+}
+
 /** HyperImmersive's state, read again every couple of seconds while it is on screen. */
 @Composable
 private fun rememberStandbyState(isCurrent: Boolean): MutableState<Bundle> {
     val context = LocalContext.current
-    val state = remember { mutableStateOf(Bundle()) }
+    val state = remember { mutableStateOf(Bundle().apply { putBoolean("unread", true) }) }
     LaunchedEffect(isCurrent) {
         if (isCurrent) while (true) {
             state.value = HyperImmersiveBridge.query(context)
@@ -501,14 +619,21 @@ private fun StandbyIcon() {
 @Composable
 private fun HyperImmersiveCard(isCurrent: Boolean, onOpen: () -> Unit) {
     val state by rememberStandbyState(isCurrent)
-    if (!state.getBoolean("installed")) return
+    val context = LocalContext.current
+    // Until its first answer the package says what the card will show, so the card does not blink.
+    val packaged = remember {
+        runCatching { context.packageManager.getPackageInfo(HyperImmersiveBridge.PACKAGE, 0).versionName }
+            .getOrNull()
+    }
+    val unread = state.getBoolean("unread")
+    if (!state.getBoolean("installed") && !(unread && packaged != null)) return
     Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
         Row(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(16.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StandbyIcon()
             Column(Modifier.weight(1f)) {
                 Text("HyperImmersive", fontSize = 15.sp, maxLines = 1, modifier = Modifier.padding(bottom = 6.dp))
-                state.getString("version")?.let { v ->
+                (state.getString("version") ?: packaged)?.let { v ->
                     Text(stringResource(R.string.extension_installed_version, v), fontSize = 12.sp, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.alpha(.7f))
                 }
@@ -560,6 +685,20 @@ private fun HyperImmersivePage(isBlurEnabled: Boolean, isCurrent: Boolean, extra
                     summary = stringResource(R.string.hyperimmersive_blur_summary),
                     checked = state.getBoolean("blurBackdrop"), enabled = enabled,
                     onCheckedChange = { set("blurBackdrop", it) })
+                fun setTime(key: String, seconds: Int) {
+                    state = Bundle(state).apply { putInt(key, seconds) }
+                    scope.launch {
+                        HyperImmersiveBridge.configure(context, key, seconds).takeIf { it.size() > 0 }?.let { state = it }
+                    }
+                }
+                StandbyTimeRow(title = stringResource(R.string.hyperimmersive_idle),
+                    summary = stringResource(R.string.hyperimmersive_idle_summary),
+                    stored = state.getInt("idleSeconds", 60), range = 10..3600,
+                    enabled = enabled, onChange = { setTime("idleSeconds", it) })
+                StandbyTimeRow(title = stringResource(R.string.hyperimmersive_off),
+                    summary = stringResource(R.string.hyperimmersive_off_summary),
+                    stored = state.getInt("offSeconds", 0), range = 10..86400,
+                    enabled = enabled, onChange = { setTime("offSeconds", it) })
                 ArrowPreference(title = stringResource(R.string.hyperimmersive_preview),
                     summary = stringResource(R.string.hyperimmersive_preview_summary),
                     onClick = { scope.launch { HyperImmersiveBridge.preview(context) } })
@@ -572,7 +711,7 @@ private fun HyperImmersivePage(isBlurEnabled: Boolean, isCurrent: Boolean, extra
                 ArrowPreference(title = stringResource(R.string.hyperimmersive_grant),
                     summary = grantMessage.ifEmpty {
                         stringResource(R.string.hyperimmersive_grant_summary,
-                            yes("notificationAccess"), yes("backgroundStart"), yes("notifications"))
+                            yes("notificationAccess"), yes("backgroundStart"), yes("notifications"), yes("calendar"), yes("lockScreen"))
                     },
                     enabled = !granting,
                     onClick = {
