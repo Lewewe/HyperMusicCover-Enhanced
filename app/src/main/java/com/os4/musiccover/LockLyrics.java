@@ -609,9 +609,16 @@ final class LockLyrics {
 
     /** Whether the view belongs in the keyguard right now. */
     static boolean wantsAttached() {
-        return !Main.aodClockArtworkCompact() && !Main.aodArtworkExpanded() && !sNotificationCompact && !sPlayerChosen
-                && wanted() && Main.coverModeOn()
-                && hasDisplayContent();
+        return !Main.aodClockArtworkCompact() && !Main.aodArtworkExpanded() && !sNotificationCompact
+                && Main.coverModeOn()
+                && (!sPlayerChosen && wanted() && hasDisplayContent()
+                    // Lyrics switched away but the cover not up: the companion, not an empty page.
+                    || sEnabled && hasBpmCompanion() && compactWithoutLyricsOnEntry());
+    }
+
+    /** The lyrics themselves are on screen, not the companion in their place. */
+    static boolean lyricsShowing() {
+        return wantsWindow() && !sLines.isEmpty();
     }
 
     /** The companion keeps the native clock and fits itself into the remaining room. */
@@ -620,8 +627,7 @@ final class LockLyrics {
     }
 
     static boolean hasBpmCompanion() {
-        return sBpmEnabled && Main.bpmPlayerAllowed(sController) && !sKey.isEmpty() && sLines.isEmpty()
-                && SystemClock.uptimeMillis() - sTrackChangedAt >= 3000L;
+        return sBpmEnabled && Main.bpmPlayerAllowed(sController) && !sKey.isEmpty() && sLines.isEmpty();
     }
     static boolean bpmSearchingLyrics() {
         return sBpmEnabled && Main.bpmPlayerAllowed(sController) && !sKey.isEmpty() && sLines.isEmpty() && sLoading;
@@ -1302,12 +1308,6 @@ final class LockLyrics {
         long lastChange = sTrackAt;
         sTrackChangedAt = SystemClock.uptimeMillis();
         sTrackAt = sTrackChangedAt;
-        final String bpmKey = key;
-        Main.main().postDelayed(new Runnable() {
-            @Override public void run() {
-                if (bpmKey.equals(sKey)) refresh();
-            }
-        }, 3000L);
         Main.main().removeCallbacks(SETTLED_LOOKUP);
         unpark();
         sBlurVideoReloaded = false;
@@ -1874,7 +1874,7 @@ final class LockLyrics {
         if (sStill) drawStill();
         CoverCardLayer.refresh();
         int buttonState = (sEnabled ? 1 : 0) | (hasDisplayContent() ? 2 : 0)
-                | (wantsCompactArtwork() ? 4 : 0);
+                | (wantsCompactArtwork() ? 4 : 0) | (lyricsShowing() ? 8 : 0);
         if (buttonState != sLyricsButtonState) {
             sLyricsButtonState = buttonState;
             Main.refreshLyricsButton();
@@ -1911,6 +1911,16 @@ final class LockLyrics {
         if (visible) sArtworkPage.preferCompact();
         else sArtworkPage.preferCover();
         refresh();
+        Main.saveState();
+    }
+
+    /** The lyrics button under the companion: look again, and the lyrics take over if found. */
+    static void searchLyrics(String key, MediaController c) {
+        if (sLoading) return;
+        sPlayerChosen = false;
+        sTapHidden = false;
+        sArtworkPage.preferCompact();
+        show(true, key, c, "searched from the button");
         Main.saveState();
     }
 
@@ -2175,7 +2185,9 @@ final class LockLyrics {
                 }
             });
         }
-        sLines = displayLines(lines);
+        // Found while switched away, they wait in the cache and the companion keeps the page.
+        sLines = sBpmEnabled && sTapHidden && !sDemo
+                ? Collections.<LyricLine>emptyList() : displayLines(lines);
         if (!sLines.isEmpty() && wanted()) sArtworkPage.preferCompact();
         // Only a settled answer: the empty set a track change puts up while it looks is not one.
         if (!sLoading) sHadLyrics = !sLines.isEmpty();

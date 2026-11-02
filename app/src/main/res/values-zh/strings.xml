@@ -347,7 +347,7 @@
     <string name="lyrics_bpm_players_empty">暂未找到兼容的媒体播放器。启动播放器后重新打开此菜单。</string>
     <string name="lyrics_bpm_players_done">完成</string>
     <string name="lyrics_bpm_companion">歌词伙伴颜文字</string>
-    <string name="lyrics_bpm_companion_summary">搜索歌词时显示好奇的颜文字，找不到歌词时显示随节拍反应的颜文字。</string>
+    <string name="lyrics_bpm_companion_summary">歌词和大封面都未显示时，显示随节拍反应的颜文字。歌词按钮用于搜索歌词。</string>
     <string name="media_customization_title">媒体播放器自定义</string>
     <string name="media_customization_summary">自定义通知与超级岛展开态播放器的封面、背景和动态效果</string>
     <string name="media_scope_notification">通知与锁屏播放器</string>

@@ -11148,6 +11148,11 @@ public class Main extends XposedModule {
     }
 
     static void openLyricsFromButton() {
+        if (sCoverMode && LockLyrics.sEnabled && LockLyrics.companionPage()) {
+            LockLyrics.searchLyrics(sTrackKey, sWatched);
+            applyMediaCard();
+            return;
+        }
         boolean fromPlayer = LockLyrics.playerChosen();
         boolean showing = LockLyrics.wantsAttached();
         if (!sCoverMode || coverMorphCardMode() && LockLyrics.wantsCompactArtwork() && !fromPlayer && !showing

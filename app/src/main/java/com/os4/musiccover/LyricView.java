@@ -209,6 +209,8 @@ final class LyricView extends View {
     /** AMLL's scale spring (stiffness 100, damping 25) settles in about this time constant. */
     private static final float TAU_SCALE = 0.15f;
     private static final float TAU_SHOW = 0.18f;
+    private static final float TAU_PAGE_OUT = 0.05f;
+    private static final float TAU_PAGE_IN = 0.12f;
     /** Rising while growing out of the island: the pop's own alpha spring does the fading. */
     private static final float TAU_POP_SHOW = 0.03f;
     /** Out faster than in: the clock starts growing into the lyrics' space at once. */
@@ -395,6 +397,10 @@ final class LyricView extends View {
     private int focusKey = Integer.MIN_VALUE;
     private int ms;
     private float show;
+    /** Dips to 0 and back as the page changes between the lyrics and the companion. */
+    private float pageFade = 1f;
+    /** The face fading out after its search found lyrics keeps looking as it did. */
+    private boolean companionSearching;
     /**
      * The island pop (POP_*): which way it is going, when a departure began, and whether this
      * showing is the pop's - that takes the float out for all of it, arrival to departure, and
@@ -591,6 +597,15 @@ final class LyricView extends View {
         boolean gone = LyricWindow.owns(this) && LockLyrics.lockScreenGone();
         pageWanted = LockLyrics.wantsWindow();
         float dtTo = still || gone ? Float.POSITIVE_INFINITY : dt;
+        // The outgoing page keeps the view until it has faded; only then is the next laid out.
+        boolean swapping = pageSwapping() && show > 0.02f && !still && !gone;
+        float fadeTo = swapping ? 0f : 1f;
+        if (pageFade != fadeTo) {
+            pageFade = !swapping && show <= 0.02f ? 1f
+                    : approach(pageFade, fadeTo, dtTo, swapping ? TAU_PAGE_OUT : TAU_PAGE_IN);
+            if (Math.abs(pageFade - fadeTo) < 0.01f) pageFade = fadeTo;
+            changed = true;
+        }
         // Not before the first layout: a width of zero would wrap every line a character a row.
         // Leaving, the lines are frozen like the band below: switching the lyrics off empties
         // them, and laying the empty set out at once cut the lines off in one frame instead of
@@ -605,7 +620,8 @@ final class LyricView extends View {
                 // the layout in use was built with, not against the field.
                 || LockLyrics.sAlign != builtAlign
                 || !LockLyrics.sStyle.sameLayout(layoutStyle))
-                && (LockLyrics.wantsAttached() || show == 0f)) {
+                && (LockLyrics.wantsAttached() || show == 0f)
+                && !(swapping && pageFade > 0f)) {
             if (layOut()) {
                 changed = true;
                 why |= 1;
@@ -1010,7 +1026,7 @@ final class LyricView extends View {
     private float showTarget() {
         if (!LockLyrics.wantsShown() || !bandOk
                 || (lines.isEmpty() && !LockLyrics.hasBpmCompanion()
-                && !LockLyrics.bpmSearchingLyrics())) return 0f;
+                && !LockLyrics.bpmSearchingLyrics() && !pageSwapping())) return 0f;
         // With the HDR highlight the lyrics are a window of their own above the shade window,
         // and the control centre pulled over the lock screen is drawn in the shade window - so
         // its blur, which takes what is under it, can never reach them: they stood sharp over
@@ -1440,6 +1456,7 @@ final class LyricView extends View {
     private boolean needsFrames() {
         if (!isAttachedToWindow()) return false;
         if (show != showTarget()) return true;
+        if (pageFade != 1f || pageSwapping()) return true;
         if (popMode == POP_IN || popMode == POP_OUT) return true;
         // The keyguard dimming around us is a movement like any other, and so is the keyguard
         // coming back: without this the loop would stop the moment the words settled and leave
@@ -2007,7 +2024,7 @@ final class LyricView extends View {
             float me = loc[1];
             float floor = bandFloor();
             boolean companion = lines.isEmpty()
-                    && (LockLyrics.hasBpmCompanion() || LockLyrics.bpmSearchingLyrics());
+                    && (LockLyrics.hasBpmCompanion() || LockLyrics.bpmSearchingLyrics() || pageSwapping());
             if (companion) {
                 float gap = CoverCardStyle.GAP_DP * density;
                 top = clock + gap - me;
@@ -2201,17 +2218,27 @@ final class LyricView extends View {
     protected void onDraw(Canvas canvas) {
         LockLyrics.noteStill("draw");
         long t0 = System.nanoTime();
-        drawLyrics(canvas);
+        if (pageFade >= 1f) drawLyrics(canvas);
+        else if (pageFade > 0f) {
+            int page = canvas.saveLayerAlpha(0f, 0f, getWidth(), getHeight(), (int) (255 * pageFade));
+            drawLyrics(canvas);
+            canvas.restoreToCount(page);
+        }
         long took = System.nanoTime() - t0;
         drawNsSum += took;
         if (took > drawNsMax) drawNsMax = took;
+    }
+
+    /** The lyrics and the companion are about to trade the page. */
+    private boolean pageSwapping() {
+        return LockLyrics.sBpmEnabled && lines.isEmpty() != LockLyrics.lines().isEmpty();
     }
 
     private void drawLyrics(Canvas canvas) {
         drawCount++;
         if (show <= 0.003f) return;
         if (lines.isEmpty()) {
-            if (LockLyrics.hasBpmCompanion() || LockLyrics.bpmSearchingLyrics()) {
+            if (LockLyrics.hasBpmCompanion() || LockLyrics.bpmSearchingLyrics() || pageSwapping()) {
                 drawBpmCompanion(canvas);
             }
             return;
@@ -2338,7 +2365,8 @@ final class LyricView extends View {
         long beatAt = LockLyrics.bpmBeatAt();
         long now = now();
         long sinceBeat = beatAt == 0L ? Long.MAX_VALUE : Math.max(0L, now - beatAt);
-        boolean searchingLyrics = LockLyrics.bpmSearchingLyrics();
+        if (!pageSwapping()) companionSearching = LockLyrics.bpmSearchingLyrics();
+        boolean searchingLyrics = companionSearching;
         float pulse = searchingLyrics || sinceBeat == Long.MAX_VALUE
                 ? 0f : (float) Math.exp(-sinceBeat / 190f);
         // A quiet stretch (a breakdown, an intro) eases into the calm face; the next hit wakes it.

@@ -80,8 +80,8 @@ final class LyricsButton {
             host.addView(button, new ViewGroup.LayoutParams(size, size));
         }
         if (button == null) return 0f;
-        // Filled while the lyrics show, on every page: the button is their switch both ways.
-        notesDrawable.setFilled(LockLyrics.wantsWindow());
+        // Filled only while lyrics are on screen; over the companion it is an outline.
+        notesDrawable.setFilled(LockLyrics.lyricsShowing());
         if (requested != show) {
             requested = show;
             button.setClickable(show);
@@ -99,7 +99,7 @@ final class LyricsButton {
             });
             animator.start();
         }
-        boolean hide = LockLyrics.wantsWindow();
+        boolean hide = LockLyrics.lyricsShowing();
         boolean chinese = "zh".equals(card.getResources().getConfiguration().getLocales().get(0).getLanguage());
         button.setContentDescription(chinese ? (hide ? "隐藏歌词" : "显示歌词") : (hide ? "Hide lyrics" : "Show lyrics"));
         // The title gives the button room only while it is drawn by the title, eased across the
