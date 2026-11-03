@@ -75,7 +75,7 @@ internal fun MediaCardPageView(isBlurEnabled: Boolean, refreshKey: Int, onBack: 
             item { SmallTitle(stringResource(R.string.media_super_island_wave)) }
             item {
                 Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    VisualizerBetaSwitch(values.getValue("island.visualizer") != 0, module.alive) { push("island.visualizer", if (it) 1 else 0) }
+                    BetaSwitch(title = stringResource(R.string.media_audio_wave), summary = stringResource(R.string.media_audio_wave_summary), values.getValue("island.visualizer") != 0, module.alive) { push("island.visualizer", if (it) 1 else 0) }
                     if (values.getValue("island.visualizer") != 0) {
                         WaveColorChoice(values, module.alive, pushAll)
                         MediaSwitch("island", "btSync", R.string.media_wave_bt_sync, values, module.alive, push, R.string.media_wave_bt_sync_summary)
@@ -172,20 +172,20 @@ private fun MediaSwitch(scope: String, name: String, title: Int, values: Map<Str
 
 
 @Composable
-private fun VisualizerBetaSwitch(checked: Boolean, enabled: Boolean, onCheckedChange: (Boolean) -> Unit) {
+internal fun BetaSwitch(title: String, summary: String, checked: Boolean, enabled: Boolean, onCheckedChange: (Boolean) -> Unit) {
     val color = MiuixTheme.colorScheme.onSurfaceVariantSummary
     Row(Modifier.fillMaxWidth().toggleable(value = checked, enabled = enabled, role = Role.Switch,
         onValueChange = onCheckedChange).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(R.string.media_audio_wave), modifier = Modifier.weight(1f, fill = false),
+                Text(title, modifier = Modifier.weight(1f, fill = false),
                     fontSize = 17.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else .5f))
                 Text("Beta", fontSize = 11.sp, color = color,
                     modifier = Modifier.border(1.dp, color.copy(alpha = .6f), RoundedCornerShape(50))
                         .padding(horizontal = 7.dp, vertical = 2.dp))
             }
-            Text(stringResource(R.string.media_audio_wave_summary), fontSize = 14.sp,
+            Text(summary, fontSize = 14.sp,
                 color = color, modifier = Modifier.padding(top = 4.dp))
         }
         Switch(checked = checked, enabled = enabled, onCheckedChange = onCheckedChange)

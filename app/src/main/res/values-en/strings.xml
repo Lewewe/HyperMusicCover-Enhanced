@@ -212,6 +212,8 @@
     <string name="mini_note_text_scroll_summary">Long notification titles and text scroll in the island; off, they are cut with an ellipsis</string>
     <string name="mini_style">Island style</string>
     <string name="mini_style_summary">How multiple islands share the row</string>
+    <string name="mini_coloros_full_size">Full-size buttons</string>
+    <string name="mini_coloros_full_size_summary">Torch and camera at 100% instead of 80%, with the pill as tall as they are and shorter to fit</string>
     <string name="mini_style_coloros">ColorOS · one at a time, swipe to switch</string>
     <string name="mini_style_hyperos">HyperOS · big island with a small one beside it</string>
     <string name="mini_widen">Widen when a shortcut is off</string>

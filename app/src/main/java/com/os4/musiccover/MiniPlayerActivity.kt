@@ -21,6 +21,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.os4.musiccover.ui.screen.features.BetaSwitch
 import com.os4.musiccover.ui.screen.features.ValueSlider
 import com.os4.musiccover.ui.theme.AppTheme
 import com.os4.musiccover.ui.util.PageScaffold
@@ -109,6 +110,13 @@ private fun MiniPlayerPage(blur: Boolean, refreshKey: Int, onBack: () -> Unit) {
                             MiniPlayerConfig.STYLE_COLOROS).coerceIn(0, 1),
                         enabled = alive && config.optBoolean(MiniPlayerConfig.ENABLED),
                         onSelectedIndexChange = { push(MiniPlayerConfig.PILL_STYLE, it) })
+                    if (MiniPlayerConfig.colorOs(config)) {
+                        BetaSwitch(title = stringResource(R.string.mini_coloros_full_size),
+                            summary = stringResource(R.string.mini_coloros_full_size_summary),
+                            checked = config.optBoolean(MiniPlayerConfig.COLOROS_FULL_SIZE),
+                            enabled = alive && config.optBoolean(MiniPlayerConfig.ENABLED),
+                            onCheckedChange = { push(MiniPlayerConfig.COLOROS_FULL_SIZE, it) })
+                    }
                     SwitchPreference(title = stringResource(R.string.mini_list_without_player),
                         summary = stringResource(R.string.mini_list_without_player_summary),
                         checked = config.optBoolean(MiniPlayerConfig.LIST_WITHOUT_PLAYER),

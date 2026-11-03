@@ -205,6 +205,8 @@
     <string name="mini_note_text_scroll_summary">通知岛中过长的标题和内容会滚动显示；关闭后以省略号截断</string>
     <string name="mini_style">岛样式</string>
     <string name="mini_style_summary">多个岛如何共用一行</string>
+    <string name="mini_coloros_full_size">全尺寸按钮</string>
+    <string name="mini_coloros_full_size_summary">手电筒和相机按钮由 80% 恢复为 100%，胶囊同样变高，并缩短长度以适应</string>
     <string name="mini_style_coloros">ColorOS · 一次一个，滑动切换</string>
     <string name="mini_style_hyperos">HyperOS · 大岛旁边带小岛</string>
     <string name="mini_widen">快捷方式关闭时加宽</string>

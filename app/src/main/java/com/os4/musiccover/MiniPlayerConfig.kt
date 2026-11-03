@@ -58,6 +58,9 @@ object MiniPlayerConfig {
     /** A notification island's long title and line scroll in the pill; off, they end in "…". */
     const val NOTE_TEXT_SCROLL = "noteTextScroll"
 
+    /** ColorOS's torch, camera and capsule at their full size; the capsule gets shorter to fit. */
+    const val COLOROS_FULL_SIZE = "colorOsFullSize"
+
     const val COMPACT_NOTIFICATIONS = "compactNotifications"
     const val NOTIFICATION_SIZE = "notificationSizePercent"
     const val NOTIFICATION_DROP = "notificationDropDp"
@@ -79,6 +82,7 @@ object MiniPlayerConfig {
         PILL_STYLE to STYLE_COLOROS,
         LIST_WITHOUT_PLAYER to false,
         NOTE_TEXT_SCROLL to true,
+        COLOROS_FULL_SIZE to false,
         COMPACT_NOTIFICATIONS to false,
         NOTIFICATION_SIZE to 80f,
         NOTIFICATION_DROP to 16f,
@@ -118,7 +122,7 @@ object MiniPlayerConfig {
         val out = JSONObject()
         defaults.forEach { (key, fallback) ->
             out.put(key, if (key == ENABLED || key == MEDIA_COLLAPSED_DEFAULT || key == ADAPTIVE_WIDTH || key == BACKGROUND_BLUR || key == STATUS_AT_DATE || key == COMPACT_NOTIFICATIONS ||
-                key == LIST_WITHOUT_PLAYER || key == NOTE_TEXT_SCROLL) {
+                key == LIST_WITHOUT_PLAYER || key == NOTE_TEXT_SCROLL || key == COLOROS_FULL_SIZE) {
                 runCatching { input.getBoolean(key) }.getOrDefault(fallback)
             } else if (key == PILL_STYLE) {
                 input.optInt(key, STYLE_COLOROS).coerceIn(STYLE_COLOROS, STYLE_HYPEROS)

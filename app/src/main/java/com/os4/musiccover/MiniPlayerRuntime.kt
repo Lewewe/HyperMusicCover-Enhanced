@@ -5073,8 +5073,10 @@ private class MiniPlayerController(
     /**
      * The torch and the camera, circle and glyph, against the capsule's height: ColorOS draws
      * them smaller than the capsule, which balances the row (the user's request, 2026-10-18).
+     * At full size they take that room back from the capsule's width (see pillRest).
      */
-    private fun shortcutScale(): Float = if (colorOs()) COLOROS_SHORTCUT else 1f
+    private fun shortcutScale(): Float =
+        if (colorOs() && !config.optBoolean(MiniPlayerConfig.COLOROS_FULL_SIZE)) COLOROS_SHORTCUT else 1f
 
     /** The glass of ColorOS's row: the brackets, and through a pull or a switch all of it. */
     private var gooGlass: GooGlass? = null
