@@ -336,12 +336,7 @@ private fun AboutContent(
                             Color.Transparent,
                         ),
                     ) {
-                        UpdateRows(
-                            update = update.update,
-                            installing = update.installing,
-                            onGetUpdate = update.showLinks,
-                            onDirectUpdate = { update.directUpdate(ctx) },
-                        )
+                        UpdateRows(onGetUpdate = update.showLinks)
                     }
                     Card(
                         modifier = Modifier

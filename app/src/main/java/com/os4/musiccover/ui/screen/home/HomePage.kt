@@ -11,12 +11,15 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,6 +28,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.CheckCircleOutline
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Favorite
@@ -52,6 +56,9 @@ import com.os4.musiccover.LsposedService
 import com.os4.musiccover.ModuleBridge
 import com.os4.musiccover.R
 import com.os4.musiccover.ui.component.DropdownItem
+import com.os4.musiccover.ui.screen.about.UpdateController
+import com.os4.musiccover.ui.screen.about.UpdateStatusDialog
+import com.os4.musiccover.ui.screen.about.rememberUpdateController
 import com.os4.musiccover.ui.component.MenuPopupDefaults
 import com.os4.musiccover.ui.util.PageScaffold
 import com.os4.musiccover.ui.util.isInDarkTheme
@@ -75,6 +82,8 @@ import top.yukonga.miuix.kmp.theme.LocalDismissState
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.window.WindowDialog
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Update
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
 
 @SuppressLint("LocalContext")
@@ -155,6 +164,7 @@ fun HomePageView(
     // Processes still on the build before this one: installing does not reload a module, and
     // the old one goes on running until its process restarts. Asked with the status, and again
     // once LSPosed's service binds, which can be after the page is up.
+    val update = rememberUpdateController(isCurrent)
     val service by LsposedService.service.collectAsState()
     var stale by remember { mutableStateOf(0) }
     // The row is a whole card wide and sits right under the status card, where a scroll starts;
@@ -170,6 +180,10 @@ fun HomePageView(
         extraBottomPadding = extraBottomPadding,
         actions = { RestartMenu() },
     ) {
+        if (update.update != null) {
+            item { UpdateCard(update, moduleVersion) }
+        }
+
         item {
             Box(
                 modifier = Modifier
@@ -394,6 +408,8 @@ fun HomePageView(
         }
     }
 
+    UpdateStatusDialog(update.status) { update.states.status = null }
+
     WindowDialog(
         show = confirmRestart,
         title = stringResource(R.string.restart_scope),
@@ -420,6 +436,77 @@ fun HomePageView(
                 },
                 colors = ButtonDefaults.textButtonColorsPrimary(),
             )
+        }
+    }
+}
+
+/**
+ * The status card's shape, there only while a newer release exists; tapping it is the whole update.
+ * The bar is a white wash rather than a second colour so it stays a little lighter in every theme.
+ */
+@Composable
+private fun UpdateCard(update: UpdateController, oldVersion: String) {
+    val context = LocalContext.current
+    val dynamicColor = MiuixTheme.isDynamicColor
+    val cardColor = when {
+        dynamicColor -> MiuixTheme.colorScheme.primaryContainer
+        isInDarkTheme() -> Color(0xFF1C3350)
+        else -> Color(0xFFB3D4F5)
+    }
+    val iconTint = if (dynamicColor) MiuixTheme.colorScheme.primary.copy(alpha = 0.8f) else Color(0xFF3D8BEA)
+    val progress by animateFloatAsState(if (update.installing) update.progress ?: 0f else 0f)
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp)
+            .padding(top = 12.dp),
+        colors = CardDefaults.defaultColors(color = cardColor),
+        onClick = { update.directUpdate(context) },
+        showIndication = true,
+        pressFeedbackType = PressFeedbackType.Tilt,
+    ) {
+        Box(Modifier.fillMaxWidth()) {
+            Box(Modifier.matchParentSize()) {
+                Box(
+                    Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(progress)
+                        .background(Color.White.copy(alpha = 0.2f))
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .offset(27.dp, 31.dp),
+                contentAlignment = Alignment.BottomEnd,
+            ) {
+                Icon(
+                    modifier = Modifier.size(110.dp),
+                    imageVector = MiuixIcons.Update,
+                    tint = iconTint,
+                    contentDescription = null,
+                )
+            }
+            Column(modifier = Modifier.padding(16.dp, 14.dp)) {
+                MiuixText(
+                    text = stringResource(R.string.update_card_title),
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.height(1.dp))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    MiuixText(text = "v" + update.update?.versionName, fontSize = 15.sp)
+                    Icon(
+                        modifier = Modifier
+                            .padding(vertical = 5.dp)
+                            .size(16.dp),
+                        imageVector = Icons.Rounded.ArrowUpward,
+                        tint = MiuixTheme.colorScheme.onSurface,
+                        contentDescription = null,
+                    )
+                    MiuixText(text = oldVersion, fontSize = 15.sp)
+                }
+            }
         }
     }
 }

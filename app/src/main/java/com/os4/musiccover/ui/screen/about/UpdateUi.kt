@@ -155,9 +155,9 @@ fun rememberUpdateController(isCurrent: () -> Boolean): UpdateController {
         }
     }
 
-    // The app already checked when it started; this picks that answer up, and re-asks only if it
-    // has since gone stale - opening the page is the moment a stale answer is worth refreshing,
-    // and the interval above is what keeps that from being a request per visit.
+    // Home asks as the app opens, since its card is the answer; this picks up what is already
+    // known and re-asks only if it has gone stale - the interval in UpdateCheck is what keeps that
+    // from being a request per visit.
     //
     // Keyed on whether this page is the one on screen, not on a counter the tab bar bumps: the
     // counter made every page's effects restart on every tab change, so passing through to About
@@ -255,28 +255,14 @@ fun UpdateHint(modifier: Modifier = Modifier, update: UpdateInfo?, onShowNotes: 
     )
 }
 
-/** The two rows InstallerX Revived has. */
+/** Where to get it by hand. Installing it directly is the Home page's update card. */
 @Composable
-fun UpdateRows(
-    update: UpdateInfo?,
-    installing: Boolean,
-    onGetUpdate: () -> Unit,
-    onDirectUpdate: () -> Unit,
-) {
+fun UpdateRows(onGetUpdate: () -> Unit) {
     ArrowPreference(
         title = stringResource(R.string.get_update),
         summary = stringResource(R.string.get_update_detail),
         onClick = onGetUpdate,
     )
-    if (update != null) {
-        ArrowPreference(
-            title = stringResource(R.string.get_update_directly),
-            summary = stringResource(
-                if (installing) R.string.updating else R.string.get_update_directly_desc
-            ),
-            onClick = onDirectUpdate,
-        )
-    }
 }
 
 /**
@@ -307,7 +293,7 @@ fun UpdateDialogs(controller: UpdateController) {
 
 /** Everything the install has to say, shown in the page rather than in a Toast. */
 @Composable
-private fun UpdateStatusDialog(status: String?, onDismiss: () -> Unit) {
+internal fun UpdateStatusDialog(status: String?, onDismiss: () -> Unit) {
     if (status == null) return
     WindowDialog(
         show = true,

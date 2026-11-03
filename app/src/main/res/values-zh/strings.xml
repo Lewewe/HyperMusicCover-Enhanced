@@ -166,10 +166,8 @@
     <string name="fp_sink_never">不下沉</string>
     <string name="get_update">获取更新</string>
     <string name="get_update_detail">检查软件更新和新功能</string>
+    <string name="update_card_title">有可用更新！</string>
     <string name="update_available">有可用更新：%1$s</string>
-    <string name="get_update_directly">直接更新</string>
-    <string name="get_update_directly_desc">直接从 Github 安装更新</string>
-    <string name="updating">正在更新…</string>
     <string name="update_notes_title">更新日志</string>
     <string name="update_notes_empty">（本次发布没有说明）</string>
     <string name="update_cancel">取消</string>

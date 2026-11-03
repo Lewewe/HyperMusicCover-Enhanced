@@ -77,6 +77,14 @@
         <!-- The other way back in while the icon is hidden: dial *#*#95993926#*#*. Both actions,
              as InstallerX Revived registers them; the dialler decides which one it sends. -->
         <receiver
+            android:name=".updater.UpdateReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name=".SecretCodeReceiver"
             android:exported="true">
             <intent-filter>

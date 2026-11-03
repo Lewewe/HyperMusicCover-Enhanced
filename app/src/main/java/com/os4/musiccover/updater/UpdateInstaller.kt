@@ -70,6 +70,10 @@ object UpdateInstaller {
     /** Cleared and rewritten on each attempt, so at most one APK is ever held. */
     private const val DOWNLOAD_DIR = "updates"
 
+    private const val ROOT_COPY = "/data/local/tmp/hmce-update.apk"
+    private const val PREFS = "self_update"
+    private const val KEY_RESTART = "restart_scope_after_install"
+
     /**
      * Process-scoped, deliberately not the composition's.
      *
@@ -128,7 +132,7 @@ object UpdateInstaller {
                             .putString(expectedPackage, version)
                             .putString("${expectedPackage}.file", file.name).apply()
                     }
-                    if (handOff(app, file)) {
+                    if ((expectedPackage == app.packageName && rootInstall(app, file)) || handOff(app, file)) {
                         InstallOutcome.HandedOff
                     } else {
                         saveToDownloads(app, file)?.let { InstallOutcome.SavedToDownloads(it) }
@@ -225,6 +229,37 @@ object UpdateInstaller {
             }
         }
         throw lastFailure ?: IOException("no download source could be reached")
+    }
+
+    /**
+     * Installs without asking, when root is granted. False sends the APK to [handOff] instead.
+     *
+     * Copied out first: system_server is not allowed to read this app's cache directory. A
+     * successful install kills this process, so the scope restart is left to [UpdateReceiver] in
+     * the new build rather than chained here; a root shell started from this app is killed with
+     * it on root managers that run su inside the caller's cgroup.
+     */
+    private fun rootInstall(context: Context, file: File): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, 0)
+        prefs.edit().putBoolean(KEY_RESTART, true).commit()
+        val script = "cp '${file.absolutePath}' $ROOT_COPY && chmod 644 $ROOT_COPY && pm install -r $ROOT_COPY; " +
+            "r=\$?; rm -f $ROOT_COPY; exit \$r"
+        val installed = try {
+            Runtime.getRuntime().exec(arrayOf("su", "-c", script)).waitFor() == 0
+        } catch (t: Throwable) {
+            Log.i(TAG, "self-update: no root to install with", t)
+            false
+        }
+        if (!installed) prefs.edit().remove(KEY_RESTART).commit()
+        return installed
+    }
+
+    /** True once, in the new build, when [rootInstall] is what replaced the old one. */
+    fun takeRestartRequest(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, 0)
+        val asked = prefs.getBoolean(KEY_RESTART, false)
+        if (asked) prefs.edit().remove(KEY_RESTART).commit()
+        return asked
     }
 
     /**

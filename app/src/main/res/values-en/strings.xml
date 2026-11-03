@@ -173,10 +173,8 @@
     <string name="fp_sink_never">Never sink</string>
     <string name="get_update">Get update</string>
     <string name="get_update_detail">Check for software updates and new features</string>
+    <string name="update_card_title">Update available!</string>
     <string name="update_available">Update available: %1$s</string>
-    <string name="get_update_directly">Get update directly</string>
-    <string name="get_update_directly_desc">Install the update straight from GitHub</string>
-    <string name="updating">Updating…</string>
     <string name="update_notes_title">Changelog</string>
     <string name="update_notes_empty">(This release has no notes)</string>
     <string name="update_cancel">Cancel</string>
