@@ -4,9 +4,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 
-/** Beta releases are intentionally included for this experimental extension. */
-internal object HyperCanvasRelease {
-    const val PACKAGE = "com.yzc26623.HyperCanvas"
+/** An optional extension's GitHub releases. Prereleases count: these extensions are experimental. */
+internal open class ExtensionRelease(val PACKAGE: String, private val name: String) {
     data class Release(val version: String, val asset: GithubAsset)
     fun installedVersion(context: android.content.Context): String? = try {
         context.packageManager.getPackageInfo(PACKAGE, 0).versionName
@@ -15,9 +14,9 @@ internal object HyperCanvasRelease {
     fun downloadedVersion(context: android.content.Context): String? {
         val preferences = context.getSharedPreferences("extension_downloads", 0)
         val version = preferences.getString(PACKAGE, null) ?: return null
-        val name = preferences.getString("${PACKAGE}.file", null) ?: "HyperCanvas-$version.apk"
-        val file = java.io.File(java.io.File(context.cacheDir, "updates"), name)
-        if (file.isFile && file.length() > 0L) return version
+        val file = preferences.getString("${PACKAGE}.file", null) ?: "$name-$version.apk"
+        val cached = java.io.File(java.io.File(context.cacheDir, "updates"), file)
+        if (cached.isFile && cached.length() > 0L) return version
         // Download history must not outlive the cached APK it describes.
         if (!UpdateInstaller.inFlight) {
             preferences.edit().remove(PACKAGE).remove("${PACKAGE}.file").apply()
@@ -26,7 +25,7 @@ internal object HyperCanvasRelease {
     }
 
     suspend fun latest(): Release = withContext(Dispatchers.IO) {
-        val connection = HttpCall("https://api.github.com/repos/Lewewe/HyperCanvas/releases?per_page=20", 15_000)
+        val connection = HttpCall("https://api.github.com/repos/Lewewe/$name/releases?per_page=20", 15_000)
             .open("application/vnd.github+json")
         try {
             check(connection.responseCode == 200) { "GitHub HTTP ${connection.responseCode}" }
@@ -37,17 +36,21 @@ internal object HyperCanvasRelease {
                 val assets = release.optJSONArray("assets") ?: continue
                 for (j in 0 until assets.length()) {
                     val asset = assets.getJSONObject(j)
-                    val name = asset.optString("name")
+                    val assetName = asset.optString("name")
                     val url = asset.optString("browser_download_url")
-                    if (name.matches(Regex("HyperCanvas-[A-Za-z0-9._-]+\\.apk"))
-                        && url.startsWith("https://github.com/Lewewe/HyperCanvas/releases/download/")) {
-                        return@withContext Release(release.getString("tag_name").removePrefix("v"), GithubAsset(name, url))
+                    if (assetName.matches(Regex("$name-[A-Za-z0-9._-]+\\.apk"))
+                        && url.startsWith("https://github.com/Lewewe/$name/releases/download/")) {
+                        return@withContext Release(release.getString("tag_name").removePrefix("v"), GithubAsset(assetName, url))
                     }
                 }
             }
-            error("No HyperCanvas APK is available")
+            error("No $name APK is available")
         } finally {
             connection.disconnect()
         }
     }
 }
+
+internal object HyperCanvasRelease : ExtensionRelease("com.yzc26623.HyperCanvas", "HyperCanvas")
+
+internal object HyperImmersiveRelease : ExtensionRelease("com.yzc26623.HyperImmersive", "HyperImmersive")

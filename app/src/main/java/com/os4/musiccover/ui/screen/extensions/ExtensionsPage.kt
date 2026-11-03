@@ -56,7 +56,10 @@ import com.os4.musiccover.updater.ExtensionVersion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import com.os4.musiccover.updater.ExtensionRelease
+import com.os4.musiccover.updater.GithubAsset
 import com.os4.musiccover.updater.HyperCanvasRelease
+import com.os4.musiccover.updater.HyperImmersiveRelease
 import com.os4.musiccover.updater.UpdateInstaller
 import com.os4.musiccover.updater.InstallOutcome
 import kotlinx.coroutines.CancellationException
@@ -117,7 +120,7 @@ private fun HyperCanvasContent(isBlurEnabled: Boolean, isCurrent: Boolean, extra
     var state by remember { mutableStateOf(Bundle()) }
     var fetching by remember { mutableStateOf(false) }
     var downloadStatus by remember { mutableStateOf("") }
-    var latestRelease by remember { mutableStateOf<HyperCanvasRelease.Release?>(null) }
+    var latestRelease by remember { mutableStateOf<ExtensionRelease.Release?>(null) }
     var checking by remember { mutableStateOf(true) }
     var iconRevision by remember { mutableStateOf(0L) }
     val extensionIcon = remember(iconRevision) {
@@ -236,13 +239,6 @@ private fun HyperCanvasContent(isBlurEnabled: Boolean, isCurrent: Boolean, extra
     }
     val release = latestRelease
     val versionLabel = installedVersion?.let { stringResource(R.string.extension_installed_version, it) }
-    val newVersionLabel = when {
-        release == null -> null
-        installedVersion == null -> release.version
-        ExtensionVersion.isNewer(release.version, installedVersion) ->
-            stringResource(R.string.extension_new_version, release.version)
-        else -> null
-    }
     val canDownload = release != null && !checking && !fetching && !removing
             && ExtensionVersion.isNewer(release.version, installedVersion)
 
@@ -252,26 +248,8 @@ private fun HyperCanvasContent(isBlurEnabled: Boolean, isCurrent: Boolean, extra
                             fetching = true
                             scope.launch {
                                 try {
-                                    downloadStatus = resources.getString(R.string.hypercanvas_fetching)
-                                    val asset = release.asset
-                                    UpdateInstaller.start(context, asset.url, asset.name, HyperCanvasRelease.PACKAGE, reuseCached = true)
-                                    while (UpdateInstaller.inFlight) {
-                                        val percent = UpdateInstaller.progress?.let { " ${(it * 100).toInt()}%" }.orEmpty()
-                                        downloadStatus = resources.getString(R.string.hypercanvas_downloading) + percent
-                                        delay(250)
-                                    }
-                                    downloadStatus = when (val outcome = UpdateInstaller.lastOutcome) {
-                                        is InstallOutcome.HandedOff -> resources.getString(R.string.hypercanvas_install_ready)
-                                        is InstallOutcome.NotOurs -> resources.getString(R.string.update_not_ours)
-                                        is InstallOutcome.NoInstaller -> resources.getString(R.string.update_no_installer)
-                                        is InstallOutcome.SavedToDownloads -> resources.getString(R.string.update_saved_to_downloads, outcome.name)
-                                        is InstallOutcome.Failed -> resources.getString(R.string.update_failed, outcome.message)
-                                        else -> ""
-                                    }
-                                } catch (e: CancellationException) {
-                                    throw e
-                                } catch (e: Exception) {
-                                    downloadStatus = resources.getString(R.string.update_failed, e.message.orEmpty())
+                                    downloadExtension(context, resources, release.asset, HyperCanvasRelease.PACKAGE,
+                                        R.string.hypercanvas_downloading) { downloadStatus = it }
                                 } finally {
                                     downloadedVersion = HyperCanvasRelease.downloadedVersion(context)
                                     fetching = false
@@ -316,33 +294,7 @@ private fun HyperCanvasContent(isBlurEnabled: Boolean, isCurrent: Boolean, extra
                             Text(stringResource(R.string.hypercanvas_list_summary), fontSize = 12.sp,
                                 modifier = Modifier.alpha(.7f))
                         }
-                        val ready = installedVersion != null && !canDownload
-                        val color = if (ready) Color(0xFF388E3C) else MiuixTheme.colorScheme.primary
-                        val label = when {
-                            fetching -> UpdateInstaller.progress?.let { "${(it * 100).toInt()}%" } ?: "…"
-                            ready -> stringResource(R.string.extension_installed)
-                            checking -> "…"
-                            canDownload && installedVersion != null -> stringResource(R.string.extension_update)
-                            downloadedVersion != null && (release == null ||
-                                !ExtensionVersion.isNewer(release.version, downloadedVersion)) -> stringResource(R.string.extension_downloaded)
-                            else -> stringResource(R.string.extension_download)
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier.alpha(if (ready || canDownload) 1f else .5f)
-                                    .clip(RoundedCornerShape(50)).border(1.dp, color, RoundedCornerShape(50))
-                                    .clickable(enabled = canDownload, role = Role.Button, onClick = download)
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)) {
-                                if (canDownload) Icon(MiuixIcons.Download, contentDescription = null,
-                                    tint = color, modifier = Modifier.size(12.dp))
-                                Text(label, color = color, fontSize = 10.sp)
-                            }
-                            newVersionLabel?.let { latest ->
-                                Text(latest, fontSize = 11.sp, maxLines = 1, modifier = Modifier.alpha(.7f))
-                            }
-                        }
+                        ExtensionPill(installedVersion, downloadedVersion, release, checking, fetching, canDownload, download)
                         if (canOpenSettings) Text("›", fontSize = 24.sp)
                     }
                     if (downloadStatus.isNotEmpty() && !fetching && installedVersion == null)
@@ -489,6 +441,75 @@ private fun HyperCanvasContent(isBlurEnabled: Boolean, isCurrent: Boolean, extra
 
 private const val CANVAS_SETTLE_MS = 4_000L
 
+/** System UI takes this long to come back and load a new hook; the setup rows wait for it. */
+private const val STANDBY_RESTART_MS = 20_000L
+
+/** Fetch a release's APK, verify it and hand it to the installer, saying how that goes. */
+private suspend fun downloadExtension(context: android.content.Context, resources: android.content.res.Resources,
+    asset: GithubAsset, pkg: String, downloading: Int, onStatus: (String) -> Unit) {
+    try {
+        onStatus(resources.getString(R.string.hypercanvas_fetching))
+        UpdateInstaller.start(context, asset.url, asset.name, pkg, reuseCached = true)
+        while (UpdateInstaller.inFlight) {
+            val percent = UpdateInstaller.progress?.let { " ${(it * 100).toInt()}%" }.orEmpty()
+            onStatus(resources.getString(downloading) + percent)
+            delay(250)
+        }
+        onStatus(when (val outcome = UpdateInstaller.lastOutcome) {
+            is InstallOutcome.HandedOff -> resources.getString(R.string.hypercanvas_install_ready)
+            is InstallOutcome.NotOurs -> resources.getString(R.string.update_not_ours)
+            is InstallOutcome.NoInstaller -> resources.getString(R.string.update_no_installer)
+            is InstallOutcome.SavedToDownloads -> resources.getString(R.string.update_saved_to_downloads, outcome.name)
+            is InstallOutcome.Failed -> resources.getString(R.string.update_failed, outcome.message)
+            else -> ""
+        })
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        onStatus(resources.getString(R.string.update_failed, e.message.orEmpty()))
+    }
+}
+
+/** Download, update or installed, at an extension's row end, with the version on offer under it. */
+@Composable
+private fun ExtensionPill(installedVersion: String?, downloadedVersion: String?, release: ExtensionRelease.Release?,
+    checking: Boolean, fetching: Boolean, canDownload: Boolean, onDownload: () -> Unit) {
+    val ready = installedVersion != null && !canDownload
+    val color = if (ready) Color(0xFF388E3C) else MiuixTheme.colorScheme.primary
+    val label = when {
+        fetching -> UpdateInstaller.progress?.let { "${(it * 100).toInt()}%" } ?: "…"
+        ready -> stringResource(R.string.extension_installed)
+        checking -> "…"
+        canDownload && installedVersion != null -> stringResource(R.string.extension_update)
+        downloadedVersion != null && (release == null ||
+            !ExtensionVersion.isNewer(release.version, downloadedVersion)) -> stringResource(R.string.extension_downloaded)
+        else -> stringResource(R.string.extension_download)
+    }
+    val newVersion = when {
+        release == null -> null
+        installedVersion == null -> release.version
+        ExtensionVersion.isNewer(release.version, installedVersion) ->
+            stringResource(R.string.extension_new_version, release.version)
+        else -> null
+    }
+    Column(horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.alpha(if (ready || canDownload) 1f else .5f)
+                .clip(RoundedCornerShape(50)).border(1.dp, color, RoundedCornerShape(50))
+                .clickable(enabled = canDownload, role = Role.Button, onClick = onDownload)
+                .padding(horizontal = 8.dp, vertical = 4.dp)) {
+            if (canDownload) Icon(MiuixIcons.Download, contentDescription = null,
+                tint = color, modifier = Modifier.size(12.dp))
+            Text(label, color = color, fontSize = 10.sp)
+        }
+        newVersion?.let { latest ->
+            Text(latest, fontSize = 11.sp, maxLines = 1, modifier = Modifier.alpha(.7f))
+        }
+    }
+}
+
 /** Older extensions expose hook receipts and their live LSPosed connection state. */
 private fun legacyCanvasActive(state: Bundle): Boolean = state.getString("scopeState") == "ready" &&
     state.getLong("systemSeen") > 0L
@@ -592,8 +613,19 @@ private fun rememberStandbyState(isCurrent: Boolean): MutableState<Bundle> {
     val context = LocalContext.current
     val state = remember { mutableStateOf(Bundle()) }
     LaunchedEffect(isCurrent) {
+        var wakes = 0
         if (isCurrent) while (true) {
-            state.value = HyperImmersiveBridge.query(context)
+            var answer = HyperImmersiveBridge.query(context)
+            // Installed but silent: HyperOS will not let this app start it. A few tries: the new
+            // process can abort in zygote before any of its code runs (seen right after a force
+            // stop), and a copy signed by someone else stays silent however awake it is.
+            if (answer.isEmpty && wakes < 5 && HyperImmersiveRelease.installedVersion(context) != null) {
+                wakes++
+                HyperImmersiveBridge.wake()
+                delay(500L)
+                answer = HyperImmersiveBridge.query(context)
+            }
+            state.value = answer
             delay(2000L)
         }
     }
@@ -601,9 +633,9 @@ private fun rememberStandbyState(isCurrent: Boolean): MutableState<Bundle> {
 }
 
 @Composable
-private fun StandbyIcon() {
+private fun StandbyIcon(installedVersion: String?) {
     val context = LocalContext.current
-    val icon = remember {
+    val icon = remember(installedVersion) {
         runCatching { context.packageManager.getApplicationIcon(HyperImmersiveBridge.PACKAGE) }
             .getOrElse { context.packageManager.defaultActivityIcon }
     }
@@ -615,24 +647,50 @@ private fun StandbyIcon() {
         update = { it.setImageDrawable(icon) })
 }
 
-/** The StandBy extension in the list; only when it is installed - it is not downloaded here. */
+/**
+ * The StandBy extension in the list: download it, then the two setup steps HyperCanvas has, until
+ * System UI answers with its hook loaded and the settings open. LSPosed says nothing about a module
+ * from outside it, so the steps stay up together rather than one following the other.
+ */
 @Composable
 private fun HyperImmersiveCard(isCurrent: Boolean, onOpen: () -> Unit) {
     val state by rememberStandbyState(isCurrent)
     val context = LocalContext.current
-    // The package, not its answers: a process starting or being updated has none to give yet.
-    // Looked at again with each read of the state, so an update or removal shows.
-    val pm = context.packageManager
-    val packaged = remember(state) {
-        runCatching {
-            if (pm.checkSignatures(context.packageName, HyperImmersiveBridge.PACKAGE) ==
-                android.content.pm.PackageManager.SIGNATURE_MATCH) pm.getPackageInfo(HyperImmersiveBridge.PACKAGE, 0) else null
-        }.getOrNull()
-    } ?: return
+    val resources = LocalResources.current
+    val scope = rememberCoroutineScope()
+    var release by remember { mutableStateOf<ExtensionRelease.Release?>(null) }
+    var checking by remember { mutableStateOf(true) }
+    var fetching by remember { mutableStateOf(false) }
+    var status by remember { mutableStateOf("") }
+    var setupMessage by remember { mutableStateOf("") }
+    var hook by remember { mutableStateOf<Boolean?>(null) }
+    var restartedAt by remember { mutableLongStateOf(0L) }
+    var installedVersion by remember { mutableStateOf(HyperImmersiveRelease.installedVersion(context)) }
+    var downloadedVersion by remember { mutableStateOf(HyperImmersiveRelease.downloadedVersion(context)) }
+    LaunchedEffect(isCurrent) {
+        if (isCurrent) {
+            checking = true
+            try { release = HyperImmersiveRelease.latest() }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) { status = resources.getString(R.string.update_failed, e.message.orEmpty()) }
+            finally { checking = false }
+        }
+    }
+    LaunchedEffect(state) {
+        installedVersion = HyperImmersiveRelease.installedVersion(context)
+        downloadedVersion = HyperImmersiveRelease.downloadedVersion(context)
+        if (state.containsKey("hookActive")) hook = state.getBoolean("hookActive")
+        if (installedVersion == null) hook = null
+    }
+    val latest = release
+    val canDownload = latest != null && !checking && !fetching &&
+        ExtensionVersion.isNewer(latest.version, installedVersion)
+    val canOpen = installedVersion != null && hook == true
+    val verifying = hook == false && System.currentTimeMillis() - restartedAt < STANDBY_RESTART_MS
     Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-        Row(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(16.dp),
+        Row(Modifier.fillMaxWidth().clickable(enabled = canOpen, onClick = onOpen).padding(16.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StandbyIcon()
+            StandbyIcon(installedVersion)
             Column(Modifier.weight(1f)) {
                 Row(modifier = Modifier.padding(bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -641,13 +699,54 @@ private fun HyperImmersiveCard(isCurrent: Boolean, onOpen: () -> Unit) {
                         modifier = Modifier.weight(1f, fill = false))
                     ExtensionStageBadge("Alpha")
                 }
-                packaged.versionName?.let { v ->
+                installedVersion?.let { v ->
                     Text(stringResource(R.string.extension_installed_version, v), fontSize = 12.sp, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.alpha(.7f))
                 }
                 Text(stringResource(R.string.hyperimmersive_list_summary), fontSize = 12.sp, modifier = Modifier.alpha(.7f))
             }
-            Text("›", fontSize = 24.sp)
+            ExtensionPill(installedVersion, downloadedVersion, latest, checking, fetching, canDownload) {
+                if (canDownload && latest != null && !UpdateInstaller.inFlight) {
+                    fetching = true
+                    scope.launch {
+                        try {
+                            downloadExtension(context, resources, latest.asset, HyperImmersiveRelease.PACKAGE,
+                                R.string.hyperimmersive_downloading) { status = it }
+                        } finally {
+                            downloadedVersion = HyperImmersiveRelease.downloadedVersion(context)
+                            fetching = false
+                        }
+                    }
+                }
+            }
+            if (canOpen) Text("›", fontSize = 24.sp)
+        }
+        if (status.isNotEmpty() && !fetching && installedVersion == null)
+            Text(status, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+        if (installedVersion != null && hook == false) {
+            if (verifying) {
+                ArrowPreference(title = stringResource(R.string.hypercanvas_setup_verifying),
+                    summary = stringResource(R.string.hyperimmersive_setup_verifying_summary),
+                    enabled = false, onClick = {})
+            } else {
+                ArrowPreference(title = stringResource(R.string.hypercanvas_setup_permissions),
+                    summary = stringResource(R.string.hyperimmersive_setup_permissions_summary),
+                    onClick = {
+                        scope.launch { HyperCanvasBridge.openLsposed(context, HyperImmersiveRelease.PACKAGE) }
+                    })
+                ArrowPreference(title = stringResource(R.string.hypercanvas_setup_restart),
+                    summary = setupMessage.ifEmpty { stringResource(R.string.hyperimmersive_setup_restart_summary) },
+                    onClick = {
+                        setupMessage = ""
+                        restartedAt = System.currentTimeMillis()
+                        scope.launch {
+                            if (!withContext(Dispatchers.IO + NonCancellable) { ModuleBridge.restartSystemUi() }) {
+                                restartedAt = 0L
+                                setupMessage = resources.getString(R.string.hyperimmersive_setup_restart_failed)
+                            }
+                        }
+                    })
+            }
         }
     }
 }
@@ -660,6 +759,8 @@ private fun HyperImmersivePage(isBlurEnabled: Boolean, isCurrent: Boolean, extra
     var state by rememberStandbyState(isCurrent)
     var grantMessage by remember { mutableStateOf("") }
     var granting by remember { mutableStateOf(false) }
+    var removing by remember { mutableStateOf(false) }
+    var removalStatus by remember { mutableStateOf("") }
     fun set(key: String, on: Boolean) {
         state = Bundle(state).apply { putBoolean(key, on) }
         scope.launch { HyperImmersiveBridge.configure(context, key, on).takeIf { it.size() > 0 }?.let { state = it } }
@@ -737,6 +838,28 @@ private fun HyperImmersivePage(isBlurEnabled: Boolean, isCurrent: Boolean, extra
                     })
             }
         }
-        item { Text(stringResource(R.string.hyperimmersive_note), modifier = Modifier.padding(16.dp)) }
+        item {
+            Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                ArrowPreference(title = stringResource(R.string.hyperimmersive_uninstall),
+                    summary = removalStatus.ifEmpty { stringResource(R.string.hyperimmersive_uninstall_summary) },
+                    enabled = !removing,
+                    onClick = {
+                        removing = true
+                        scope.launch {
+                            val result = withContext(Dispatchers.IO + NonCancellable) {
+                                HyperImmersiveBridge.uninstall(context)
+                            }
+                            removalStatus = resources.getString(when (result) {
+                                2 -> R.string.hyperimmersive_removed
+                                1 -> R.string.hyperimmersive_removed_restart_failed
+                                else -> R.string.hyperimmersive_remove_failed
+                            })
+                            android.widget.Toast.makeText(context, removalStatus, android.widget.Toast.LENGTH_LONG).show()
+                            removing = false
+                            if (result != 0) onBack()
+                        }
+                    })
+            }
+        }
     }
 }

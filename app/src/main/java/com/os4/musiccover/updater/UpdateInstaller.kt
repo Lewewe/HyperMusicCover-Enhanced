@@ -126,7 +126,7 @@ object UpdateInstaller {
                     file.delete()
                     InstallOutcome.NotOurs
                 } else {
-                    if (expectedPackage == HyperCanvasRelease.PACKAGE) {
+                    if (expectedPackage != app.packageName) {
                         val version = app.packageManager.getPackageArchiveInfo(file.absolutePath, 0)?.versionName
                         app.getSharedPreferences("extension_downloads", 0).edit()
                             .putString(expectedPackage, version)

@@ -41,7 +41,7 @@
 
 使用 Spotify Canvas：进入 **Extensions → HyperCanvas → Download**，按应用内提示完成设置。
 
-使用 StandBy：构建并安装使用相同签名的 [HyperImmersive](https://github.com/Lewewe/HyperImmersive)，之后它会出现在 **Extensions** 中，所有设置都在那里。
+使用 StandBy：进入 **Extensions → HyperImmersive → Download**，按应用内提示完成设置。
 
 ## 反馈
 

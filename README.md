@@ -41,7 +41,7 @@ Full change list: [release notes](https://github.com/Lewewe/HyperMusicCover-Enha
 
 For Spotify Canvas: **Extensions → HyperCanvas → Download**, then follow the steps shown in the app.
 
-For StandBy: build and install [HyperImmersive](https://github.com/Lewewe/HyperImmersive), signed with the same key. It then appears under **Extensions**, where all its settings live.
+For StandBy: **Extensions → HyperImmersive → Download**, then follow the steps shown in the app.
 
 ## Feedback
 

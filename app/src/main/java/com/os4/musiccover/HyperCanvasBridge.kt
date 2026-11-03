@@ -53,9 +53,9 @@ internal object HyperCanvasBridge {
     }
 
     /** Open LSPosed without changing module activation or scopes. */
-    suspend fun openLsposed(context: Context): Boolean = withContext(Dispatchers.IO) {
+    suspend fun openLsposed(context: Context, pkg: String = "com.yzc26623.HyperCanvas"): Boolean = withContext(Dispatchers.IO) {
         val user = android.os.Process.myUid() / 100000
-        val data = "module://com.yzc26623.HyperCanvas:$user"
+        val data = "module://$pkg:$user"
         val standalone = context.packageManager.getLaunchIntentForPackage("org.lsposed.manager")
         if (standalone != null && runCatching {
             context.startActivity(standalone.setData(Uri.parse(data))

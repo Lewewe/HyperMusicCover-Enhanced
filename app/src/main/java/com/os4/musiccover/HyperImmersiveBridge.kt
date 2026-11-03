@@ -28,6 +28,37 @@ internal object HyperImmersiveBridge {
     suspend fun preview(context: Context) = call(context, "preview")
 
     /**
+     * Start its process and watcher through its receiver. HyperOS rejects this app starting a
+     * stopped one through the provider (WakePathChecker), and after an install it is stopped.
+     */
+    suspend fun wake(): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            val user = android.os.Process.myUid() / 100000
+            val process = ProcessBuilder("su", "-c", "am broadcast --user $user --include-stopped-packages " +
+                "-n $PACKAGE/com.os4.immersive.BootReceiver -a android.intent.action.MY_PACKAGE_REPLACED")
+                .redirectErrorStream(true).start()
+            if (!process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                process.destroyForcibly()
+                false
+            } else process.exitValue() == 0
+        }.getOrDefault(false)
+    }
+
+    /** Root: 2 when it is gone and System UI has dropped its hook, 1 if only the first, 0 otherwise. */
+    fun uninstall(context: Context): Int = try {
+        val process = ProcessBuilder("su", "-c", "pm uninstall $PACKAGE").redirectErrorStream(true).start()
+        if (!process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            0
+        } else if (process.exitValue() != 0 || !process.inputStream.bufferedReader().readText().contains("Success")) {
+            0
+        } else {
+            context.getSharedPreferences("extension_downloads", 0).edit().remove(PACKAGE).commit()
+            if (ModuleBridge.restartSystemUi()) 2 else 1
+        }
+    } catch (_: Exception) { 0 }
+
+    /**
      * What StandBy needs and cannot ask for without a screen: notification access (the
      * artwork), opening from the background, its watcher's notification, the calendar (its 4x2
      * widget's events), and taking the lock screen. HyperOS can set that last one to ignore when

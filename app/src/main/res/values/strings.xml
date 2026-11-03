@@ -490,5 +490,14 @@
     <string name="hyperimmersive_allowed">allowed</string>
     <string name="hyperimmersive_missing">missing</string>
     <string name="hyperimmersive_grant_failed">Could not grant them. Check root access.</string>
-    <string name="hyperimmersive_note">To keep the system gestures and bars out of StandBy, enable HyperImmersive in LSPosed with System UI in its scope.</string>
+    <string name="hyperimmersive_downloading">Downloading HyperImmersive…</string>
+    <string name="hyperimmersive_setup_permissions_summary">Enable HyperImmersive in LSPosed with System UI in its scope, then come back and restart. Settings stay locked until its hook is loaded.</string>
+    <string name="hyperimmersive_setup_restart_summary">Restart System UI to load HyperImmersive. The screen blinks and the lock screen comes back.</string>
+    <string name="hyperimmersive_setup_restart_failed">Could not restart System UI. Check root access and try again.</string>
+    <string name="hyperimmersive_setup_verifying_summary">Waiting for System UI to load the extension.</string>
+    <string name="hyperimmersive_uninstall">Uninstall HyperImmersive</string>
+    <string name="hyperimmersive_uninstall_summary">Remove the extension using root, then restart System UI.</string>
+    <string name="hyperimmersive_removed">HyperImmersive was removed.</string>
+    <string name="hyperimmersive_removed_restart_failed">HyperImmersive was removed, but System UI could not be restarted.</string>
+    <string name="hyperimmersive_remove_failed">Could not remove HyperImmersive. Check root access and try again.</string>
 </resources>
