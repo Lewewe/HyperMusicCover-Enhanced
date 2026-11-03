@@ -29,11 +29,31 @@ import java.security.MessageDigest
 private const val REPO = "Lewewe/HyperMusicCover-Enhanced"
 private const val RELEASES_LIST = "https://api.github.com/repos/$REPO/releases"
 
-/** `v1.2.3`, and only that: three numeric parts, each within the width the versionCode packs. */
-private val STABLE_TAG = Regex("^v(\\d{1,3})\\.(\\d{1,2})\\.(\\d{1,2})$")
+/**
+ * `v1.2.3`, or a small update on top of it: `v1.2.3-1`, `v1.2.3-rev2`. Numeric parts, each within
+ * the width the versionCode packs.
+ */
+private val STABLE_TAG = Regex("^v(\\d{1,3})\\.(\\d{1,2})\\.(\\d{1,2})(?:-[A-Za-z]*(\\d{1,3}))?$")
+
+/** A small update's number in a version name; nightly and dev suffixes are not one, and count as 0. */
+private val REVISION = Regex("^\\d+\\.\\d+\\.\\d+-[A-Za-z]*(\\d{1,3})$")
 
 /** The leading triple of a local version name, nightly `-nightly.<date>.<sha>` suffixes and all. */
 private val LEADING_TRIPLE = Regex("^(\\d{1,3})\\.(\\d{1,2})\\.(\\d{1,2})")
+
+/**
+ * Is [remote] newer than [local]? Compared part by part, then by the small update's number; null
+ * when either has no leading triple.
+ */
+internal fun isNewerVersion(remote: String, local: String): Boolean? {
+    val l = LEADING_TRIPLE.find(local)?.groupValues?.drop(1)?.map(String::toInt) ?: return null
+    val r = LEADING_TRIPLE.find(remote)?.groupValues?.drop(1)?.map(String::toInt) ?: return null
+    for (i in 0..2) if (r[i] != l[i]) return r[i] > l[i]
+    return revision(remote) > revision(local)
+}
+
+private fun revision(version: String): Int =
+    REVISION.find(version)?.groupValues?.get(1)?.toInt() ?: 0
 
 /** One release, as much of it as this app uses. GitHub's release object carries dozens more. */
 internal data class GithubRelease(
@@ -252,7 +272,8 @@ object UpdateApi {
      */
     private fun toUpdateInfo(releases: List<GithubRelease>): UpdateInfo? {
         // Newest first, stable only, newer than the running build. `parseRelease` drops
-        // pre-releases and tags that are not a dotted triple; `isNewer` drops everything at or
+        // pre-releases and tags that are not a dotted triple or one with a small update's number on
+        // top; `isNewer` drops everything at or
         // below the build we are running.
         val newer = releases
             .mapNotNull(::parseRelease)
@@ -280,11 +301,12 @@ object UpdateApi {
     private fun parseRelease(release: GithubRelease): Release? {
         if (release.prerelease) return null
         val match = STABLE_TAG.matchEntire(release.tagName) ?: return null
-        val (major, minor, patch) = match.destructured
+        val (major, minor, patch, revision) = match.destructured
         val apk = releaseApk(release)
         return Release(
             versionName = release.tagName.removePrefix("v"),
-            versionCode = (major.toInt() * 10_000 + minor.toInt() * 100 + patch.toInt()) * 1000,
+            versionCode = (major.toInt() * 10_000 + minor.toInt() * 100 + patch.toInt()) * 1000 +
+                (revision.toIntOrNull() ?: 0),
             notes = release.body.trim(),
             apkUrl = apk?.url,
             releaseUrl = release.htmlUrl,
@@ -325,15 +347,7 @@ object UpdateApi {
      * local version name that does not parse at all.
      */
     private fun isNewer(versionName: String, versionCode: Int): Boolean {
-        val local = LEADING_TRIPLE.find(BuildConfig.VERSION_NAME)?.value
-        val remote = LEADING_TRIPLE.find(versionName)?.value
-        if (local != null && remote != null) {
-            val l = local.split('.').map(String::toInt)
-            val r = remote.split('.').map(String::toInt)
-            for (i in 0..2) if (r[i] != l[i]) return r[i] > l[i]
-            return false
-        }
-        return versionCode > BuildConfig.VERSION_CODE
+        return isNewerVersion(versionName, BuildConfig.VERSION_NAME) ?: (versionCode > BuildConfig.VERSION_CODE)
     }
 
     /**
