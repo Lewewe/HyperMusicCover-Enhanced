@@ -39,7 +39,6 @@ import com.os4.musiccover.DictionaryActivity
 import com.os4.musiccover.TranslationProvider
 import com.os4.musiccover.ModuleBridge
 import com.os4.musiccover.R
-import com.os4.musiccover.ShadeActivity
 import com.os4.musiccover.TweaksActivity
 import com.os4.musiccover.MiniPlayerActivity
 import com.os4.musiccover.ui.util.PageScaffold
@@ -132,15 +131,6 @@ private fun FeatureList(
                         title = stringResource(R.string.features_cover_title),
                         summary = stringResource(R.string.features_cover_summary),
                         onClick = { onOpen(CoverActivity::class.java) },
-                    )
-                }
-                Card(
-                    modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)
-                ) {
-                    ArrowPreference(
-                        title = stringResource(R.string.features_shade_title),
-                        summary = stringResource(R.string.features_shade_summary),
-                        onClick = { onOpen(ShadeActivity::class.java) },
                     )
                 }
                 Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
@@ -1407,10 +1397,6 @@ private fun CardGroup(
  * A slider with its current value printed opposite the title. Without the number there is no way
  * to tell where you have dragged to, which matters here because these values get compared against
  * ones written down in the notes.
- *
- * Shared with ShadePage, which is why it is `internal` rather than private to this file: both
- * pages adjust module settings the same way, and a second slider that looked almost the same was
- * the first thing a reviewer noticed.
  *
  * [detent] marks the module default with a dot and uses miuix's key point haptic feedback.
  */

@@ -229,16 +229,6 @@ object ModuleBridge {
         val lyriconInstalled: Boolean = false,
         /** 0 system default, 1 never avoid the fingerprint icon, 2 always avoid it. */
         val fpAvoid: Int = 0,
-        /**
-         * The notification-shade settings, keyed exactly as the module's own CFG_KEYS.
-         *
-         * Read out of the reply by PREFIX rather than field by field. The module generates its
-         * half of this from one list - the same list its state file and its query reply are
-         * built from - so enumerating the bundle here means a knob added on that side appears in
-         * this map with nothing to change in this file. What the page does with each key is a
-         * table in the UI; what it means is the module's business.
-         */
-        val shade: Map<String, Int> = emptyMap(),
         val mediaCardConfig: String = MediaCardConfig.normalized(null),
         val miniConfig: String = MiniPlayerConfig.defaultJson(),
         val notificationCompactingAvailable: Boolean = false,
@@ -410,7 +400,7 @@ object ModuleBridge {
 
     /**
      * Which setting an intent sets, so a newer value replaces an older one in [pending]. The op
-     * alone is not enough: shadecfg carries its setting as "key", and mediacard sets whichever
+     * alone is not enough: mediastyle carries its setting as "key", and mediacard sets whichever
      * of its switches it carries.
      */
     private fun pendingKey(intent: Intent): String {
@@ -657,21 +647,8 @@ object ModuleBridge {
     fun setFingerprintAvoid(context: Context, mode: Int) =
         send(context, "fpavoid") { putExtra("mode", mode) }
 
-    /**
-     * One shade setting, by the module's own key.
-     *
-     * A single op for the whole page rather than one per setting, so this side and the module
-     * cannot drift. The key is matched and the value clamped inside ShadeLayer.configure, so the
-     * settings page and an adb shell go through the same door.
-     */
     fun setMiniConfig(context: Context, json: String) =
         send(context, "minicfg") { putExtra("json", MiniPlayerConfig.normalizedJson(json)) }
-
-    fun setShade(context: Context, key: String, value: Int) =
-        send(context, "shadecfg") {
-            putExtra("key", key)
-            putExtra("v", value)
-        }
 
     /**
      * Asks the module for everything at once. Returns a dead State rather than throwing when the
@@ -1017,9 +994,6 @@ object ModuleBridge {
             lyricSource = b.getString("lyricsrc") ?: "none",
             lyriconInstalled = b.getBoolean("lyricon", false),
             fpAvoid = b.getInt("fpavoid", 0),
-            shade = b.keySet()
-                .filter { it.startsWith("shade_") }
-                .associate { it.removePrefix("shade_") to b.getInt(it, 0) },
             mediaCardConfig = MediaCardConfig.normalized(b.getString("mediastyle")),
             miniConfig = MiniPlayerConfig.normalizedJson(b.getString("minicfg")),
             notificationCompactingAvailable = b.getBoolean("notificationcompactavailable", false),

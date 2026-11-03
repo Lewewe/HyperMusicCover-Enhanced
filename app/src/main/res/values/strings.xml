@@ -213,16 +213,9 @@
     <!-- The features page is a list of cards, each opening a page of its own. -->
     <string name="features_cover_title">Lock screen music cover</string>
     <string name="features_cover_summary">Cover, clock, media card</string>
-    <string name="features_shade_title">Notification shade and Control Center (experimental)</string>
-    <string name="features_shade_summary">Flowing light</string>
     <string name="features_mini_title">Lock screen super island</string>
     <string name="features_mini_summary">Music, notifications, blur and brightness</string>
 
-    <string name="shade_enabled">Enable flowing light</string>
-    <string name="shade_section_behaviour">Behavior</string>
-    <string name="shade_mode">Shade background</string>
-    <string name="shade_mode_restore">System default</string>
-    <string name="shade_mode_keep">Keep the album cover</string>
 
     <string name="islands_background_blur">Blur background</string>
     <string name="islands_background_blur_summary">Blur behind the pill and shortcut buttons. When off, Frosted Glass uses a solid color and Soft Glass uses HyperOS 4 glass.</string>

@@ -189,16 +189,9 @@
     <!-- The features page is a list of cards, each opening a page of its own. -->
     <string name="features_cover_title">锁屏音乐封面</string>
     <string name="features_cover_summary">封面、时钟、媒体卡片</string>
-    <string name="features_shade_title">通控中心（实验性功能）</string>
-    <string name="features_shade_summary">动态流光</string>
     <string name="features_mini_title">锁屏超级岛</string>
     <string name="features_mini_summary">音乐、通知、背景模糊与亮度</string>
 
-    <string name="shade_enabled">启用流光效果</string>
-    <string name="shade_section_behaviour">行为</string>
-    <string name="shade_mode">生效范围</string>
-    <string name="shade_mode_restore">系统默认</string>
-    <string name="shade_mode_keep">保持音乐封面</string>
 
     <string name="islands_background_blur">背景模糊</string>
     <string name="islands_background_blur_summary">为超级岛和快捷按钮添加模糊背景。关闭后，Frosted Glass 使用纯色背景，Soft Glass 使用 HyperOS 4 原生玻璃效果。</string>

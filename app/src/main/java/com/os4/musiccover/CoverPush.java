@@ -21,6 +21,13 @@ import android.view.ViewTreeObserver;
  * decides WHETHER the cover should be on; Main does that and calls in.
  */
 final class CoverPush {
+    /** A cover has reached its place in this process; a restart of SystemUI forgets it. */
+    private static volatile boolean sArtDelivered;
+
+    static boolean artDelivered() {
+        return sArtDelivered;
+    }
+
 
     private CoverPush() {
     }
@@ -221,11 +228,9 @@ final class CoverPush {
             // that hands the OEM's own colours back happens with the rest of cover mode.
             // The wallpaper cover is gone, but Canvas still needs the artwork's clock palette.
             if (!CanvasHostBridge.ownsVideoBackdrop() && !CanvasHostBridge.nativeClockScene()) Main.sCoverTint = 0;
-            // The shade has nothing to reveal any more - unless it is set to keep the last cover.
             // This branch is the single funnel for leaving cover mode - the tap, the dismissed
-            // card, the release path and the cover op all end up here - so it is the only place
-            // the picture has to be dropped.
-            if (!ShadeLayer.keepsArt()) ShadeLayer.setArt(null);
+            // card, the release path and the cover op all end up here.
+            sArtDelivered = false;
             Xp.log(Main.TAG + "pushart off");
             return;
         }
@@ -293,13 +298,7 @@ final class CoverPush {
                     sTintValue = Main.sCoverTint;
                 }
                 if (Main.sCoverMode || CanvasHostBridge.active()) Main.recolorClock();
-                // The shade builds its background from the square source and keeps nothing.
-                android.os.Trace.beginSection("MC push.shade");
-                try {
-                    ShadeLayer.setArt(src);
-                } finally {
-                    android.os.Trace.endSection();
-                }
+                sArtDelivered = true;
                 Xp.log(Main.TAG + "pushart " + w + "x" + h + " bias=" + Main.sBias + " as a "
                         + src.getWidth() + "x" + src.getHeight() + " source, sent in "
                         + (sent - t0) + "ms, own copy " + (reused ? "reused" : "composed") + " in "
@@ -382,8 +381,7 @@ final class CoverPush {
         // Send broadcast first so wallpaper process begins decoding/encoding immediately!
         out.putExtra("tsent", android.os.SystemClock.uptimeMillis());
         ProbeGuard.send(ctx, out);
-        // After the send: the shade's background is not what anyone is waiting on.
-        ShadeLayer.setArt(art);
+        sArtDelivered = true;
         Xp.log(Main.TAG + "pushart " + w + "x" + h + " bias=" + Main.sBias
                 + " as " + jpg.length + "B jpeg, draw " + (tc - t0) + "ms encode "
                 + (android.os.SystemClock.uptimeMillis() - tc) + "ms");

@@ -63,7 +63,7 @@ private fun MiniPlayerPage(blur: Boolean, refreshKey: Int, onBack: () -> Unit) {
     var alive by remember { mutableStateOf(false) }
     var compactAvailable by remember { mutableStateOf(false) }
     val config = remember(configText) { JSONObject(configText) }
-    // See ShadePageView: a setting the module did not take greys the page until it answers again.
+    // A setting the module did not take means it went away: grey the page until it answers again.
     val lost by ModuleBridge.lost.collectAsState()
     LaunchedEffect(lost) { if (lost > 0) alive = false }
     LaunchedEffect(refreshKey, lost) {

@@ -1062,10 +1062,9 @@ public class Main extends XposedModule {
                 // wallpaper it was covering is hidden, so losing it without putting it back
                 // leaves the lock screen blank. Re-compose rather than re-show the old view:
                 // the track may have moved on while the screen was off.
-                // ... and the shade's background has to be rebuilt for the same reason even on
-                // the image path, where nothing else would notice it had gone: it is static, so
-                // a restart takes it and only this puts it back.
-                if (sCoverMode && (sVideoWallpaper || !ShadeLayer.hasArt())) {
+                // ... and a restart of SystemUI forgets the cover on the image path too, where
+                // nothing else would notice it had gone.
+                if (sCoverMode && (sVideoWallpaper || !CoverPush.artDelivered())) {
                     if (sVideoWallpaper) sCover = null;
                     CoverPush.pushArtAsync(true, false);
                 }
@@ -1770,9 +1769,6 @@ public class Main extends XposedModule {
             Xp.w(TAG + "charging animation hook failed: " + t);
         }
 
-        // The notification shade's cover background. Its hooks and logic are ShadeLayer's own.
-        ShadeLayer.install(cl);
-
         // The live container, and - on every clock style except the all_in_one family - the
         // only place the notification Y ever arrives.
         //
@@ -2042,7 +2038,6 @@ public class Main extends XposedModule {
                     + "\nmctap=" + (sMcTitleTap ? 1 : 0)
                     + "\ntap=" + (sTapToggle ? 1 : 0)
                     + "\nlyriclessclose=" + (sCloseLyriclessCover ? 1 : 0)
-                    + ShadeLayer.dumpCfg()
                     + "\nfadewp=" + (sFadeWp ? 1 : 0)
                     + "\nvcfade=" + (sVideoFade ? 1 : 0)
                     + "\nfsmode2=" + sFadeMode
@@ -2272,11 +2267,6 @@ public class Main extends XposedModule {
                         else if ("minicfg".equals(k)) MiniPlayerRuntime.applyConfig(sAppCtx,
                                 new String(android.util.Base64.decode(v, android.util.Base64.DEFAULT),
                                         java.nio.charset.StandardCharsets.UTF_8));
-                        // The whole shade settings page, in one prefix - the keys and their
-                        // meaning belong to ShadeLayer.configure.
-                        else if (k.startsWith("shade_")) {
-                            ShadeLayer.configure(k.substring(6), Integer.parseInt(v));
-                        }
                         else if ("cardrect".equals(k)) {
                             String[] r = v.split(",");
                             // Same sanity check the sampler applies, because a file written
@@ -3167,12 +3157,6 @@ public class Main extends XposedModule {
                         setResultData(chargeAnimReport());
                     } else if ("views".equals(op)) {
                         dumpViewTree(i.getBooleanExtra("root", false));
-                    } else if ("shadecfg".equals(op)) {
-                        // One op for the whole settings page. The key is validated and the value
-                        // clamped in ShadeLayer.configure, so adb and the UI go through exactly
-                        // the same door.
-                        ShadeLayer.configure(i.getStringExtra("key"), i.getIntExtra("v", 0));
-                        saveState();
                     } else if ("mediastyle".equals(op)) {
                         if (i.hasExtra("json")) MediaCardRuntime.configure(i.getStringExtra("json"));
                         else MediaCardRuntime.set(i.getStringExtra("key"), i.getIntExtra("v", 0));
@@ -3216,12 +3200,6 @@ public class Main extends XposedModule {
                         out.putFloat("clockoff", sClockOffsetDp);
                         out.putFloat("glass", sGlassEnd);
                         out.putFloat("spring", sClockResponse);
-                        // The whole shade settings page, generated from the one key list so a new
-                        // knob cannot reach the state file and miss the settings app.
-                        for (String key : ShadeLayer.CFG_KEYS) {
-                            out.putInt("shade_" + key, ShadeLayer.cfgInt(key));
-                        }
-                        out.putInt("shadeMode", ShadeLayer.mode());
                         out.putBoolean("card", sCardShowing);
                         // Checked live rather than reported from the cached flag: the user can
                         // change the wallpaper at any time and that is what breaks the feature.
@@ -10831,16 +10809,9 @@ public class Main extends XposedModule {
     }
 
     /**
-     * Doors for {@link ShadeLayer}, which is a file of its own on purpose - the shade port is
-     * large enough that folding it in here would make the "every hook installs on its own terms"
-     * rule unauditable.
-     *
-     * Both the keyguard answers are exposed together rather than one being picked here, because
-     * the two disagree and which one the shade should use is the question the port turns on:
-     * {@link #onKeyguardNow} is the clock container being shown, and the comment above
-     * {@link #keyguardShowing} records that it reads VISIBLE with the phone UNLOCKED and an app
-     * in the foreground. The shade is an unlocked-only feature, so it must gate on the
-     * KeyguardManager answer, not on the container.
+     * The KeyguardManager's answer. The two keyguard answers disagree: {@link #onKeyguardNow} is
+     * the clock container being shown, and the comment above {@link #keyguardShowing} records that
+     * it reads VISIBLE with the phone UNLOCKED and an app in the foreground.
      */
     static boolean keyguardLocked() {
         return keyguardShowing();
