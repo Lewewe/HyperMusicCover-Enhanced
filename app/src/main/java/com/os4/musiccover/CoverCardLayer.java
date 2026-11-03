@@ -744,10 +744,11 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
     /** The last place the lit lock screen gave it - what the doze keeps. */
     private CoverCardStyle.Rect lockPlace;
     private CoverCardStyle.Rect bigCoverPlace;
+    private CoverCardStyle.Rect lastGoal;
     private boolean aodExpandPending;
     /**
      * The place of the landed cover look, Phase.ON only - what the big clock's fall and wake
-     * keep. Not lockPlace: that one is still written while the clock grows into the doze.
+     * keep. Not lockPlace: that one is only written on the lit, locked lock screen.
      */
     private CoverCardStyle.Rect restPlace;
 
@@ -809,14 +810,24 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
             goal = held == null ? null : aodPlace(held);
         } else {
             goal = placeNow();
-            if (goal != null) lockPlace = goal;
+            // An unlock shrinks the place frame by frame for 30ms before going-away is set (1106 to
+            // 1050px), which a sleep from the home screen would then hold through the whole doze.
+            // Only a place that held still since the last frame is remembered.
+            boolean still = goal != null && lastGoal != null
+                    && Math.abs(goal.side - lastGoal.side) <= 0.5f
+                    && Math.abs(goal.y - lastGoal.y) <= 0.5f;
+            lastGoal = goal;
+            boolean settled = still && phase == ClockCollapse.Phase.ON
+                    && AodArtworkPolicy.canRememberPose(
+                    Main.keyguardLocked() && Main.onKeyguardNow(),
+                    MiniPlayerScene.INSTANCE.getKeyguardGoingAway(), Main.screenOnCached(),
+                    goal.y, goal.side, Float.NaN, getHeight());
+            if (settled) lockPlace = goal;
             if (goal != null && phase == ClockCollapse.Phase.ON) {
                 restPlace = goal;
                 if (!LockLyrics.wantsCompactArtwork() && !Main.aodArtworkExpanded()
                         && !LockIslands.INSTANCE.notificationArtworkExpanded()
-                        && AodArtworkPolicy.canRememberPose(Main.keyguardLocked() && Main.onKeyguardNow(),
-                                MiniPlayerScene.INSTANCE.getKeyguardGoingAway(), Main.screenOnCached(),
-                                goal.y, goal.side, Float.NaN, getHeight())) bigCoverPlace = goal;
+                        && settled) bigCoverPlace = goal;
             }
         }
         if (goal == null) {
