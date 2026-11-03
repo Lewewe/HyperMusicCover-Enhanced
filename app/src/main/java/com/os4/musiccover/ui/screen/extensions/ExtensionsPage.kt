@@ -125,7 +125,7 @@ private fun HyperCanvasContent(isBlurEnabled: Boolean, isCurrent: Boolean, extra
     var iconRevision by remember { mutableStateOf(0L) }
     val extensionIcon = remember(iconRevision) {
         runCatching { context.packageManager.getApplicationIcon(HyperCanvasRelease.PACKAGE) }
-            .getOrElse { context.packageManager.defaultActivityIcon }
+            .getOrElse { context.getDrawable(R.drawable.ic_extension_hypercanvas) }
     }
     var installedVersion by remember { mutableStateOf(HyperCanvasRelease.installedVersion(context)) }
     var downloadedVersion by remember { mutableStateOf(HyperCanvasRelease.downloadedVersion(context)) }
@@ -637,7 +637,7 @@ private fun StandbyIcon(installedVersion: String?) {
     val context = LocalContext.current
     val icon = remember(installedVersion) {
         runCatching { context.packageManager.getApplicationIcon(HyperImmersiveBridge.PACKAGE) }
-            .getOrElse { context.packageManager.defaultActivityIcon }
+            .getOrElse { context.getDrawable(R.drawable.ic_extension_hyperimmersive) }
     }
     AndroidView(modifier = Modifier.size(42.dp),
         factory = { android.widget.ImageView(it).apply {
