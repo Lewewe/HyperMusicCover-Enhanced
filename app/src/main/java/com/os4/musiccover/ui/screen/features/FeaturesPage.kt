@@ -462,16 +462,6 @@ private fun CoverGroup(
             },
         )
         SwitchPreference(
-            title = stringResource(R.string.mesh_backdrop),
-            summary = stringResource(R.string.mesh_backdrop_summary),
-            checked = module.meshBackdrop,
-            enabled = enabled && module.coverStyle == 1 && !module.hidePlayerBackground,
-            onCheckedChange = {
-                onChange(module.copy(meshBackdrop = it))
-                ModuleBridge.setMeshBackdrop(context, it)
-            },
-        )
-        SwitchPreference(
             title = stringResource(R.string.cover_glow_drift),
             summary = stringResource(R.string.cover_glow_drift_summary),
             checked = module.glowDrift,
@@ -481,6 +471,19 @@ private fun CoverGroup(
                 ModuleBridge.setGlowDrift(context, it)
             },
         )
+        if (module.glowDrift) {
+            WindowDropdownPreference(
+                title = stringResource(R.string.cover_glow_style),
+                items = listOf(stringResource(R.string.cover_glow_style_gradient),
+                    stringResource(R.string.cover_glow_style_mesh)),
+                selectedIndex = if (module.meshBackdrop) 1 else 0,
+                enabled = enabled && module.coverStyle == 1 && !module.hidePlayerBackground,
+                onSelectedIndexChange = {
+                    onChange(module.copy(meshBackdrop = it == 1))
+                    ModuleBridge.setMeshBackdrop(context, it == 1)
+                },
+            )
+        }
         val miniConfig = JSONObject(module.miniConfig)
         SwitchPreference(
             title = stringResource(R.string.mini_media_collapsed),

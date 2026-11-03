@@ -14,6 +14,9 @@
     <string name="cover_flip_summary">When the track changes, by a skip or on its own, the big cover art turns over to the new art like the media card does</string>
     <string name="cover_glow_drift">Moving background colours</string>
     <string name="cover_glow_drift_summary">Colours from the artwork drift slowly behind the big cover art. Off, they stand still</string>
+    <string name="cover_glow_style">Colour style</string>
+    <string name="cover_glow_style_gradient">Gradient</string>
+    <string name="cover_glow_style_mesh">Mesh gradient</string>
     <string name="cover_clock_section">Cover &amp; clock</string>
     <string name="clock_size">Clock size with big cover art</string>
     <string name="clock_force_colon">Always show the clock colon</string>
@@ -463,8 +466,6 @@
     <string name="experiments_iphone">iPhone-ify</string>
     <string name="island_iphone_gestures">iPhone-style island gestures</string>
     <string name="island_iphone_gestures_summary">Hold to expand Super Island, tap to open its app. Turn off to restore HyperOS gestures.</string>
-    <string name="mesh_backdrop">Mesh gradient background</string>
-    <string name="mesh_backdrop_summary">Fill the lock screen behind the big cover art with a mesh gradient made from the artwork colours. Shown on the lit lock screen, not the AOD</string>
     <string name="island_iphone_top">Expanded island at the camera</string>
     <string name="island_iphone_top_summary">Open the expanded Super Island from the camera, over the status bar, as on iPhone. Portrait phones only.</string>
     <string name="island_iphone_focus_black">Black background for other islands</string>

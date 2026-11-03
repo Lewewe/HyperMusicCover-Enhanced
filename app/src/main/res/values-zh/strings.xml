@@ -14,6 +14,9 @@
     <string name="cover_flip_summary">切歌时（手动或自动），大封面会像媒体卡片一样翻转到新封面</string>
     <string name="cover_glow_drift">背景颜色流动</string>
     <string name="cover_glow_drift_summary">封面的颜色在大封面背后缓慢流动，关闭后保持静止</string>
+    <string name="cover_glow_style">颜色样式</string>
+    <string name="cover_glow_style_gradient">渐变</string>
+    <string name="cover_glow_style_mesh">网格渐变</string>
     <string name="cover_clock_section">封面与时钟</string>
     <string name="clock_size">大封面时的时钟大小</string>
     <string name="clock_force_colon">时钟强制显示冒号</string>
@@ -471,8 +474,6 @@
     <string name="experiments_iphone">iPhone-ify</string>
     <string name="island_iphone_gestures">灵动岛手势实验</string>
     <string name="island_iphone_gestures_summary">长按展开灵动岛，轻点打开对应应用。关闭后恢复 HyperOS 原有操作。</string>
-    <string name="mesh_backdrop">网格渐变背景</string>
-    <string name="mesh_backdrop_summary">用封面颜色生成的网格渐变填满大封面背后的锁屏，只在亮屏时显示，息屏显示时不显示</string>
     <string name="island_iphone_top">展开的灵动岛贴近摄像头</string>
     <string name="island_iphone_top_summary">像 iPhone 一样从摄像头处展开超级岛，覆盖状态栏。仅限竖屏手机。</string>
     <string name="island_iphone_focus_black">其他灵动岛使用黑色背景</string>

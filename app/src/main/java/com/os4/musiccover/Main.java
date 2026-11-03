@@ -590,7 +590,7 @@ public class Main extends XposedModule {
     static volatile boolean sCoverFlip;
     /** The colour regions over the big cover's backdrop drift (CoverGlow); off, they stand still. */
     static volatile boolean sGlowDrift = true;
-    /** A true mesh gradient fills the big cover's backdrop instead of the regions (CoverGlow). */
+    /** The colours move as a true mesh gradient rather than the regions, with sGlowDrift (CoverGlow). */
     static volatile boolean sMeshBackdrop;
     /** The OEM's MiuiGxzwManager, caught on its first updateGxzwState. */
     private static volatile Object sFodManager;

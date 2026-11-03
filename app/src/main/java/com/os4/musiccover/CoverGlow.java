@@ -46,9 +46,9 @@ final class CoverGlow {
                 && Main.effectiveCoverStyle().mode == CoverCardStyle.CARD
                 && !Main.sHidePlayerBackground;
         boolean drift = Main.sGlowDrift;
-        boolean mesh = Main.sMeshBackdrop;
-        // Opaque, the mesh stays off the AOD whether it moves or not.
-        boolean on = base && ((!drift && !mesh) || (Main.screenOnCached() && Main.coverCardVisible()
+        // The mesh is a way of moving the colours; standing still they are always the regions.
+        boolean mesh = drift && Main.sMeshBackdrop;
+        boolean on = base && (!drift || (Main.screenOnCached() && Main.coverCardVisible()
                 && ClockCollapse.phase() != ClockCollapse.Phase.AOD));
         if (sRegions != null && (sSpec == null || sSpecDrift != drift || sSpecMesh != mesh)) {
             sSpec = mesh ? meshSpec() : spec(drift);

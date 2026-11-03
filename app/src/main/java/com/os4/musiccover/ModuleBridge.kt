@@ -116,7 +116,7 @@ object ModuleBridge {
         val coverFlip: Boolean = false,
         /** The colour regions over the big cover's backdrop drift. See Main.sGlowDrift. */
         val glowDrift: Boolean = true,
-        /** A mesh gradient fills the big cover's backdrop. See Main.sMeshBackdrop. */
+        /** The moving colours are a mesh gradient. See Main.sMeshBackdrop. */
         val meshBackdrop: Boolean = false,
         /**
          * Keep cover mode's small clock in the full-screen always-on display, instead of letting
