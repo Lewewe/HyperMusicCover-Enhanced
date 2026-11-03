@@ -775,7 +775,8 @@ final class LockLyrics {
 
     /**
      * The big cover tapped on a song whose lyrics are hidden: the player alone over the blurred
-     * artwork, its lyrics button there to show them, rather than out of the cover altogether.
+     * artwork, a long press on its thumbnail there to show them, rather than out of the cover
+     * altogether.
      */
     static void choosePlayer() {
         sPlayerChosen = true;

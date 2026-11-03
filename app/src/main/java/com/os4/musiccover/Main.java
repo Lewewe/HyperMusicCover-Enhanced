@@ -8695,10 +8695,11 @@ public class Main extends XposedModule {
                 && coverMorphEligible() && sCardShowing && card.isShown();
         boolean canvasLyrics = CanvasHostBridge.active() && onKeyguard && !sCardForced
                 && LockLyrics.sEnabled && LockLyrics.hasLyrics() && sCardShowing && card.isShown();
-        // With the thumbnail on the card (the player alone, the lyrics), the button stands under it
-        // beside the controls, as Canvas has it; over the big cover it leads the title.
+        // It leads the title over the big cover, and leaves as it always changed spot once the
+        // cover folds away: a long press on the thumbnail switches the lyrics there. Canvas has it
+        // beside the controls.
         float lyricsInset = LyricsButton.update(card, lyricsButton || canvasLyrics, canvasLyrics,
-                lyricsButton && LockLyrics.wantsCompactArtwork());
+                lyricsButton && !fullScreenLyrics && LockLyrics.wantsCompactArtwork());
         alignCardTextLeft(card, (TextView) sCardTitle, hideP, lyricsInset);
         alignCardTextLeft(card, (TextView) sCardArtist, hideP, lyricsInset);
         LyricsButton.place(card, (TextView) sCardTitle, (TextView) sCardArtist, sCardArt);
@@ -9139,6 +9140,9 @@ public class Main extends XposedModule {
             sArtSwallow = onCard && artRectContains(ev.getRawX(), ev.getRawY());
             if (sArtSwallow) {
                 sArtDownAt = android.os.SystemClock.uptimeMillis();
+                long downAt = sArtDownAt;
+                main().postDelayed(() -> artLongPress(downAt),
+                        android.view.ViewConfiguration.getLongPressTimeout());
             } else if (onCard && sVerbose) {
                 // For telling "the rectangle is wrong" from "the state is wrong" without
                 // guessing, which is how the mirror above was found.
@@ -9148,6 +9152,8 @@ public class Main extends XposedModule {
             return sArtSwallow;
         }
         if (!sArtSwallow) return false;
+        // A finger gone off the artwork is neither its tap nor its long press.
+        if (action == MotionEvent.ACTION_MOVE && !artRectContains(ev.getRawX(), ev.getRawY())) sArtDownAt = 0L;
         if (action == MotionEvent.ACTION_UP) {
             sArtSwallow = false;
             long held = android.os.SystemClock.uptimeMillis() - sArtDownAt;
@@ -9187,6 +9193,16 @@ public class Main extends XposedModule {
             sArtSwallow = false;
         }
         return true;
+    }
+
+    /** Held on the player's thumbnail, the lyrics switch on and off with no cover in between. */
+    private static void artLongPress(long downAt) {
+        if (!sArtSwallow || sArtDownAt != downAt || !sCoverMode || CanvasHostBridge.active()
+                || !LockLyrics.hasLyrics() || !LockLyrics.playerChosen() && !LockLyrics.wantsAttached()) return;
+        sArtDownAt = 0L;
+        View art = sCardArt;
+        if (art != null) art.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+        openLyricsFromButton();
     }
 
     /** The artwork's rectangle as this code sees it, for the log line above. */
@@ -11135,7 +11151,7 @@ public class Main extends XposedModule {
         if (!sCoverMode || coverMorphCardMode() && LockLyrics.wantsCompactArtwork() && !fromPlayer && !showing
                 || !LockLyrics.sEnabled || !LockLyrics.hasDisplayContent()) return;
         // A switch both ways, as with Canvas: the player alone gives way to the lyrics, and the
-        // lyrics go back to the player alone - its button still there to show them again.
+        // lyrics go back to the player alone - held on its thumbnail, they show again.
         // Only the big cover itself has to fold into the thumbnail; between the player and the
         // lyrics the thumbnail is already on the card, so there is nothing to morph.
         LockLyrics.setPlayerChosen(showing);
@@ -11325,8 +11341,8 @@ public class Main extends XposedModule {
             }
         } else if (LockLyrics.sEnabled && LockLyrics.hasDisplayContent() && !LockLyrics.wantsAttached()
                 && !LockLyrics.compactWithoutLyrics()) {
-            // Lyrics there but hidden: into the player over the blurred artwork, its lyrics
-            // button beside the thumbnail, not out of the cover (the maintainer, 2026-10-24).
+            // Lyrics there but hidden: into the player over the blurred artwork, not out of
+            // the cover (the maintainer, 2026-10-24).
             Xp.log(TAG + "tap at y=" + y + ": into the player");
             beginCompactArtworkMorph(false);
             LockLyrics.choosePlayer();

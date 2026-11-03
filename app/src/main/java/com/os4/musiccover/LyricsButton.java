@@ -20,7 +20,7 @@ final class LyricsButton {
     private static ValueAnimator animator;
     private static float progress;
     private static boolean requested, canvasControls;
-    /** Laid out as Canvas lays it, under the thumbnail beside the controls, whatever the tap does. */
+    /** Off the title: under the thumbnail on Canvas, otherwise gone, whatever the tap does. */
     private static boolean besideControls;
     /** The slot it is drawn in: it changes slot at the bottom of a quick shrink-and-fade. */
     private static boolean shownBeside;
@@ -30,6 +30,11 @@ final class LyricsButton {
     private static float titleShare, titleFrom;
     private static ValueAnimator swap;
     private static boolean swapPastMiddle;
+    /** Coming back to the title from nowhere: this swap has only its growing half. */
+    private static boolean swapArriving;
+    /** Where it rests by the title, kept across unlocks: it grows back there, not on the moving title. */
+    private static float restLeft = Float.NaN, titleLeft;
+    private static boolean holdLeft;
     /** Where it last rested, and where a jump of its spot holds it until it has faded out. */
     private static float[] restAt, heldAt;
     private static final float JUMP_DP = 6f;
@@ -52,7 +57,7 @@ final class LyricsButton {
             if (swap != null) swap.cancel();
             swap = null;
             shownBeside = besideControls;
-            swapLook = 1f;
+            swapLook = gone() ? 0f : 1f;
             titleShare = besideControls ? 0f : 1f;
         } else if (shownBeside != besideControls && swap == null) {
             // Between the title and the controls it does not travel: it shrinks, fades and blurs
@@ -109,6 +114,12 @@ final class LyricsButton {
 
     private static void startSwap() {
         swapPastMiddle = false;
+        swapArriving = shownBeside && !besideControls && !canvasControls;
+        // It grows by the title from the start, not from the slot it left at the middle.
+        if (swapArriving) {
+            shownBeside = false;
+            holdLeft = !Float.isNaN(restLeft);
+        }
         titleFrom = titleShare;
         swap = ValueAnimator.ofFloat(0f, 1f);
         swap.setDuration(SWAP_MS);
@@ -119,7 +130,8 @@ final class LyricsButton {
                 swapPastMiddle = true;
                 shownBeside = besideControls;
             }
-            swapLook = Math.abs(1f - 2f * t);
+            // To or from nowhere there is one half to see, so it takes the whole swap.
+            swapLook = gone() ? 1f - t : swapArriving ? t : Math.abs(1f - 2f * t);
             float eased = 1f - (1f - t) * (1f - t);
             titleShare = titleFrom + ((besideControls ? 0f : 1f) - titleFrom) * eased;
             if (t >= 1f) swap = null;
@@ -144,12 +156,15 @@ final class LyricsButton {
         float radius = (1f - look) * BLUR_DP * view.getResources().getDisplayMetrics().density;
         view.setRenderEffect(radius < 0.5f ? null : RenderEffect.createBlurEffect(
                 radius, radius, Shader.TileMode.DECAL));
+        // shortcut: gone from under the thumbnail, where it covered other apps' extra controls,
+        // until that row can be measured for room. Invisible so it takes no touches there either.
         if (!requested && progress == 0f) view.setVisibility(View.GONE);
+        else view.setVisibility(look > 0f ? View.VISIBLE : View.INVISIBLE);
         if (host != null) host.postInvalidateOnAnimation();
     }
 
     static void place(View card, TextView title, TextView artist, View artwork) {
-        if (button == null || host != card || title == null || progress <= 0f) return;
+        if (button == null || host != card || title == null || progress <= 0f || gone()) return;
         Layout layout = title.getLayout();
         if (layout == null || layout.getLineCount() == 0) return;
         float density = card.getResources().getDisplayMetrics().density;
@@ -163,6 +178,16 @@ final class LyricsButton {
         // returns (its share of the progress), and following the title it slid in from the left.
         float left = titleX - (SIZE_DP + GAP_DP) * density * progress * titleShare;
         float y = (top + bottom - size) / 2f;
+        if (!shownBeside) {
+            // The cover's spring outlasts the swap: held until the title has reached it, or has
+            // truly stopped elsewhere. Its slow tail still moves, so letting go on that jumped.
+            float riding = left;
+            if (holdLeft && swap == null && (Math.abs(riding - restLeft) < 1f
+                    || Math.abs(riding - titleLeft) < .01f)) holdLeft = false;
+            if (holdLeft) left = restLeft;
+            else if (swap == null && progress >= 1f) restLeft = riding;
+            titleLeft = riding;
+        }
         if (shownBeside) {
             float artLeft = artwork == null ? 16f * density : position(card, artwork, true);
             float artWidth = artwork == null ? size : artwork.getWidth();
@@ -202,6 +227,11 @@ final class LyricsButton {
         }
     }
 
+    /** The slot off the title has no button outside Canvas: it shrinks away where it stands. */
+    private static boolean gone() {
+        return besideControls && !canvasControls;
+    }
+
     /** Shown, or on its way in, beside the title rather than under the thumbnail. */
     static boolean byTitle() {
         return button != null && requested && !besideControls;
@@ -233,6 +263,7 @@ final class LyricsButton {
         shownBeside = false;
         swapLook = 1f;
         swapPastMiddle = false;
+        holdLeft = false;
         titleFrom = titleShare;
         restAt = heldAt = null;
         titleShare = titleFrom = 0f;

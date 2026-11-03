@@ -1147,7 +1147,7 @@ internal object LockIslands {
             icon, focus = false, time = lead.time, intent = lead.intent, group = null,
             summary = false, redacted = lead.redacted, since = members.maxOf { it.since },
             iconFrom = if (apps.size > 1) "apps${apps.size}" else lead.iconFrom,
-            count = if (hiddenLine(lead)) 1 else n)
+            count = n)
     }
 
     private fun hiddenLine(lead: Note) = lead.redacted && android.text.TextUtils.equals(lead.text, hiddenText())
@@ -1157,17 +1157,9 @@ internal object LockIslands {
         // The count is not in the line any more: "n+" at the pill's right end (Note.count). Read
         // "16 notifications · ..." the line began with a number (the user, 2026-10-22).
         if (!hiddenLine(lead)) return lead.text
-        if (SystemUiLanguage.isChinese()) {
-            return when {
-                n <= 1 -> lead.text
-                n > 5 -> "你有多条新消息"
-                else -> "你有${HIDDEN_COUNT[n]}条新消息"
-            }
-        }
-        return if (n <= 1) "New notification" else "$n new notifications"
+        if (SystemUiLanguage.isChinese()) return if (n <= 1) lead.text else "你有多条新消息"
+        return if (n <= 1) "New notification" else "New notifications"
     }
-
-    private val HIDDEN_COUNT = arrayOf("零", "一", "两", "三", "四", "五")
 
     /** A notification island's standing, released or not; null for one this lock screen has not got. */
     fun rankOf(key: String): Rank? {
