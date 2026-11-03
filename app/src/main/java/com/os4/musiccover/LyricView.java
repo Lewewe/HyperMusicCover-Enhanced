@@ -360,9 +360,12 @@ final class LyricView extends View {
     private static final int BLUR_QUARTER_ROWS = 3;
     private final android.graphics.RectF bmpDst = new android.graphics.RectF();
     private final Paint bmpPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
-    /** Fades the band's bottom strip out over a row cut by it; see drawEdgeRows. */
-    private final Paint edgeMask = new Paint();
+    /** Fades the band's strips out over a row cut by them; see drawEdgeRows. */
+    private final Paint edgeMask = new Paint(), edgeTopMask = new Paint();
     private float edgeMaskFrom = Float.NaN, edgeMaskTo = Float.NaN;
+    private float edgeTopFrom = Float.NaN, edgeTopTo = Float.NaN;
+    private boolean edgeCutTop, edgeCutBottom;
+    private float edgeRowsBottom;
     private final int[] edgeRows = new int[8];
     private final float[] edgeRowY = new float[8], edgeRowA = new float[8];
     private int edgeCount;
@@ -2296,15 +2299,10 @@ final class LyricView extends View {
             if (y > bandBottom) break;
             float renderedHeight = simultaneousHeight(i);
             if (y + renderedHeight < bandTop) continue;
-            // Faded by the row's own top against the top edge. The bottom edge is a mask
-            // (drawEdgeRows), so a next line under a long focus peeks in and rises into view,
-            // instead of staying at zero till all of it fits and then appearing from nothing.
-            // A focused row that is taller than the band is intentionally top-pinned above.
-            // It must be clipped, not faded to zero merely because its secondary rows extend
-            // below the card; otherwise the complete lyric vanishes on the lit lock screen.
-            float edge = i == focus && renderedHeight > bandH ? 1f
-                    : clamp01((y - bandTop) / fade);
-            float a = vis * edge;
+            // Both edges are masks (drawEdgeRows), so a next line under a long focus peeks in and
+            // rises into view, and a sung line over it stays until it has left: faded by its own
+            // top, a tall one vanished while most of it still fit, leaving the room above empty.
+            float a = vis;
             a *= simultaneousDepartureAlpha(i);
             // Lines already sung, above the focus, sit further back than the ones to come.
             // Keep finished rows bright until their Gentle lyric flow group is released.
@@ -2312,27 +2310,43 @@ final class LyricView extends View {
                     && !retained(i) && !sungNow(i)) a *= ABOVE_ALPHA;
             if (a <= 0.003f) continue;
             float strip = bandBottom - fade;
-            if (y + renderedHeight <= strip || edgeCount == edgeRows.length) {
+            // A focused row taller than the band is intentionally top-pinned above: its top is
+            // the actual lyric, not to be masked for sitting near the edge.
+            boolean cutTop = y < bandTop + fade && !(i == focus && renderedHeight > bandH);
+            boolean cutBottom = y + renderedHeight > strip;
+            if (!cutTop && !cutBottom || edgeCount == edgeRows.length) {
                 drawLine(canvas, i, side, y, a);
                 continue;
             }
-            // Cut by the bottom edge: drawn once, whole, in the masked layer. Drawn twice (above
-            // the strip and in it) the two antialiased clip edges overlapped in a bright seam.
+            // Cut by an edge: drawn once, whole, in the masked layer. Drawn twice (beside the
+            // strip and in it) the two antialiased clip edges overlapped in a bright seam.
+            edgeCutTop |= cutTop;
+            edgeCutBottom |= cutBottom;
+            edgeRowsBottom = Math.max(edgeRowsBottom, y + renderedHeight);
             edgeRows[edgeCount] = i;
             edgeRowY[edgeCount] = y;
             edgeRowA[edgeCount++] = a;
         }
-        if (edgeCount > 0) drawEdgeRows(canvas, side, bandBottom - fade, bandBottom);
+        if (edgeCount > 0) drawEdgeRows(canvas, side, bandTop + fade, bandBottom - fade, bandBottom);
         edgeCount = 0;
+        edgeCutTop = edgeCutBottom = false;
+        edgeRowsBottom = 0f;
         canvas.restoreToCount(save);
     }
 
     /**
-     * The rows the bottom edge cuts, in a layer faded out over the strip above the edge: a row
+     * The rows the band's edges cut, in a layer faded out over the strip inside each edge: a row
      * leaves or enters the band through a gradient, not a hard line through its glyphs. Only
-     * those rows are offscreen, and only while one crosses the strip.
+     * those rows are offscreen, and only while one crosses a strip.
      */
-    private void drawEdgeRows(Canvas canvas, float side, float from, float to) {
+    private void drawEdgeRows(Canvas canvas, float side, float topTo, float from, float to) {
+        if (edgeCutTop && (bandTop != edgeTopFrom || topTo != edgeTopTo)) {
+            edgeTopMask.setShader(new LinearGradient(0f, bandTop, 0f, topTo, 0x00000000, 0xFF000000,
+                    Shader.TileMode.CLAMP));
+            edgeTopMask.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
+            edgeTopFrom = bandTop;
+            edgeTopTo = topTo;
+        }
         if (from != edgeMaskFrom || to != edgeMaskTo) {
             edgeMask.setShader(new LinearGradient(0f, from, 0f, to, 0xFF000000, 0x00000000,
                     Shader.TileMode.CLAMP));
@@ -2341,12 +2355,12 @@ final class LyricView extends View {
             edgeMaskTo = to;
         }
         float top = Math.max(bandTop, Math.min(from, edgeRowY[0]));
-        int layer = canvas.saveLayer(0f, top, getWidth(), to, null);
+        int layer = canvas.saveLayer(0f, top, getWidth(), Math.min(to, edgeRowsBottom), null);
         for (int k = 0; k < edgeCount; k++) {
             drawLine(canvas, edgeRows[k], side, edgeRowY[k], edgeRowA[k]);
         }
-        // CLAMP keeps the mask opaque above the strip.
-        canvas.drawRect(0f, top, getWidth(), to, edgeMask);
+        if (edgeCutTop) canvas.drawRect(0f, top, getWidth(), topTo, edgeTopMask);
+        if (edgeCutBottom) canvas.drawRect(0f, from, getWidth(), to, edgeMask);
         canvas.restoreToCount(layer);
     }
 
