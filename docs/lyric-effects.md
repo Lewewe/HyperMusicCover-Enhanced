@@ -15,13 +15,22 @@ animation loop is added. The existing karaoke frames drive the effect.
 ## Interlude companion
 
 Long pauses between timed lyric lines keep the existing three-dot interlude when **Kaomoji
-companion** is off. When it is on, that same slot shows a small `(・ω・)` with a restrained
+companion** is off. When it is on, that same slot shows a small `( ・ω・ )` with a restrained
 breath and a small music-driven hop on low-band beat onsets, with the remaining time shown as a
-quiet seconds-only label below it. The face is centered in the full lyric band like the no-lyrics
-companion, while the interlude keeps the lyric stack's existing vertical spacing. A faint
+quiet seconds-only label below it. Off, Subtle, and Dramatic align the face with the lyric column
+and allow it to preview in the existing interlude slot before the actual break, while Eye-candy
+centers it in the lyric band and waits for the actual break. The interlude keeps the lyric stack's
+existing vertical spacing. The same neutral face remains throughout each interlude, so it does not
+switch expressions during the preview or countdown. Before the actual pause, the preview face stays
+dim and still without its countdown; it becomes active and music-responsive when the interlude
+begins. Off, Subtle, and Dramatic use a smaller face so it remains close to the restrained dot
+scale; Eye-candy keeps the larger companion presentation. A faint
 cover-colored halo responds to beat onsets without adding another card or panel. FFT/BPM still
 shapes the face's hop, pulse and halo, but the label stays minimal so it does not compete with
-the face or the incoming lyric.
+the face or the incoming lyric. The face remains stable for the pause, then fades cleanly as the
+next lyric arrives. Subtle and Dramatic keep a small additional gap between lyric rows so their
+motion remains readable. All modes use their normal lyric renderer
+when the next line arrives.
 The countdown uses lyric timestamps, so it remains stable even when FFT capture is unavailable.
 
 ## Inactive lyrics blur
@@ -44,7 +53,7 @@ to their timing and retain their measured shaping, karaoke gradient and existing
 HDR highlighting remains controlled by its separate setting. No new letter reveal, trails,
 breathing or translation motion is applied in this mode.
 
-Subtle and Dramatic retain the normal renderer: all word-timed letters remain visible, and the fill
+Subtle and Dramatic retain the normal renderer with a little extra row spacing: all word-timed letters remain visible, and the fill
 cursor drives each safe grapheme's rise. As the fill passes, each letter eases smoothly back to
 baseline. They also provide their mode-specific trails, breathing and translation motion, but neither
 flies letters in from off-screen nor hides upcoming lyric lines. The full-line blur crossfade is

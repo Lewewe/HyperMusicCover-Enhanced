@@ -255,8 +255,9 @@ final class LyricView extends View {
     private static final int LULL_MS = 2500;
 
     // ---- interlude dots/kaomoji, in text sizes and milliseconds
-    private static final String INTERLUDE_FACE = "(・ω・)";
-    private static final long FACE_EXIT_MS = 480L;
+    private static final String INTERLUDE_FACE = "( ・ω・ )";
+    private static final long FACE_EXIT_MS = 720L;
+    private static final float ALIVE_LINE_GAP_DP = 4f;
     private static final long FACE_EXIT_LEAD_MS = 120L;
     private static final float DOT_EM = 0.25f;
     private static final float DOT_GAP_EM = 0.43f;
@@ -1797,7 +1798,9 @@ final class LyricView extends View {
         b.clusterEnd = new int[n][];
         b.clusterEndBg = new int[n][];
         float y = 0f;
-        float gap = GAP_DP * density;
+        float gap = (GAP_DP + (AliveLyricsEffects.enabled(LockLyrics.sAliveFx)
+                && !AliveLyricsEffects.eyeCandy(LockLyrics.sAliveFx) ? ALIVE_LINE_GAP_DP : 0f))
+                * density;
         for (int i = 0; i < n; i++) {
             LyricLine l = ls.get(i);
             // A long gap before this line holds the interlude dots, in a slot of their own.
@@ -2274,17 +2277,20 @@ final class LyricView extends View {
             if (!simultaneousStage && !Float.isNaN(dotsTop[i])) {
                 boolean kaomoji = LockLyrics.sBpmEnabled;
                 boolean dramatic = LockLyrics.sAliveFx == AliveLyricsEffects.DRAMATIC;
+                boolean eyeCandy = AliveLyricsEffects.eyeCandy(LockLyrics.sAliveFx);
                 long gapStart = i == 0 ? 0L : lines.get(i - 1).end;
-                if ((kaomoji || dramatic) && ms < gapStart) continue;
+                if (((kaomoji && eyeCandy) || (!kaomoji && dramatic)) && ms < gapStart) continue;
                 float dy = anchor + dotsTop[i] - scroll[i];
                 if (dy > bandBottom) break;
                 float dh = DOTS_SLOT_EM * textPx;
                 float dEdge = Math.min(clamp01((dy - bandTop) / fade),
                         clamp01((bandBottom - (dy + dh)) / fade));
                 float da = vis * dEdge;
-                if (dotsFor >= 0 ? i < dotsFor : i <= focus) da *= ABOVE_ALPHA;
+                if (!kaomoji && (dotsFor >= 0 ? i < dotsFor : i <= focus)) da *= ABOVE_ALPHA;
                 if (da > 0.003f) {
-                    if (kaomoji) drawInterludeFace(canvas, i, da);
+                    if (kaomoji) {
+                        drawInterludeFace(canvas, i, da, dy);
+                    }
                     else drawDots(canvas, i, side, dy, da);
                 }
             }
@@ -2431,17 +2437,19 @@ final class LyricView extends View {
     }
 
     /** The kaomoji rests centered in a long lyric pause, then fades before the next line arrives. */
-    private void drawInterludeFace(Canvas c, int d, float alphaMul) {
+    private void drawInterludeFace(Canvas c, int d, float alphaMul, float lyricTop) {
         long gapStart = d == 0 ? 0L : lines.get(d - 1).end;
         long sw = switchAt(d);
-        long appear = gapStart;
-        long exitStart = Math.max(appear, sw - FACE_EXIT_MS);
-        long exitEnd = sw;
-        if (ms < appear || ms >= exitEnd) return;
+        boolean preview = !AliveLyricsEffects.eyeCandy(LockLyrics.sAliveFx);
+        long motionStart = gapStart + Math.min(DOT_APPEAR_MS, (long) ((sw - gapStart) * 0.15f));
+        long exitEnd = preview ? sw - DOT_EXIT_LEAD_MS : sw;
+        long exitStart = Math.max(gapStart, exitEnd - FACE_EXIT_MS);
+        if (ms >= exitEnd) return;
+        boolean active = ms >= gapStart;
 
         float scale = 1f, fade = 1f;
-        if (ms >= appear && !LockLyrics.still()) {
-            float breath = (float) Math.sin((ms - appear) / 900f);
+        if (active && ms >= motionStart && !LockLyrics.still()) {
+            float breath = (float) Math.sin((ms - motionStart) / 900f);
             scale = 1f + .035f * breath;
             if (ms >= exitStart && ms < sw) {
                 float e = clamp01((ms - exitStart) / (float) (exitEnd - exitStart));
@@ -2450,19 +2458,22 @@ final class LyricView extends View {
             }
         }
         long beatAt = LockLyrics.bpmBeatAt();
-        long sinceBeat = beatAt == 0L ? Long.MAX_VALUE : Math.max(0L, now() - beatAt);
+        long sinceBeat = !active || beatAt == 0L ? Long.MAX_VALUE
+                : Math.max(0L, now() - beatAt);
         float hop = sinceBeat == Long.MAX_VALUE ? 0f
                 : (float) Math.exp(-sinceBeat / 190f);
+        long until = sw - ms;
+        String face = INTERLUDE_FACE;
         TextPaint p = companionPaint;
         p.set(paint);
-        p.setTextSize(textPx * 1.18f);
+        float faceTextScale = AliveLyricsEffects.eyeCandy(LockLyrics.sAliveFx) ? 1.18f : .85f;
+        p.setTextSize(textPx * faceTextScale);
         p.setTypeface(COMPANION_TYPEFACE);
         p.getFontMetrics(companionMetrics);
-        float width = p.measureText(INTERLUDE_FACE);
-        float faceTop = companionMetrics.top;
+        float width = p.measureText(face);
+        float faceGlyphTop = companionMetrics.top;
         float faceBottom = companionMetrics.bottom;
-        float faceHeight = faceBottom - faceTop;
-        long until = sw - ms;
+        float faceHeight = faceBottom - faceGlyphTop;
         String countdownText = Math.max(1, (int) Math.ceil(until / 1000f)) + "s";
         p.setTextSize(textPx * .42f);
         p.getFontMetrics(companionMetrics);
@@ -2470,33 +2481,46 @@ final class LyricView extends View {
         float labelWidth = p.measureText(label);
         float lineGap = textPx * .1f;
         float faceCenterY = faceHeight * 1.09f * .5f;
-        float faceBaseline = faceCenterY - (faceTop + faceBottom) * .5f;
+        float faceBaseline = faceCenterY - (faceGlyphTop + faceBottom) * .5f;
         float labelBaseline = faceHeight * 1.09f + lineGap - companionMetrics.top;
         float contentWidth = Math.max(width, labelWidth);
         float contentHeight = labelBaseline + companionMetrics.bottom;
-        float faceLeft = (getWidth() - width) / 2f;
+        Layout.Alignment align = alignFor(lines.get(d).opposite, builtAlign);
+        float columnLeft = sidePx;
+        float columnWidth = main[d].getWidth();
+        float blockLeft = align == Layout.Alignment.ALIGN_CENTER
+                ? columnLeft + (columnWidth - contentWidth) * .5f
+                : align == Layout.Alignment.ALIGN_OPPOSITE
+                        ? columnLeft + columnWidth - contentWidth : columnLeft;
+        float faceLeft = blockLeft + (contentWidth - width) * .5f;
+        float labelLeft = blockLeft + (contentWidth - labelWidth) * .5f;
+        float blockCenterX = blockLeft + contentWidth * .5f;
         float pulse = 1f + .025f * hop;
         float centeredTop = (bandTop + bandBottom - contentHeight) * .5f;
-        p.setAlpha((int) (255f * alphaMul * fade * .88f));
+        boolean followsLyrics = LockLyrics.sAliveFx != AliveLyricsEffects.EYE_CANDY;
+        float faceTop = followsLyrics ? lyricTop : centeredTop;
+        p.setAlpha((int) (255f * alphaMul * fade * (active ? .88f : INACTIVE)));
         c.save();
-        c.translate(0f, centeredTop - textPx * .12f * hop);
-        c.scale(scale * pulse, scale * pulse, getWidth() / 2f, contentHeight * .5f);
+        c.translate(0f, Math.max(bandTop, faceTop) - textPx * .12f * hop);
+        c.scale(scale * pulse, scale * pulse, blockCenterX, contentHeight * .5f);
         float glowRadius = Math.max(width * .62f, textPx * .8f) * (1f + .12f * hop);
         int glowColor = android.graphics.Color.rgb(Math.round(tintR * 255f),
                 Math.round(tintG * 255f), Math.round(tintB * 255f));
-        companionGlowPaint.setShader(new RadialGradient(getWidth() / 2f, faceCenterY,
+        companionGlowPaint.setShader(new RadialGradient(blockCenterX, faceCenterY,
                 glowRadius, new int[] {
                 android.graphics.Color.argb((int) (34f * hop * alphaMul),
                         android.graphics.Color.red(glowColor), android.graphics.Color.green(glowColor),
                         android.graphics.Color.blue(glowColor)),
                 android.graphics.Color.argb(0, 0, 0, 0)
         }, new float[] {0f, 1f}, Shader.TileMode.CLAMP));
-        c.drawCircle(getWidth() / 2f, faceCenterY, glowRadius, companionGlowPaint);
-        p.setTextSize(textPx * 1.18f);
-        c.drawText(INTERLUDE_FACE, faceLeft, faceBaseline, p);
+        c.drawCircle(blockCenterX, faceCenterY, glowRadius, companionGlowPaint);
+        p.setTextSize(textPx * faceTextScale);
+        c.drawText(face, faceLeft, faceBaseline, p);
         p.setTextSize(textPx * .42f);
-        p.setAlpha((int) (255f * alphaMul * fade * .78f));
-        c.drawText(label, (getWidth() - labelWidth) / 2f, labelBaseline, p);
+        if (active) {
+            p.setAlpha((int) (255f * alphaMul * fade * .78f));
+            c.drawText(label, labelLeft, labelBaseline, p);
+        }
         c.restore();
     }
 
@@ -2991,9 +3015,9 @@ final class LyricView extends View {
             int save = c.save();
             c.translate(0f, lay.getHeight() + BG_GAP_DP * density);
             drawWordRows(c, l.bg, bl, bgPaint, charXFor(i, bl, l.bg, charXBg), e,
-                    a * level * BG_ALPHA,
-                    a * (INACTIVE + (1f - INACTIVE) * e * UNSUNG) * BG_ALPHA,
-                    BG_LIFT, false, 1);
+                        a * level * BG_ALPHA,
+                        a * (INACTIVE + (1f - INACTIVE) * e * UNSUNG) * BG_ALPHA,
+                        BG_LIFT, false, 1);
             c.restoreToCount(save);
         }
         drawTranslation(c, i, a * level);
