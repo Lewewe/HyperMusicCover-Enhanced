@@ -18,13 +18,18 @@
 | | |
 | --- | --- |
 | 🎨 **大封面** | 全屏封面，切歌过渡流畅，也可使用自己的壁纸作背景 |
+| 🌈 **流动背景** | 封面颜色在大封面后缓慢流动，可选渐变或网格渐变 |
 | 🎤 **歌词** | 同步歌词、逐词歌词、翻译、字体包和歌词效果 |
+| (・ω・) **歌词伙伴颜文字** | 歌词和大封面都未显示时，随节拍摆动的颜文字 |
 | 📊 **音频可视化** *(Beta)* | 超级岛和播放器上随音乐跳动的频谱，静音时同样有效 |
+| 🏝️ **iPhone-ify** *(A/B)* | 长按超级岛，在摄像头处打开 iPhone 风格卡片，覆盖其他胶囊，音乐和其他超级岛均适用 |
 | 🎛️ **播放器外观** | 封面形状、背景、材质、配色和歌名滚动 |
 | 🎬 **Spotify Canvas** | 通过可选扩展 [HyperCanvas](https://github.com/Lewewe/HyperCanvas) 显示视频背景 |
-| 🔔 **通知与 AOD** | 适配通知堆叠、胶囊模式和息屏显示 |
+| 🌙 **StandBy** *(Alpha)* | 通过可选扩展 [HyperImmersive](https://github.com/Lewewe/HyperImmersive)，在充电时显示全屏时钟、音乐和小组件 |
+| 🔔 **通知与 AOD** | 适配通知堆叠、HyperOS 与 ColorOS 风格胶囊和息屏显示 |
+| ⬆️ **一键更新** | 主页卡片可下载并安装新版本，已授予 Root 时会自动重启作用域 |
 
-完整更新内容见[发布页](https://github.com/Lewewe/HyperMusicCover-Enhanced/releases)。
+完整更新内容见[发布页](https://github.com/Lewewe/HyperMusicCover-Enhanced/releases)。本页跟随 `main` 分支，部分功能将在下一版本提供。
 
 ## 安装
 
@@ -35,6 +40,8 @@
 3. 打开应用进行设置。
 
 使用 Spotify Canvas：进入 **Extensions → HyperCanvas → Download**，按应用内提示完成设置。
+
+使用 StandBy：构建并安装使用相同签名的 [HyperImmersive](https://github.com/Lewewe/HyperImmersive)，之后它会出现在 **Extensions** 中，所有设置都在那里。
 
 ## 反馈
 
@@ -48,7 +55,7 @@ cd HyperMusicCover-Enhanced
 ./gradlew :app:assembleRelease :hyper-canvas:assembleRelease
 ```
 
-需要 Android SDK 37。HyperMusicCover-Enhanced 与 HyperCanvas 必须使用相同签名（`keystore.properties`）。
+需要 Android SDK 37。HyperMusicCover-Enhanced、HyperCanvas 以及从独立仓库构建的 [HyperImmersive](https://github.com/Lewewe/HyperImmersive) 必须使用相同签名（`keystore.properties`）。
 
 ## 致谢
 

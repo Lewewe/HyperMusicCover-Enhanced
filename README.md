@@ -18,13 +18,18 @@ An LSPosed module forked from [HyperMusicCover](https://github.com/zyl6932/Hyper
 | | |
 | --- | --- |
 | 🎨 **Big cover art** | Full-screen artwork with smooth track changes, or your own wallpaper behind it |
+| 🌈 **Moving backdrop** | Artwork colours drift behind the big cover, as a gradient or a mesh gradient |
 | 🎤 **Lyrics** | Synced and word-timed lyrics, translation, font packs and effects |
+| (・ω・) **Kaomoji companion** | A face that bops to the beat when neither lyrics nor the big cover are up |
 | 📊 **Audio visualizer** *(beta)* | Super Island and player bars that follow the music, even at zero volume |
+| 🏝️ **iPhone-ify** *(A/B)* | Hold Super Island to open an iPhone-style card at the camera, over the other pills, for music and other islands |
 | 🎛️ **Player styling** | Artwork shape, backgrounds, materials, colors and scrolling titles |
 | 🎬 **Spotify Canvas** | Video backgrounds through the optional [HyperCanvas](https://github.com/Lewewe/HyperCanvas) extension |
-| 🔔 **Notifications & AOD** | Works with the notification stack, pill mode and always-on display |
+| 🌙 **StandBy** *(alpha)* | Full-screen clock, music and widgets on the charger through the optional [HyperImmersive](https://github.com/Lewewe/HyperImmersive) extension |
+| 🔔 **Notifications & AOD** | Works with the notification stack, HyperOS and ColorOS-style pills and always-on display |
+| ⬆️ **One-tap updates** | A card on Home downloads and installs a new release, then restarts the scope when root is granted |
 
-Full change list: [release notes](https://github.com/Lewewe/HyperMusicCover-Enhanced/releases).
+Full change list: [release notes](https://github.com/Lewewe/HyperMusicCover-Enhanced/releases). This page follows `main`, so some features arrive with the next release.
 
 ## Install
 
@@ -35,6 +40,8 @@ Full change list: [release notes](https://github.com/Lewewe/HyperMusicCover-Enha
 3. Open the app to set it up.
 
 For Spotify Canvas: **Extensions → HyperCanvas → Download**, then follow the steps shown in the app.
+
+For StandBy: build and install [HyperImmersive](https://github.com/Lewewe/HyperImmersive), signed with the same key. It then appears under **Extensions**, where all its settings live.
 
 ## Feedback
 
@@ -48,7 +55,7 @@ cd HyperMusicCover-Enhanced
 ./gradlew :app:assembleRelease :hyper-canvas:assembleRelease
 ```
 
-Needs Android SDK 37. HyperMusicCover-Enhanced and HyperCanvas must be signed with the same key (`keystore.properties`).
+Needs Android SDK 37. HyperMusicCover-Enhanced, HyperCanvas and [HyperImmersive](https://github.com/Lewewe/HyperImmersive), which builds from its own repository, must be signed with the same key (`keystore.properties`).
 
 ## Credits
 
