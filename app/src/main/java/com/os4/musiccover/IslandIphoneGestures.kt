@@ -30,6 +30,7 @@ object IslandIphoneGestures {
     private const val TOUCH = "miui.systemui.dynamicisland.touch.domain.interactor.DynamicIslandTouchInteractor"
     private const val BASE = "miui.systemui.dynamicisland.window.content.DynamicIslandBaseContentView"
     private const val UPDATER = "miui.systemui.dynamicisland.anim.ui.animator.IslandPropertyUpdater"
+    private const val DELEGATE = "miui.systemui.dynamicisland.anim.DynamicIslandAnimationDelegate"
     private const val CAMERA_GAP_DP = 6f
     private const val GESTURE = "miui.systemui.dynamicisland.anim.ui.animator.IslandGestureAnimator"
     private const val MEDIA_BINDER =
@@ -62,6 +63,8 @@ object IslandIphoneGestures {
     /** Long enough for SystemUI's open-app callback, short enough not to style a later launch. */
     private const val LAUNCH_WINDOW_MS = 1500L
     private const val GHOST_MS = 380L
+    /** Above HyperOS's big pill at 3 and its glow one above that. */
+    private const val CARD_Z = 5f
     private const val OTHERS_OUT_MS = 120L
     private const val OTHERS_BACK_DELAY_MS = 150L
     private const val OTHERS_BACK_MS = 200L
@@ -99,7 +102,10 @@ object IslandIphoneGestures {
     @JvmStatic fun focusBlack(): Boolean = focusBlack
     @JvmStatic fun configureFocusBlack(on: Boolean) {
         focusBlack = on
-        main.post { blackenAllFocus() }
+        main.post {
+            blackenAllFocus()
+            islandWindows.toList().forEach(::syncOthers)
+        }
     }
     @JvmStatic fun radiusDp(): Int = radiusDp
     @JvmStatic fun configureRadius(dp: Int) {
@@ -413,11 +419,7 @@ object IslandIphoneGestures {
                 if (owner != null && content != null) runCatching {
                     // HyperOS clamps to this maximum; only a music card at the camera passes it.
                     nativeMaxHeight.remove(owner)?.let { Xp.setObjectField(owner, "expandedViewMaxHeight", it) }
-                    raisedBy.remove(owner)
-                    if (content.javaClass.name != MEDIA_CARD) {
-                        raiseFocus(owner, args)
-                        return@runCatching
-                    }
+                    if (content.javaClass.name != MEDIA_CARD) return@runCatching
                     val native = nativeCardHeight(content)
                     val width = args.getOrNull(0) as? Int ?: return@runCatching
                     val height = if (liftedLayout(owner) != null) native + cardExtra(width) else native
@@ -441,22 +443,15 @@ object IslandIphoneGestures {
                 } }
                 result
             }
-            // A raised card's content keeps the height it asked for, centred in the taller island.
-            if (declares(base, "updateViewLayoutParams")) Xp.hookAll(base, "updateViewLayoutParams") { chain ->
-                val args = chain.args.toTypedArray()
-                runCatching {
-                    val lp = (args[0] as? View)?.layoutParams as? android.view.ViewGroup.MarginLayoutParams
-                        ?: return@runCatching
-                    val raised = raisedBy[chain.thisObject] ?: 0
-                    if (raised > 0) args[2] = (args[2] as Int) - raised
-                    if (raised > 0 || lp in centredParams) {
-                        lp.topMargin = raised / 2
-                        // The card wraps its content, so both margins are what keep it the full height.
-                        lp.bottomMargin = raised - raised / 2
+            // HyperOS stacks a big pill above the card. At the camera the card opens over the row.
+            runCatching { Xp.findClass(DELEGATE, loader) }.getOrNull()?.let { delegate ->
+                for (name in listOf("getExpandedAnimState", "getBigIslandAnimState", "getSmallIslandAnimState"))
+                    Xp.hookAll(delegate, name) { chain ->
+                        val result = chain.proceed()
+                        runCatching { stackCard(field(chain.thisObject ?: return@hookAll result, "view") as View, name == "getExpandedAnimState") }
+                            .onFailure { Xp.w("Island card stacking failed: $it") }
+                        result
                     }
-                    if (raised > 0) centredParams[lp] = true else centredParams.remove(lp)
-                }.onFailure { Xp.w("Island card centring failed: $it") }
-                chain.proceed(args)
             }
             // A hidden island takes no touch: HyperOS finds who was touched from these rectangles.
             for (name in listOf("getBigIslandRect", "getSmallIslandRect")) if (declares(base, name))
@@ -466,7 +461,7 @@ object IslandIphoneGestures {
             if (updater != null && declares(updater, "updateContainer")) Xp.hookAll(updater, "updateContainer") { chain ->
                 val result = chain.proceed()
                 if (hiddenIslands.isNotEmpty()) (field(chain.thisObject ?: return@hookAll result, "view") as? View)?.let {
-                    if (it in hiddenIslands) {
+                    if (it in hiddenIslands && !coverOthers) {
                         it.animate().cancel()
                         hiddenIslands[it] = it.alpha
                         it.alpha = 0f
@@ -555,6 +550,21 @@ object IslandIphoneGestures {
         (call(call(owner, "getCurrentIslandData"), "getView") as? View)?.let { blackenFocus(owner, it) }
     }
 
+    /** The card last opened at the camera, which stays on top until it has closed into its pill. */
+    private var frontCard: WeakReference<View>? = null
+
+    private fun stackCard(view: View, expanded: Boolean) {
+        if (liftedLayout(view) == null) return
+        if (expanded && frontCard?.get() !== view) {
+            // Its own next state gives it HyperOS's height again; until then it is below the new card.
+            (frontCard?.get()?.let { call(it, "getBackgroundView") } as? View)?.z = 1f
+            frontCard = WeakReference(view)
+        }
+        if (frontCard?.get() === view) (call(view, "getBackgroundView") as? View)?.z = CARD_Z
+    }
+
+    @Volatile private var coverOthers = false
+
     /** Islands hidden for a card at the camera, with the alpha HyperOS last gave each. */
     private val hiddenIslands = WeakHashMap<View, Float>()
     private val islandWindows = java.util.Collections.newSetFromMap(WeakHashMap<View, Boolean>())
@@ -566,21 +576,23 @@ object IslandIphoneGestures {
     }
 
     /**
-     * HyperOS keeps the other islands in their row above its card. At the camera the card covers
-     * that row, so as on iPhone they step aside while it is open, and return as it closes.
+     * At the camera the card opens over the other islands' row, which then takes no touch. A card
+     * that can be seen through would show them, so those islands step aside until it closes.
      */
     private fun syncOthers(window: View) {
         val views = (call(window, "getContentViews") as? List<*>)?.filterIsInstance<View>() ?: return
         val card = views.firstOrNull {
             call(it, "getState")?.javaClass?.simpleName == "Expanded" && liftedLayout(it) != null
         }
+        coverOthers = card != null && (focusBlack ||
+            (call(call(card, "getCurrentIslandData"), "getView") as? View)?.javaClass?.name == MEDIA_CARD)
         for (view in views) {
             val hide = card != null && view !== card &&
                 IslandGesturePolicy.remap(true, call(view, "getState")?.javaClass?.simpleName)
-            if (hide && view !in hiddenIslands) {
-                hiddenIslands[view] = view.alpha
-                view.animate().alpha(0f).setStartDelay(0L).setDuration(OTHERS_OUT_MS)
-            } else if (!hide && view in hiddenIslands) {
+            if (hide) {
+                val alpha = hiddenIslands.getOrPut(view) { view.alpha }
+                view.animate().alpha(if (coverOthers) alpha else 0f).setStartDelay(0L).setDuration(OTHERS_OUT_MS)
+            } else if (view in hiddenIslands) {
                 view.animate().alpha(hiddenIslands.remove(view) ?: 1f)
                     .setStartDelay(OTHERS_BACK_DELAY_MS).setDuration(OTHERS_BACK_MS)
             }
@@ -616,25 +628,6 @@ object IslandIphoneGestures {
     /** The size each island last asked HyperOS for, before this module's change. */
     private val askedWidth = WeakHashMap<View, Int>()
     private val askedHeight = WeakHashMap<View, Int>()
-
-    /** A card shorter than two radii can only be a capsule, so at the camera it grows to two radii. */
-    private fun raiseFocus(owner: View, args: Array<Any?>) {
-        val layout = liftedLayout(owner) ?: return
-        val asked = args.getOrNull(1) as? Int ?: return
-        val least = Math.ceil(layout.radius * 2.0).toInt()
-        if (asked >= least) return
-        args[1] = least
-        raisedBy[owner] = least - asked
-        val max = field(owner, "expandedViewMaxHeight") as? Int ?: return
-        if (max < least) {
-            nativeMaxHeight[owner] = max
-            Xp.setObjectField(owner, "expandedViewMaxHeight", least)
-        }
-    }
-
-    /** How much each island was raised, and the content layouts given a margin for it. */
-    private val raisedBy = WeakHashMap<Any, Int>()
-    private val centredParams = WeakHashMap<Any, Boolean>()
 
     /** HyperOS's own maximum expanded width of each island this module widened. */
     private val nativeMaxWidth = WeakHashMap<View, Int>()
@@ -676,7 +669,7 @@ object IslandIphoneGestures {
         // Card coordinates: content sits at the pill's top in the island window.
         val lensLeft = layout.lens.left - (owner.width - content.width) / 2f
         val lensRight = lensLeft + layout.lens.width()
-        val lensBottom = layout.lens.bottom - layout.pillTop.toFloat() - content.top
+        val lensBottom = layout.lens.bottom - layout.pillTop.toFloat()
         val boxes = texts.map { it to textBox(it, content) }
         // Text whose column runs under the lens moves down together, as title and artist do. The
         // view's full width counts, so a long or scrolling title is placed the same as a short one.
@@ -689,7 +682,7 @@ object IslandIphoneGestures {
         } ?: 0f
         for ((text, box) in boxes) {
             val shift = if (under.any { it.first === text }) down else -IslandGesturePolicy.bottomCornerLift(
-                layout.radius, width, height + content.top, box.left, box.right, box.bottom)
+                layout.radius, width, height, box.left, box.right, box.bottom)
             setShift(text, shift)
         }
     }

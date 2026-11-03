@@ -56,6 +56,11 @@ internal class MediaIslandTheme {
             true
         }
 
+        // The card wraps its content: a layer that asked for the space on offer would stretch the card.
+        override fun onMeasure(widthSpec: Int, heightSpec: Int) = setMeasuredDimension(
+            if (MeasureSpec.getMode(widthSpec) == MeasureSpec.EXACTLY) MeasureSpec.getSize(widthSpec) else 0,
+            if (MeasureSpec.getMode(heightSpec) == MeasureSpec.EXACTLY) MeasureSpec.getSize(heightSpec) else 0)
+
         override fun onAttachedToWindow() {
             super.onAttachedToWindow()
             alpha = card.alpha
