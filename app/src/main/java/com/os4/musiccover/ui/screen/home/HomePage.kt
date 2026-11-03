@@ -13,6 +13,9 @@ import android.os.Build
 import android.provider.Settings
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,6 +45,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -57,6 +64,7 @@ import com.os4.musiccover.ModuleBridge
 import com.os4.musiccover.R
 import com.os4.musiccover.ui.component.DropdownItem
 import com.os4.musiccover.ui.screen.about.UpdateController
+import com.os4.musiccover.ui.screen.about.UpdateNotesDialog
 import com.os4.musiccover.ui.screen.about.UpdateStatusDialog
 import com.os4.musiccover.ui.screen.about.rememberUpdateController
 import com.os4.musiccover.ui.component.MenuPopupDefaults
@@ -455,15 +463,18 @@ private fun UpdateCard(update: UpdateController, oldVersion: String) {
     }
     val iconTint = if (dynamicColor) MiuixTheme.colorScheme.primary.copy(alpha = 0.8f) else Color(0xFF3D8BEA)
     val progress by animateFloatAsState(if (update.installing) update.progress ?: 0f else 0f)
-    Card(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp)
             .padding(top = 12.dp),
+    ) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.defaultColors(color = cardColor),
         onClick = { update.directUpdate(context) },
         showIndication = true,
-        pressFeedbackType = PressFeedbackType.Tilt,
+        pressFeedbackType = PressFeedbackType.Sink,
     ) {
         Box(Modifier.fillMaxWidth()) {
             Box(Modifier.matchParentSize()) {
@@ -507,7 +518,45 @@ private fun UpdateCard(update: UpdateController, oldVersion: String) {
                     MiuixText(text = oldVersion, fontSize = 15.sp)
                 }
             }
+            ChangelogPill(Modifier.align(Alignment.TopEnd).padding(10.dp).clearAndSetSemantics {})
         }
+    }
+    // The pill is drawn in the card, to sink with it, and pressed out here: in the card a press on
+    // it would also be the card's download and sink. An unseen copy, so the two are the same size;
+    // the padding is the touch target around the small pill.
+    ChangelogPill(
+        Modifier
+            .align(Alignment.TopEnd)
+            .alpha(0f)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                role = Role.Button,
+                onClick = update.showNotes,
+            )
+            .padding(10.dp),
+    )
+    }
+    UpdateNotesDialog(
+        show = update.states.notes,
+        update = update.update,
+        onDismiss = { update.states.notes = false },
+        onConfirm = {
+            update.states.notes = false
+            update.directUpdate(context)
+        },
+    )
+}
+
+@Composable
+private fun ChangelogPill(modifier: Modifier) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color.White.copy(alpha = 0.2f))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        MiuixText(text = stringResource(R.string.update_notes_title), fontSize = 13.sp)
     }
 }
 

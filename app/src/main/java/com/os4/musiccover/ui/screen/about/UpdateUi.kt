@@ -390,7 +390,7 @@ private fun UpdateProgressDialog(show: Boolean, progress: Float?, onCancel: () -
  * it are one step rather than two.
  */
 @Composable
-private fun UpdateNotesDialog(
+internal fun UpdateNotesDialog(
     show: Boolean,
     update: UpdateInfo?,
     onDismiss: () -> Unit,
