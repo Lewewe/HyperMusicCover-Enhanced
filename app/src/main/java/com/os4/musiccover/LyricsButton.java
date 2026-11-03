@@ -51,7 +51,9 @@ final class LyricsButton {
         if (!(card instanceof ViewGroup)) return 0f;
         if (host != card) release();
         canvasControls = controls;
-        besideControls = controls || beside;
+        // Leaving (the next track has no lyrics), it stays in its slot: swapping back to the title
+        // on the way out pushed the title right for a moment as the button went.
+        if (show) besideControls = controls || beside;
         if (button == null || progress <= 0f) {
             // Nothing on screen to swap: it appears where it belongs.
             if (swap != null) swap.cancel();
