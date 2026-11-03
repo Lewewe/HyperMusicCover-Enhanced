@@ -7,6 +7,7 @@ import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
+import android.graphics.RadialGradient;
 import android.graphics.Bitmap;
 import android.graphics.BlurMaskFilter;
 import android.graphics.Shader;
@@ -251,32 +252,25 @@ final class LyricView extends View {
     private static final int POP_NONE = 0, POP_IN = 1, POP_OUT = 2, POP_HOLD = 3;
 
     /** A gap between lines at least this long gets the interlude dots. */
-    private static final int LULL_MS = 4000;
+    private static final int LULL_MS = 2500;
 
-    // ---- interlude dots, in text sizes and milliseconds (see drawDots)
+    // ---- interlude dots/kaomoji, in text sizes and milliseconds
+    private static final String INTERLUDE_FACE = "(・ω・)";
+    private static final long FACE_EXIT_MS = 480L;
+    private static final long FACE_EXIT_LEAD_MS = 120L;
     private static final float DOT_EM = 0.25f;
     private static final float DOT_GAP_EM = 0.43f;
     private static final float DOT_CENTER_EM = 0.9f;
-    private static final float DOTS_SLOT_EM = 1.8f;
     private static final float DOT_DIM = 0.18f;
     private static final float DOT_RAMP = 0.7f;
-    /**
-     * The breath: the whole group swells and shrinks about its centre by this much either way.
-     * It was +-13.5% of each dot's radius on a 4.2s cosine - too slow and too small to read as
-     * breathing (user, 2026-09-16).
-     */
-    private static final float DOT_BREATH = 0.2f;
-    /** About this long a breath, stretched so a whole number of them fits the interlude. */
     private static final long DOT_BREATH_MS = 2400L;
-    /** The share of a breath spent swelling; the shrink is slower, like breathing out. */
     private static final float DOT_INHALE = 0.42f;
-    /** How long the breath takes to reach its full depth once the interlude starts. */
     private static final long DOT_BREATH_IN_MS = 700L;
     private static final long DOT_APPEAR_MS = 1200L;
-    /** Out: a small swell, then shrinking to nothing, ending this long before the scroll. */
     private static final long DOT_EXIT_MS = 480L;
     private static final long DOT_EXIT_LEAD_MS = 120L;
     private static final float DOT_EXIT_BACK = 1.7f;
+    private static final float DOTS_SLOT_EM = 1.8f;
 
     private final TextPaint paint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint transPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
@@ -2278,6 +2272,10 @@ final class LyricView extends View {
             // The interlude slot above this line, if it has one: its dots move with the line, and
             // sit there dim from the start rather than leaving a hole until their turn.
             if (!simultaneousStage && !Float.isNaN(dotsTop[i])) {
+                boolean kaomoji = LockLyrics.sBpmEnabled;
+                boolean dramatic = LockLyrics.sAliveFx == AliveLyricsEffects.DRAMATIC;
+                long gapStart = i == 0 ? 0L : lines.get(i - 1).end;
+                if ((kaomoji || dramatic) && ms < gapStart) continue;
                 float dy = anchor + dotsTop[i] - scroll[i];
                 if (dy > bandBottom) break;
                 float dh = DOTS_SLOT_EM * textPx;
@@ -2285,7 +2283,10 @@ final class LyricView extends View {
                         clamp01((bandBottom - (dy + dh)) / fade));
                 float da = vis * dEdge;
                 if (dotsFor >= 0 ? i < dotsFor : i <= focus) da *= ABOVE_ALPHA;
-                if (da > 0.003f) drawDots(canvas, i, side, dy, da);
+                if (da > 0.003f) {
+                    if (kaomoji) drawInterludeFace(canvas, i, da);
+                    else drawDots(canvas, i, side, dy, da);
+                }
             }
             // Eye-candy never previews a future lyric line before its own timestamp.
             if (i > revealThrough) break;
@@ -2351,6 +2352,7 @@ final class LyricView extends View {
     }
 
     private final TextPaint companionPaint = new TextPaint();
+    private final Paint companionGlowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint.FontMetrics companionMetrics = new Paint.FontMetrics();
     private static final Typeface COMPANION_TYPEFACE = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL);
 
@@ -2428,16 +2430,76 @@ final class LyricView extends View {
         canvas.restoreToCount(blockSave);
     }
 
-    /**
-     * The interlude slot before line d: three dots.
-     *
-     * Before their turn they sit there dim and still, like any line to come. Once the gap starts
-     * they light one after another across it (dim at 18%, each lit over about 70% of its third,
-     * sizes and spacing off Apple's frames) while the group breathes about its centre - swelling
-     * quicker than it shrinks, a whole number of breaths fitted to the gap so the last one ends
-     * at rest. Just before the stack moves on they swell a touch and shrink away to nothing.
-     * Once their interlude is over they are not drawn again.
-     */
+    /** The kaomoji rests centered in a long lyric pause, then fades before the next line arrives. */
+    private void drawInterludeFace(Canvas c, int d, float alphaMul) {
+        long gapStart = d == 0 ? 0L : lines.get(d - 1).end;
+        long sw = switchAt(d);
+        long appear = gapStart;
+        long exitStart = Math.max(appear, sw - FACE_EXIT_MS);
+        long exitEnd = sw;
+        if (ms < appear || ms >= exitEnd) return;
+
+        float scale = 1f, fade = 1f;
+        if (ms >= appear && !LockLyrics.still()) {
+            float breath = (float) Math.sin((ms - appear) / 900f);
+            scale = 1f + .035f * breath;
+            if (ms >= exitStart && ms < sw) {
+                float e = clamp01((ms - exitStart) / (float) (exitEnd - exitStart));
+                scale *= 1f - .12f * e;
+                fade = 1f - clamp01((e - 0.55f) / 0.45f);
+            }
+        }
+        long beatAt = LockLyrics.bpmBeatAt();
+        long sinceBeat = beatAt == 0L ? Long.MAX_VALUE : Math.max(0L, now() - beatAt);
+        float hop = sinceBeat == Long.MAX_VALUE ? 0f
+                : (float) Math.exp(-sinceBeat / 190f);
+        TextPaint p = companionPaint;
+        p.set(paint);
+        p.setTextSize(textPx * 1.18f);
+        p.setTypeface(COMPANION_TYPEFACE);
+        p.getFontMetrics(companionMetrics);
+        float width = p.measureText(INTERLUDE_FACE);
+        float faceTop = companionMetrics.top;
+        float faceBottom = companionMetrics.bottom;
+        float faceHeight = faceBottom - faceTop;
+        long until = sw - ms;
+        String countdownText = Math.max(1, (int) Math.ceil(until / 1000f)) + "s";
+        p.setTextSize(textPx * .42f);
+        p.getFontMetrics(companionMetrics);
+        String label = countdownText;
+        float labelWidth = p.measureText(label);
+        float lineGap = textPx * .1f;
+        float faceCenterY = faceHeight * 1.09f * .5f;
+        float faceBaseline = faceCenterY - (faceTop + faceBottom) * .5f;
+        float labelBaseline = faceHeight * 1.09f + lineGap - companionMetrics.top;
+        float contentWidth = Math.max(width, labelWidth);
+        float contentHeight = labelBaseline + companionMetrics.bottom;
+        float faceLeft = (getWidth() - width) / 2f;
+        float pulse = 1f + .025f * hop;
+        float centeredTop = (bandTop + bandBottom - contentHeight) * .5f;
+        p.setAlpha((int) (255f * alphaMul * fade * .88f));
+        c.save();
+        c.translate(0f, centeredTop - textPx * .12f * hop);
+        c.scale(scale * pulse, scale * pulse, getWidth() / 2f, contentHeight * .5f);
+        float glowRadius = Math.max(width * .62f, textPx * .8f) * (1f + .12f * hop);
+        int glowColor = android.graphics.Color.rgb(Math.round(tintR * 255f),
+                Math.round(tintG * 255f), Math.round(tintB * 255f));
+        companionGlowPaint.setShader(new RadialGradient(getWidth() / 2f, faceCenterY,
+                glowRadius, new int[] {
+                android.graphics.Color.argb((int) (34f * hop * alphaMul),
+                        android.graphics.Color.red(glowColor), android.graphics.Color.green(glowColor),
+                        android.graphics.Color.blue(glowColor)),
+                android.graphics.Color.argb(0, 0, 0, 0)
+        }, new float[] {0f, 1f}, Shader.TileMode.CLAMP));
+        c.drawCircle(getWidth() / 2f, faceCenterY, glowRadius, companionGlowPaint);
+        p.setTextSize(textPx * 1.18f);
+        c.drawText(INTERLUDE_FACE, faceLeft, faceBaseline, p);
+        p.setTextSize(textPx * .42f);
+        p.setAlpha((int) (255f * alphaMul * fade * .78f));
+        c.drawText(label, (getWidth() - labelWidth) / 2f, labelBaseline, p);
+        c.restore();
+    }
+
     private void drawDots(Canvas c, int d, float x, float top, float alphaMul) {
         long gapStart = d == 0 ? 0L : lines.get(d - 1).end;
         long sw = switchAt(d);
@@ -2445,17 +2507,13 @@ final class LyricView extends View {
         long exitEnd = sw - DOT_EXIT_LEAD_MS;
         long exitStart = Math.max(appear, exitEnd - DOT_EXIT_MS);
         if (ms >= exitEnd) return;
-
         float group = 1f, fade = 1f, u = 0f;
-        // Still, they sit at rest and unlit: the breath and the lighting are both movement.
         if (ms >= appear && !LockLyrics.still()) {
             long span = exitStart - appear;
             long t = Math.min(ms, exitStart) - appear;
             u = span <= 0 ? 3f : 3f * t / (float) span;
             if (span > 0) {
                 float period = span / (float) Math.max(1, Math.round(span / (float) DOT_BREATH_MS));
-                // Started a quarter of the way into the swell, where the curve is at rest level
-                // and rising, so the first frame of the interlude matches the still dots.
                 float p = (t + period * DOT_INHALE / 2f) / period;
                 p -= (float) Math.floor(p);
                 float b = p < DOT_INHALE
@@ -2463,7 +2521,7 @@ final class LyricView extends View {
                         : (float) Math.cos(Math.PI * (p - DOT_INHALE) / (1f - DOT_INHALE));
                 float depth = clamp01(t / (float) DOT_BREATH_IN_MS);
                 depth = 1f - (1f - depth) * (1f - depth);
-                group = 1f + DOT_BREATH * depth * b;
+                group = 1f + .2f * depth * b;
             }
             if (ms >= exitStart) {
                 float e = clamp01((ms - exitStart) / (float) (exitEnd - exitStart));
@@ -2475,9 +2533,6 @@ final class LyricView extends View {
         if (group <= 0.01f) return;
         float size = DOT_EM * textPx;
         float gap = DOT_GAP_EM * textPx * group;
-        // They sit in the slot of the line they lead into, so they go where it goes: the user's
-        // alignment, with a duet's second voice against the other edge (see alignFor). Laid out
-        // at their rest spacing, which is the anchor the breath moves them around.
         float groupW = size + 2f * DOT_GAP_EM * textPx;
         Layout.Alignment align = alignFor(lines.get(d).opposite, builtAlign);
         float colW = main[d].getWidth();

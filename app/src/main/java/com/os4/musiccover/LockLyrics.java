@@ -666,7 +666,7 @@ final class LockLyrics {
 
     /** Reconcile capture when the page, lock screen, display, track or playback changes. */
     private static void syncBpmCapture() {
-        boolean capture = BpmCompanionPolicy.capture(hasBpmCompanion() && !bpmSearchingLyrics(),
+        boolean capture = BpmCompanionPolicy.capture(sBpmEnabled && !sLoading && !sKey.isEmpty(),
                 wantsShown(), sView != null && sView.isAttachedToWindow(),
                 Main.screenOnCached(), !lockScreenGone(), playing(), still());
         if (!capture) {

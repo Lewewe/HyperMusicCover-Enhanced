@@ -1,6 +1,6 @@
 package com.os4.musiccover;
 
-/** Capture and beat animations belong only to a visible, playing companion on the lit screen. */
+/** Capture and beat animations belong only to visible, playing kaomoji content on the lit screen. */
 final class BpmCompanionPolicy {
     private BpmCompanionPolicy() {}
 

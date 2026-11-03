@@ -12,6 +12,18 @@ The Canvas renderer reuses its TextPaint, LinearGradient and Matrix; the gradien
 only when its cover/brightness/alpha inputs change. No Lottie dependency, full-line offscreen layer or new
 animation loop is added. The existing karaoke frames drive the effect.
 
+## Interlude companion
+
+Long pauses between timed lyric lines keep the existing three-dot interlude when **Kaomoji
+companion** is off. When it is on, that same slot shows a small `(・ω・)` with a restrained
+breath and a small music-driven hop on low-band beat onsets, with the remaining time shown as a
+quiet seconds-only label below it. The face is centered in the full lyric band like the no-lyrics
+companion, while the interlude keeps the lyric stack's existing vertical spacing. A faint
+cover-colored halo responds to beat onsets without adding another card or panel. FFT/BPM still
+shapes the face's hop, pulse and halo, but the label stays minimal so it does not compete with
+the face or the incoming lyric.
+The countdown uses lyric timestamps, so it remains stable even when FFT capture is unavailable.
+
 ## Inactive lyrics blur
 
 Lyrics settings → Lyric Effects includes **Inactive lyrics blur**, adjustable from 0–200%.
