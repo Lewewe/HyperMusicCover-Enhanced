@@ -1367,6 +1367,28 @@ final class LockLyrics {
             NextLyrics.onLyricsFinal();
             return;
         }
+        final int restoreGen = sGen + 1;
+        if (NextLyrics.restoreCurrent(c, new NextLyrics.LyricsCallback() {
+            @Override public void onReady(final NextLyrics.Lyrics result) {
+                if (restoreGen != sGen || !awaitedKey.equals(sKey) || sDemo) return;
+                if (result != null && !result.lines.isEmpty()) {
+                    settlePrefetched(awaitedKey, result);
+                    return;
+                }
+                sInfoSeen = LyricSource.infoFor(c);
+                if (sInfoSeen == null
+                        && ((lastChange > 0L && sTrackAt - lastChange < BURST_MS)
+                        || staleDuration(lastKey, awaitedKey))) {
+                    Main.main().postDelayed(SETTLED_LOOKUP, SETTLE_MS);
+                    return;
+                }
+                lookup(awaitedKey, c, false);
+            }
+        })) {
+            sGen = restoreGen;
+            Main.main().postDelayed(LOOKUP_WATCHDOG, LOOKUP_TIMEOUT_MS);
+            return;
+        }
         // What the lookup about to start will read the session as, so a payload that turns up
         // after it - the provider module's real one - can be told apart from this one.
         sInfoSeen = LyricSource.infoFor(c);

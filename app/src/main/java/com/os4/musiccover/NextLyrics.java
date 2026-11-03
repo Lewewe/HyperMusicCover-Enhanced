@@ -222,6 +222,37 @@ final class NextLyrics {
         return null;
     }
 
+    static boolean restoreCurrent(final MediaController controller, final LyricsCallback callback) {
+        if (controller == null || callback == null) return false;
+        final Prefetch.Item item = itemOf(controller);
+        if (item == null || item.mediaId == null || item.mediaId.isEmpty()) return false;
+        final String pkg = controller.getPackageName();
+        final Context context = context();
+        lyricWork().post(new Runnable() {
+            @Override public void run() {
+                Lyrics restored = null;
+                try {
+                    QueuedLyricCache.Entry cached = QueuedLyricCache.read(
+                            pkg, item.mediaId, context.configuration);
+                    if (cached != null && !cached.lines.isEmpty()) {
+                        LocalRomanizer.apply(cached.lines);
+                        restored = new Lyrics(pkg, item, cached.lines, cached.source,
+                                cached.translated, context);
+                    }
+                } catch (Throwable t) {
+                    Xp.w(TAG + "restoring current lyrics failed: " + t);
+                }
+                final Lyrics result = restored;
+                Main.main().post(new Runnable() {
+                    @Override public void run() {
+                        callback.onReady(result);
+                    }
+                });
+            }
+        });
+        return true;
+    }
+
     static boolean await(MediaController controller, LyricsCallback callback) {
         if (controller == null || callback == null) return false;
         Prefetch.Item item = itemOf(controller);
