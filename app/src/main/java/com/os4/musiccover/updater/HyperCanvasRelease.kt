@@ -7,6 +7,10 @@ import org.json.JSONArray
 /** An optional extension's GitHub releases. Prereleases count: these extensions are experimental. */
 internal open class ExtensionRelease(val PACKAGE: String, private val name: String) {
     data class Release(val version: String, val asset: GithubAsset)
+
+    /** Newest first. Not /releases/latest: that skips prereleases, and every release so far is one. */
+    val releasesPage = "https://github.com/Lewewe/$name/releases"
+
     fun installedVersion(context: android.content.Context): String? = try {
         context.packageManager.getPackageInfo(PACKAGE, 0).versionName
     } catch (_: android.content.pm.PackageManager.NameNotFoundException) { null }

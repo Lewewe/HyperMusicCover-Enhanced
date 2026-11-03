@@ -120,6 +120,7 @@ private fun HyperCanvasContent(isBlurEnabled: Boolean, isCurrent: Boolean, extra
     var state by remember { mutableStateOf(Bundle()) }
     var fetching by remember { mutableStateOf(false) }
     var downloadStatus by remember { mutableStateOf("") }
+    var githubOnly by remember { mutableStateOf(false) }
     var latestRelease by remember { mutableStateOf<ExtensionRelease.Release?>(null) }
     var checking by remember { mutableStateOf(true) }
     var iconRevision by remember { mutableStateOf(0L) }
@@ -166,9 +167,13 @@ private fun HyperCanvasContent(isBlurEnabled: Boolean, isCurrent: Boolean, extra
     LaunchedEffect(isCurrent) {
         if (isCurrent) {
             checking = true
+            githubOnly = false
             try { latestRelease = HyperCanvasRelease.latest() }
             catch (e: CancellationException) { throw e }
-            catch (e: Exception) { downloadStatus = resources.getString(R.string.update_failed, e.message.orEmpty()) }
+            catch (e: Exception) {
+                downloadStatus = resources.getString(R.string.update_failed, e.message.orEmpty())
+                githubOnly = latestRelease == null
+            }
             finally { checking = false }
         }
     }
@@ -248,8 +253,8 @@ private fun HyperCanvasContent(isBlurEnabled: Boolean, isCurrent: Boolean, extra
                             fetching = true
                             scope.launch {
                                 try {
-                                    downloadExtension(context, resources, release.asset, HyperCanvasRelease.PACKAGE,
-                                        R.string.hypercanvas_downloading) { downloadStatus = it }
+                                    githubOnly = !downloadExtension(context, resources, release.asset,
+                                        HyperCanvasRelease.PACKAGE, R.string.hypercanvas_downloading) { downloadStatus = it }
                                 } finally {
                                     downloadedVersion = HyperCanvasRelease.downloadedVersion(context)
                                     fetching = false
@@ -294,10 +299,12 @@ private fun HyperCanvasContent(isBlurEnabled: Boolean, isCurrent: Boolean, extra
                             Text(stringResource(R.string.hypercanvas_list_summary), fontSize = 12.sp,
                                 modifier = Modifier.alpha(.7f))
                         }
-                        ExtensionPill(installedVersion, downloadedVersion, release, checking, fetching, canDownload, download)
+                        ExtensionPill(installedVersion, downloadedVersion, release, checking, fetching, canDownload,
+                            HyperCanvasRelease.releasesPage.takeIf { githubOnly && (installedVersion == null || canDownload) },
+                            download)
                         if (canOpenSettings) Text("›", fontSize = 24.sp)
                     }
-                    if (downloadStatus.isNotEmpty() && !fetching && installedVersion == null)
+                    if (downloadStatus.isNotEmpty() && !fetching && (installedVersion == null || (githubOnly && canDownload)))
                         Text(downloadStatus, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                     if (installedVersion != null && setupStage != HyperCanvasSetup.Stage.READY &&
                         setupStage != HyperCanvasSetup.Stage.CHECKING) {
@@ -444,40 +451,65 @@ private const val CANVAS_SETTLE_MS = 4_000L
 /** System UI takes this long to come back and load a new hook; the setup rows wait for it. */
 private const val STANDBY_RESTART_MS = 20_000L
 
-/** Fetch a release's APK, verify it and hand it to the installer, saying how that goes. */
+/** A download that has not moved for this long is given up on; the pill offers GitHub instead. */
+private const val DOWNLOAD_STALL_MS = 60_000L
+
+/**
+ * Fetch a release's APK, verify it and hand it to the installer, saying how that goes. False when
+ * the APK did not get anywhere.
+ */
 private suspend fun downloadExtension(context: android.content.Context, resources: android.content.res.Resources,
-    asset: GithubAsset, pkg: String, downloading: Int, onStatus: (String) -> Unit) {
+    asset: GithubAsset, pkg: String, downloading: Int, onStatus: (String) -> Unit): Boolean {
     try {
         onStatus(resources.getString(R.string.hypercanvas_fetching))
         UpdateInstaller.start(context, asset.url, asset.name, pkg, reuseCached = true)
+        var seen = UpdateInstaller.progress
+        var movedAt = System.currentTimeMillis()
+        var stalled = false
         while (UpdateInstaller.inFlight) {
             val percent = UpdateInstaller.progress?.let { " ${(it * 100).toInt()}%" }.orEmpty()
             onStatus(resources.getString(downloading) + percent)
             delay(250)
+            if (UpdateInstaller.progress != seen) {
+                seen = UpdateInstaller.progress
+                movedAt = System.currentTimeMillis()
+            } else if (!stalled && System.currentTimeMillis() - movedAt > DOWNLOAD_STALL_MS) {
+                stalled = true
+                UpdateInstaller.cancel()
+            }
         }
-        onStatus(when (val outcome = UpdateInstaller.lastOutcome) {
+        val outcome = UpdateInstaller.lastOutcome
+        onStatus(when (outcome) {
             is InstallOutcome.HandedOff -> resources.getString(R.string.hypercanvas_install_ready)
             is InstallOutcome.NotOurs -> resources.getString(R.string.update_not_ours)
             is InstallOutcome.NoInstaller -> resources.getString(R.string.update_no_installer)
             is InstallOutcome.SavedToDownloads -> resources.getString(R.string.update_saved_to_downloads, outcome.name)
             is InstallOutcome.Failed -> resources.getString(R.string.update_failed, outcome.message)
+            is InstallOutcome.Cancelled -> resources.getString(R.string.update_failed, "timed out")
             else -> ""
         })
+        return outcome is InstallOutcome.HandedOff || outcome is InstallOutcome.SavedToDownloads
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         onStatus(resources.getString(R.string.update_failed, e.message.orEmpty()))
+        return false
     }
 }
 
-/** Download, update or installed, at an extension's row end, with the version on offer under it. */
+/**
+ * Download, update or installed, at an extension's row end, with the version on offer under it.
+ * With [releasesPage], the app could not get the APK itself and the pill opens that page instead.
+ */
 @Composable
 private fun ExtensionPill(installedVersion: String?, downloadedVersion: String?, release: ExtensionRelease.Release?,
-    checking: Boolean, fetching: Boolean, canDownload: Boolean, onDownload: () -> Unit) {
+    checking: Boolean, fetching: Boolean, canDownload: Boolean, releasesPage: String?, onDownload: () -> Unit) {
+    val context = LocalContext.current
     val ready = installedVersion != null && !canDownload
     val color = if (ready) Color(0xFF388E3C) else MiuixTheme.colorScheme.primary
     val label = when {
         fetching -> UpdateInstaller.progress?.let { "${(it * 100).toInt()}%" } ?: "…"
+        releasesPage != null -> "GitHub"
         ready -> stringResource(R.string.extension_installed)
         checking -> "…"
         canDownload && installedVersion != null -> stringResource(R.string.extension_update)
@@ -496,11 +528,15 @@ private fun ExtensionPill(installedVersion: String?, downloadedVersion: String?,
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.alpha(if (ready || canDownload) 1f else .5f)
+            modifier = Modifier.alpha(if (ready || canDownload || releasesPage != null) 1f else .5f)
                 .clip(RoundedCornerShape(50)).border(1.dp, color, RoundedCornerShape(50))
-                .clickable(enabled = canDownload, role = Role.Button, onClick = onDownload)
+                .clickable(enabled = canDownload || releasesPage != null, role = Role.Button, onClick = {
+                    if (releasesPage == null) onDownload()
+                    else runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse(releasesPage))) }
+                })
                 .padding(horizontal = 8.dp, vertical = 4.dp)) {
-            if (canDownload) Icon(MiuixIcons.Download, contentDescription = null,
+            if (canDownload || releasesPage != null) Icon(MiuixIcons.Download, contentDescription = null,
                 tint = color, modifier = Modifier.size(12.dp))
             Text(label, color = color, fontSize = 10.sp)
         }
@@ -632,6 +668,36 @@ private fun rememberStandbyState(isCurrent: Boolean): MutableState<Bundle> {
     return state
 }
 
+/** Calendar and the watcher's notification are left out: StandBy opens and plays without them. */
+private fun standbyPermissionsReady(state: Bundle) = state.getBoolean("notificationAccess") &&
+    state.getBoolean("backgroundStart") && state.getBoolean("lockScreen")
+
+@Composable
+private fun StandbyGrantRow(state: Bundle, onChecked: (Bundle) -> Unit) {
+    val context = LocalContext.current
+    val resources = LocalResources.current
+    val scope = rememberCoroutineScope()
+    var message by remember { mutableStateOf("") }
+    var granting by remember { mutableStateOf(false) }
+    fun yes(key: String) = resources.getString(
+        if (state.getBoolean(key)) R.string.hyperimmersive_allowed else R.string.hyperimmersive_missing)
+    ArrowPreference(title = stringResource(R.string.hyperimmersive_grant),
+        summary = message.ifEmpty {
+            stringResource(R.string.hyperimmersive_grant_summary,
+                yes("notificationAccess"), yes("backgroundStart"), yes("notifications"), yes("calendar"), yes("lockScreen"))
+        },
+        enabled = !granting,
+        onClick = {
+            granting = true
+            message = ""
+            scope.launch {
+                if (!HyperImmersiveBridge.grant()) message = resources.getString(R.string.hyperimmersive_grant_failed)
+                onChecked(HyperImmersiveBridge.query(context))
+                granting = false
+            }
+        })
+}
+
 @Composable
 private fun StandbyIcon(installedVersion: String?) {
     val context = LocalContext.current
@@ -654,7 +720,7 @@ private fun StandbyIcon(installedVersion: String?) {
  */
 @Composable
 private fun HyperImmersiveCard(isCurrent: Boolean, onOpen: () -> Unit) {
-    val state by rememberStandbyState(isCurrent)
+    var state by rememberStandbyState(isCurrent)
     val context = LocalContext.current
     val resources = LocalResources.current
     val scope = rememberCoroutineScope()
@@ -662,17 +728,23 @@ private fun HyperImmersiveCard(isCurrent: Boolean, onOpen: () -> Unit) {
     var checking by remember { mutableStateOf(true) }
     var fetching by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
+    var githubOnly by remember { mutableStateOf(false) }
     var setupMessage by remember { mutableStateOf("") }
     var hook by remember { mutableStateOf<Boolean?>(null) }
+    var permissionsReady by remember { mutableStateOf<Boolean?>(null) }
     var restartedAt by remember { mutableLongStateOf(0L) }
     var installedVersion by remember { mutableStateOf(HyperImmersiveRelease.installedVersion(context)) }
     var downloadedVersion by remember { mutableStateOf(HyperImmersiveRelease.downloadedVersion(context)) }
     LaunchedEffect(isCurrent) {
         if (isCurrent) {
             checking = true
+            githubOnly = false
             try { release = HyperImmersiveRelease.latest() }
             catch (e: CancellationException) { throw e }
-            catch (e: Exception) { status = resources.getString(R.string.update_failed, e.message.orEmpty()) }
+            catch (e: Exception) {
+                status = resources.getString(R.string.update_failed, e.message.orEmpty())
+                githubOnly = release == null
+            }
             finally { checking = false }
         }
     }
@@ -680,12 +752,16 @@ private fun HyperImmersiveCard(isCurrent: Boolean, onOpen: () -> Unit) {
         installedVersion = HyperImmersiveRelease.installedVersion(context)
         downloadedVersion = HyperImmersiveRelease.downloadedVersion(context)
         if (state.containsKey("hookActive")) hook = state.getBoolean("hookActive")
-        if (installedVersion == null) hook = null
+        if (state.containsKey("notificationAccess")) permissionsReady = standbyPermissionsReady(state)
+        if (installedVersion == null) {
+            hook = null
+            permissionsReady = null
+        }
     }
     val latest = release
     val canDownload = latest != null && !checking && !fetching &&
         ExtensionVersion.isNewer(latest.version, installedVersion)
-    val canOpen = installedVersion != null && hook == true
+    val canOpen = installedVersion != null && hook == true && permissionsReady == true
     val verifying = hook == false && System.currentTimeMillis() - restartedAt < STANDBY_RESTART_MS
     Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
         Row(Modifier.fillMaxWidth().clickable(enabled = canOpen, onClick = onOpen).padding(16.dp),
@@ -705,13 +781,14 @@ private fun HyperImmersiveCard(isCurrent: Boolean, onOpen: () -> Unit) {
                 }
                 Text(stringResource(R.string.hyperimmersive_list_summary), fontSize = 12.sp, modifier = Modifier.alpha(.7f))
             }
-            ExtensionPill(installedVersion, downloadedVersion, latest, checking, fetching, canDownload) {
+            ExtensionPill(installedVersion, downloadedVersion, latest, checking, fetching, canDownload,
+                HyperImmersiveRelease.releasesPage.takeIf { githubOnly && (installedVersion == null || canDownload) }) {
                 if (canDownload && latest != null && !UpdateInstaller.inFlight) {
                     fetching = true
                     scope.launch {
                         try {
-                            downloadExtension(context, resources, latest.asset, HyperImmersiveRelease.PACKAGE,
-                                R.string.hyperimmersive_downloading) { status = it }
+                            githubOnly = !downloadExtension(context, resources, latest.asset,
+                                HyperImmersiveRelease.PACKAGE, R.string.hyperimmersive_downloading) { status = it }
                         } finally {
                             downloadedVersion = HyperImmersiveRelease.downloadedVersion(context)
                             fetching = false
@@ -721,8 +798,9 @@ private fun HyperImmersiveCard(isCurrent: Boolean, onOpen: () -> Unit) {
             }
             if (canOpen) Text("›", fontSize = 24.sp)
         }
-        if (status.isNotEmpty() && !fetching && installedVersion == null)
+        if (status.isNotEmpty() && !fetching && (installedVersion == null || (githubOnly && canDownload)))
             Text(status, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+        if (installedVersion != null && permissionsReady == false) StandbyGrantRow(state) { state = it }
         if (installedVersion != null && hook == false) {
             if (verifying) {
                 ArrowPreference(title = stringResource(R.string.hypercanvas_setup_verifying),
@@ -757,8 +835,6 @@ private fun HyperImmersivePage(isBlurEnabled: Boolean, isCurrent: Boolean, extra
     val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     var state by rememberStandbyState(isCurrent)
-    var grantMessage by remember { mutableStateOf("") }
-    var granting by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf(false) }
     var removalStatus by remember { mutableStateOf("") }
     fun set(key: String, on: Boolean) {
@@ -819,23 +895,7 @@ private fun HyperImmersivePage(isBlurEnabled: Boolean, isCurrent: Boolean, extra
         }
         item {
             Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                fun yes(key: String) = resources.getString(
-                    if (state.getBoolean(key)) R.string.hyperimmersive_allowed else R.string.hyperimmersive_missing)
-                ArrowPreference(title = stringResource(R.string.hyperimmersive_grant),
-                    summary = grantMessage.ifEmpty {
-                        stringResource(R.string.hyperimmersive_grant_summary,
-                            yes("notificationAccess"), yes("backgroundStart"), yes("notifications"), yes("calendar"), yes("lockScreen"))
-                    },
-                    enabled = !granting,
-                    onClick = {
-                        granting = true
-                        grantMessage = ""
-                        scope.launch {
-                            if (!HyperImmersiveBridge.grant()) grantMessage = resources.getString(R.string.hyperimmersive_grant_failed)
-                            state = HyperImmersiveBridge.query(context)
-                            granting = false
-                        }
-                    })
+                StandbyGrantRow(state) { state = it }
             }
         }
         item {
