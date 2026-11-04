@@ -445,7 +445,8 @@ private fun CoverGroup(
             title = stringResource(R.string.cover_flip),
             summary = stringResource(R.string.cover_flip_summary),
             checked = module.coverFlip,
-            enabled = enabled,
+            // The wallpaper background forces the card, whatever style is saved.
+            enabled = enabled && (module.coverStyle == 1 || module.hidePlayerBackground),
             onCheckedChange = {
                 onChange(module.copy(coverFlip = it))
                 ModuleBridge.setCoverFlip(context, it)
