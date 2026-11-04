@@ -666,6 +666,10 @@ public class Main extends XposedModule {
     private static volatile float sCardP;
     /** How small the thumbnail gets at the far end of the fade. Apple's shrinks as it goes. */
     private static final float CARD_ART_MIN_SCALE = 0.82f;
+    /** With the full-screen cover nothing flies into the thumbnail: it grows and sharpens in place. */
+    private static final float FULL_ART_MIN_SCALE = 0.6f;
+    private static final float FULL_ART_BLUR_DP = 8f;
+    private static boolean sArtBlurred;
     /**
      * The lyrics exception as a number the card can move on, rather than a yes/no read off the
      * frame it happens to land on. 1 is "the thumbnail the setting hides is back because the
@@ -8647,13 +8651,15 @@ public class Main extends XposedModule {
                     || ((ClockCollapse.phase() == ClockCollapse.Phase.AOD || !screenOnCached())
                         && LockLyrics.wantsAttached());
         }
+        // The player pulled up alone has no cover behind it, so it keeps its thumbnail.
         boolean fullScreenLyrics = onKeyguard && !sCardForced && sCoverMode
                 && !coverMorphCardMode() && !CanvasHostBridge.active()
-                && LockLyrics.sEnabled && LockLyrics.hasLyrics();
+                && LockLyrics.sEnabled && LockLyrics.hasLyrics() && !LockLyrics.playerChosen();
         float exc = stepLyricArt(!fullScreenLyrics
                 && (sMcArtInLyrics || LockLyrics.compactWithoutLyrics()) && sLyricUp);
         // Slide both text lines into the thumbnail's freed space as the artwork leaves.
-        float hideP = fullScreenLyrics ? p : sMcHideArt ? p * (1f - exc) : 0f;
+        // Full-screen lyrics always hide it, by the same spring: switched, the title jumped there.
+        float hideP = fullScreenLyrics || sMcHideArt ? p * (1f - exc) : 0f;
         View art = sCardArt;
         if (art != null) {
             // INVISIBLE at the far end, not GONE: the constraints around it are the card's
@@ -8671,11 +8677,14 @@ public class Main extends XposedModule {
                 // same view, and a thumbnail left at 0.82 of its size there would be ours.
                 scaleArt(art, 1f);
                 if (art.getAlpha() != 1f) art.setAlpha(1f);
+                blurArt(art, 0f);
             } else {
                 if (art.getVisibility() != View.VISIBLE) art.setVisibility(View.VISIBLE);
                 float a = 1f - hideP;
                 if (art.getAlpha() != a) art.setAlpha(a);
-                scaleArt(art, 1f - hideP * (1f - CARD_ART_MIN_SCALE));
+                boolean fullCover = !coverMorphCardMode();
+                scaleArt(art, 1f - hideP * (1f - (fullCover ? FULL_ART_MIN_SCALE : CARD_ART_MIN_SCALE)));
+                blurArt(art, fullCover ? hideP : 0f);
             }
             if (CoverMorphLayer.active()) {
                 // The moving copy owns these pixels until it reaches either endpoint. Keep the
@@ -9166,8 +9175,11 @@ public class Main extends XposedModule {
                 sArtHidLyrics = false;
                 if (sCoverMode && LockLyrics.compactWithoutLyrics()) {
                     beginCompactArtworkMorph(true);
+                    FullCoverPop.play(true);
                     LockLyrics.setPlayerChosen(false);
                     LockLyrics.setArtworkCompact(false);
+                    // With lyrics the line above does nothing, and the blur still has to lift.
+                    LockLyrics.refresh();
                 } else if (sCoverMode && LockLyrics.wantsAttached()) {
                     beginCompactArtworkMorph(true);
                     if (CanvasHostBridge.active()) {
@@ -9203,6 +9215,19 @@ public class Main extends XposedModule {
         View art = sCardArt;
         if (art != null) art.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
         openLyricsFromButton();
+    }
+
+    /** Cleared whenever it is not moving: the shade shows this same view. */
+    private static void blurArt(View art, float amount) {
+        float radius = amount * FULL_ART_BLUR_DP * art.getResources().getDisplayMetrics().density;
+        if (radius < 0.5f) {
+            if (sArtBlurred) art.setRenderEffect(null);
+            sArtBlurred = false;
+            return;
+        }
+        art.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(
+                radius, radius, android.graphics.Shader.TileMode.DECAL));
+        sArtBlurred = true;
     }
 
     /** The artwork's rectangle as this code sees it, for the log line above. */
@@ -11154,7 +11179,8 @@ public class Main extends XposedModule {
         // lyrics go back to the player alone - held on its thumbnail, they show again.
         // Only the big cover itself has to fold into the thumbnail; between the player and the
         // lyrics the thumbnail is already on the card, so there is nothing to morph.
-        LockLyrics.setPlayerChosen(showing);
+        // The full-screen cover has no thumbnail to hold, so its lyrics go back to the cover.
+        LockLyrics.setPlayerChosen(showing && coverMorphCardMode());
         onTwoFingerTap(!fromPlayer && !showing);
         applyMediaCard();
     }
@@ -11337,6 +11363,7 @@ public class Main extends XposedModule {
             // its artwork rather than treating a tap as a scene exit.
             if (!LockLyrics.compactWithoutLyrics()) {
                 beginCompactArtworkMorph(false);
+                FullCoverPop.play(false);
                 LockLyrics.setArtworkCompact(true);
             }
         } else if (LockLyrics.sEnabled && LockLyrics.hasDisplayContent() && !LockLyrics.wantsAttached()
@@ -11345,6 +11372,7 @@ public class Main extends XposedModule {
             // the cover (the maintainer, 2026-10-24).
             Xp.log(TAG + "tap at y=" + y + ": into the player");
             beginCompactArtworkMorph(false);
+            FullCoverPop.play(false);
             LockLyrics.choosePlayer();
         } else {
             exitFromTap("tap at y=" + y);

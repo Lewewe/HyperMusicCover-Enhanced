@@ -145,7 +145,7 @@ final class CoverCompose {
      * sits above that.
      */
     static Bitmap composeWallpaper(Bitmap src, int w, int h, float bias) {
-        Bitmap out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        Bitmap out = composedBackdrop(src, w, h, bias);
         android.graphics.Canvas cv = new android.graphics.Canvas(out);
         android.graphics.Paint p = new android.graphics.Paint(
                 android.graphics.Paint.FILTER_BITMAP_FLAG);
@@ -155,15 +155,22 @@ final class CoverCompose {
         if (bias > 1f) bias = 1f;
         float top = (h - coverH) * bias;
 
-        Bitmap bg = mirroredBackground(src, w, h, bias);
-        Bitmap blurred = blur(bg, 48, 4, 3);
-        cv.drawBitmap(blurred, null, new android.graphics.RectF(0, 0, w, h), p);
-        cv.drawColor(0x14000000);
         // The sharp band, feathered in its own pixels and then drawn in one go. See feathered().
         Bitmap band = feathered(src, w, Math.round(coverH),
                 Math.min(240, Math.round(coverH / 4f)));
         cv.drawBitmap(band, null, new android.graphics.RectF(0, top, w, top + coverH), p);
         band.recycle();
+        return out;
+    }
+
+    /** What composeWallpaper() lays under its sharp band. */
+    static Bitmap composedBackdrop(Bitmap src, int w, int h, float bias) {
+        Bitmap out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas cv = new android.graphics.Canvas(out);
+        Bitmap blurred = blur(mirroredBackground(src, w, h, bias), 48, 4, 3);
+        cv.drawBitmap(blurred, null, new android.graphics.RectF(0, 0, w, h),
+                new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG));
+        cv.drawColor(0x14000000);
         return out;
     }
 
@@ -286,7 +293,7 @@ final class CoverCompose {
      * rounding does. The mask rects are on a bitmap whose edges are 0 and bandH - both whole
      * pixels - so there is no fractional bound left for anything to disagree about.
      */
-    private static Bitmap feathered(Bitmap src, int w, int bandH, int feather) {
+    static Bitmap feathered(Bitmap src, int w, int bandH, int feather) {
         Bitmap band = Bitmap.createBitmap(w, bandH, Bitmap.Config.ARGB_8888);
         android.graphics.Canvas bc = new android.graphics.Canvas(band);
         bc.drawBitmap(src, null, new android.graphics.RectF(0, 0, w, bandH),
