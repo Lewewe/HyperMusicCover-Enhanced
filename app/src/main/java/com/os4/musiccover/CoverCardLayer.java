@@ -332,7 +332,7 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
                 int backdropH = Math.min(768, Math.max(256,
                         Math.round(backdropW * Main.screenHeight()
                                 / (float) Main.screenWidth())));
-                aodBackdrop = CoverCompose.cardBackground(readable, backdropW, backdropH);
+                aodBackdrop = CoverCompose.cardBackground(readable, backdropW, backdropH, Main.sFullBlur);
             } catch (Throwable t) {
                 Xp.w("[MCCard] AOD backdrop preparation failed: " + t);
             }

@@ -7,6 +7,8 @@
     <string name="about_feedback">Feedback</string>
     <string name="about_feedback_summary">https://github.com/Lewewe/HyperMusicCover-Enhanced/issues</string>
     <string name="cover_bias">Vertical position</string>
+    <string name="cover_full_blur">Background blur</string>
+    <string name="cover_full_blur_summary">How strongly the artwork behind the cover is blurred</string>
     <string name="cover_style">Cover layout</string>
     <string name="cover_style_full">Full-screen cover</string>
     <string name="cover_style_card">Square card</string>
@@ -17,7 +19,6 @@
     <string name="cover_glow_style">Colour style</string>
     <string name="cover_glow_style_gradient">Gradient</string>
     <string name="cover_glow_style_mesh">Mesh gradient</string>
-    <string name="cover_clock_section">Cover &amp; clock</string>
     <string name="clock_size">Clock size with big cover art</string>
     <string name="clock_force_colon">Always show the clock colon</string>
     <string name="clock_force_colon_summary">No effect on some styles</string>
@@ -502,4 +503,10 @@
     <string name="hyperimmersive_removed">HyperImmersive was removed.</string>
     <string name="hyperimmersive_removed_restart_failed">HyperImmersive was removed, but System UI could not be restarted.</string>
     <string name="hyperimmersive_remove_failed">Could not remove HyperImmersive. Check root access and try again.</string>
+    <string name="cover_section">Cover</string>
+    <string name="clock_section">Clock</string>
+    <string name="fingerprint_section">Fingerprint</string>
+    <string name="mini_general_section">General</string>
+    <string name="mini_notifications_section">Notifications</string>
+    <string name="mini_background_section">Background</string>
 </resources>

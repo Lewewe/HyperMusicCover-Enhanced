@@ -6,7 +6,7 @@ import android.graphics.Bitmap;
  * The cover composition, shared by both processes.
  *
  * Lives on its own so the wallpaper process can call it without touching Main, whose static
- * state belongs to SystemUI. Pure: the same source, size and bias give the same pixels in
+ * state belongs to SystemUI. Pure: the same source, size, bias and blur give the same pixels in
  * either process, which is what lets SystemUI hand over the small source instead of the
  * composed picture - see CoverPush.pushArtToWallpaper().
  */
@@ -19,20 +19,22 @@ final class CoverCompose {
 
     /** "MCSR", then a version, so a file written by another build is refused rather than misread. */
     private static final int MAGIC = 0x4D435352;
-    private static final int VERSION = 1;
-    private static final int HEADER_INTS = 7;
+    private static final int VERSION = 2;
+    private static final int HEADER_INTS = 8;
 
     /** What a hand-over file holds: the source and everything the composition depends on. */
     static final class Source {
         final Bitmap src;
         final int w, h;
         final float bias;
+        final int fullBlur;
 
-        Source(Bitmap src, int w, int h, float bias) {
+        Source(Bitmap src, int w, int h, float bias, int fullBlur) {
             this.src = src;
             this.w = w;
             this.h = h;
             this.bias = bias;
+            this.fullBlur = fullBlur;
         }
     }
 
@@ -64,7 +66,7 @@ final class CoverCompose {
      * opened the previous file keeps reading that file's inode to the end; one that opens after
      * the rename gets the whole new one. Never half of each.
      */
-    static void writeSource(java.io.File dest, Bitmap src, int w, int h, float bias)
+    static void writeSource(java.io.File dest, Bitmap src, int w, int h, float bias, int fullBlur)
             throws java.io.IOException {
         int n = src.getByteCount();
         java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocateDirect(HEADER_INTS * 4 + 4 + n);
@@ -72,7 +74,7 @@ final class CoverCompose {
                 .putInt(src.getWidth()).putInt(src.getHeight())
                 .putInt(w).putInt(h)
                 .putInt(colorSpaceIndex(src))
-                .putFloat(bias);
+                .putFloat(bias).putInt(fullBlur);
         src.copyPixelsToBuffer(buf);
         buf.flip();
         java.io.File tmp = new java.io.File(dest.getPath() + ".tmp");
@@ -104,6 +106,7 @@ final class CoverCompose {
             int sw = buf.getInt(), sh = buf.getInt(), w = buf.getInt(), h = buf.getInt();
             int cs = buf.getInt();
             float bias = buf.getFloat();
+            int fullBlur = buf.getInt();
             if (sw <= 0 || sh <= 0 || w <= 0 || h <= 0
                     || buf.remaining() < (long) sw * sh * 4) {
                 return null;
@@ -111,7 +114,7 @@ final class CoverCompose {
             Bitmap src = Bitmap.createBitmap(sw, sh, Bitmap.Config.ARGB_8888, true,
                     colorSpaceAt(cs));
             src.copyPixelsFromBuffer(buf);
-            return new Source(src, w, h, bias);
+            return new Source(src, w, h, bias, fullBlur);
         } finally {
             in.close();
         }
@@ -144,8 +147,8 @@ final class CoverCompose {
      * centred, 1 flush with the bottom. Centred is what the media card covers, so the default
      * sits above that.
      */
-    static Bitmap composeWallpaper(Bitmap src, int w, int h, float bias) {
-        Bitmap out = composedBackdrop(src, w, h, bias);
+    static Bitmap composeWallpaper(Bitmap src, int w, int h, float bias, int fullBlur) {
+        Bitmap out = composedBackdrop(src, w, h, bias, fullBlur);
         android.graphics.Canvas cv = new android.graphics.Canvas(out);
         android.graphics.Paint p = new android.graphics.Paint(
                 android.graphics.Paint.FILTER_BITMAP_FLAG);
@@ -163,20 +166,30 @@ final class CoverCompose {
         return out;
     }
 
+    /** The width the backdrop is blurred at: 50% is the original 48, each 25 points halves or doubles it. */
+    static int blurWidth(int pct) {
+        return Math.round(48f * (float) Math.pow(2, (50 - Math.max(0, Math.min(100, pct))) / 25f));
+    }
+
     /** What composeWallpaper() lays under its sharp band. */
-    static Bitmap composedBackdrop(Bitmap src, int w, int h, float bias) {
+    static Bitmap composedBackdrop(Bitmap src, int w, int h, float bias, int fullBlur) {
         Bitmap out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         android.graphics.Canvas cv = new android.graphics.Canvas(out);
-        Bitmap blurred = blur(mirroredBackground(src, w, h, bias), 48, 4, 3);
+        Bitmap blurred = blur(mirroredBackground(src, w, h, bias), blurWidth(fullBlur), 4, 3);
         cv.drawBitmap(blurred, null, new android.graphics.RectF(0, 0, w, h),
                 new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG));
         cv.drawColor(0x14000000);
         return out;
     }
 
-    /** Card mode fills the screen with one cropped cover and artwork-derived color regions. */
+    /** ExtensionSpectrum runs in another process without the blur setting. */
     static Bitmap cardBackground(Bitmap src, int w, int h) {
-        Bitmap small = cardBackdrop(src, w, h);
+        return cardBackground(src, w, h, 50);
+    }
+
+    /** Card mode fills the screen with one cropped cover and artwork-derived color regions. */
+    static Bitmap cardBackground(Bitmap src, int w, int h, int fullBlur) {
+        Bitmap small = cardBackdrop(src, w, h, fullBlur);
         try {
             Bitmap out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
             new android.graphics.Canvas(out).drawBitmap(small, null,
@@ -188,7 +201,7 @@ final class CoverCompose {
         }
     }
 
-    private static Bitmap cardBackdrop(Bitmap src, int w, int h) {
+    private static Bitmap cardBackdrop(Bitmap src, int w, int h, int fullBlur) {
         int bw = Math.max(1, Math.min(256, w / 4));
         int bh = Math.max(1, Math.round(bw * h / (float) w));
         Bitmap backdrop = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888);
@@ -201,7 +214,7 @@ final class CoverCompose {
                         (bw + drawnW) / 2f, (bh + drawnH) / 2f), paint);
         Bitmap soft;
         try {
-            soft = blur(backdrop, Math.min(48, bw), 4, 3);
+            soft = blur(backdrop, Math.min(blurWidth(fullBlur), bw), 4, 3);
         } finally {
             backdrop.recycle();
         }
@@ -341,7 +354,7 @@ final class CoverCompose {
      */
     static Bitmap frostedFor(Bitmap src, int w, int h, float bias, boolean cardMode) {
         if (cardMode) {
-            Bitmap backdrop = cardBackdrop(src, w, h);
+            Bitmap backdrop = cardBackdrop(src, w, h, 50);
             try {
                 // Reuse the same crop, colors and shade underneath the lyrics.
                 return frosted(backdrop, w, h);

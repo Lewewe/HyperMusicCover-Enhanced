@@ -20,6 +20,7 @@ import org.json.JSONObject
 object SettingsBackup {
 
     private const val KEY_BIAS = "coverBias"
+    private const val KEY_FULL_BLUR = "coverFullBlur"
     private const val KEY_COVER_STYLE = "coverStyle"
     /** The size as a fraction of the style's full clock; the same key the trimmed builds dropped. */
     private const val KEY_CLOCK_SIZE = "clockSizeFraction"
@@ -94,6 +95,7 @@ object SettingsBackup {
             // than kept for compatibility: importing a value nothing can hold is the one outcome
             // worse than not importing it.
             json.put(KEY_BIAS, module.bias.toDouble())
+            json.put(KEY_FULL_BLUR, module.fullBlur)
             json.put(KEY_COVER_STYLE, module.coverStyle)
             json.put("hidePlayerBackground", module.hidePlayerBackground)
             json.put("wallpaperDim", module.wallpaperDim)
@@ -140,6 +142,7 @@ object SettingsBackup {
         try {
             val obj = JSONObject(json)
             if (obj.has(KEY_BIAS)) ModuleBridge.setBias(context, obj.getDouble(KEY_BIAS).toFloat())
+            if (obj.has(KEY_FULL_BLUR)) ModuleBridge.setFullBlur(context, obj.getInt(KEY_FULL_BLUR))
             // Only the mode. The square's size, place and corners are fixed, so a file that still
             // carries coverCardFill, coverCardPos, coverCardCorner or the dp coverCardSizeDp from
             // before them is not read for any of it - the module holds them where they are.

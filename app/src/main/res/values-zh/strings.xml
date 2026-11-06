@@ -7,6 +7,8 @@
     <string name="about_feedback">反馈与建议</string>
     <string name="about_feedback_summary">https://github.com/Lewewe/HyperMusicCover-Enhanced/issues</string>
     <string name="cover_bias">封面纵向位置</string>
+    <string name="cover_full_blur">背景模糊度</string>
+    <string name="cover_full_blur_summary">封面后方专辑图的模糊程度</string>
     <string name="cover_style">封面展现形式</string>
     <string name="cover_style_full">全屏封面</string>
     <string name="cover_style_card">方形卡片</string>
@@ -17,7 +19,6 @@
     <string name="cover_glow_style">颜色样式</string>
     <string name="cover_glow_style_gradient">渐变</string>
     <string name="cover_glow_style_mesh">网格渐变</string>
-    <string name="cover_clock_section">封面与时钟</string>
     <string name="clock_size">大封面时的时钟大小</string>
     <string name="clock_force_colon">时钟强制显示冒号</string>
     <string name="clock_force_colon_summary">部分样式不生效</string>
@@ -509,4 +510,10 @@
     <string name="hyperimmersive_removed">HyperImmersive 已移除。</string>
     <string name="hyperimmersive_removed_restart_failed">HyperImmersive 已移除，但无法重启系统界面。</string>
     <string name="hyperimmersive_remove_failed">无法移除 HyperImmersive。请检查 Root 权限后重试。</string>
+    <string name="cover_section">封面</string>
+    <string name="clock_section">时钟</string>
+    <string name="fingerprint_section">指纹</string>
+    <string name="mini_general_section">常规</string>
+    <string name="mini_notifications_section">通知</string>
+    <string name="mini_background_section">背景</string>
 </resources>

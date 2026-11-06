@@ -58,7 +58,7 @@ final class FullCoverPop {
         int backW = Main.sScreenW / BACKDROP_DOWNSCALE, backH = Main.sScreenH / BACKDROP_DOWNSCALE;
         // Opaque from the first frame. Over the wallpaper itself the band's feathered edges were
         // laid on the same edges in the wallpaper, stronger than either, and those flashed.
-        backdrop(host, CoverCompose.composedBackdrop(art, backW, backH, Main.sBias));
+        backdrop(host, CoverCompose.composedBackdrop(art, backW, backH, Main.sBias, Main.sFullBlur));
         ImageView frost = backdrop(host, CoverCompose.frostedFor(art, backW, backH, Main.sBias, false));
         frost.setAlpha(grow ? FROST_ALPHA : 0f);
 

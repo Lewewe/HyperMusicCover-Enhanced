@@ -1149,8 +1149,8 @@ public class WallpaperProbe {
             try {
                 CoverCompose.Source s = CoverCompose.readSource(src);
                 if (s != null) {
-                    sArt = sCardMode ? CoverCompose.cardBackground(s.src, s.w, s.h)
-                            : CoverCompose.composeWallpaper(s.src, s.w, s.h, s.bias);
+                    sArt = sCardMode ? CoverCompose.cardBackground(s.src, s.w, s.h, s.fullBlur)
+                            : CoverCompose.composeWallpaper(s.src, s.w, s.h, s.bias, s.fullBlur);
                     sAsks = 0;
                     Xp.log(TAG + "art restored from the saved source " + describe(sArt));
                     return;
@@ -2340,8 +2340,8 @@ public class WallpaperProbe {
                     read = SystemClock.uptimeMillis();
                     sTmRead = read;
                     if (seq != sSrcSeq) return;
-                    b = cardMode ? CoverCompose.cardBackground(s.src, s.w, s.h)
-                            : CoverCompose.composeWallpaper(s.src, s.w, s.h, s.bias);
+                    b = cardMode ? CoverCompose.cardBackground(s.src, s.w, s.h, s.fullBlur)
+                            : CoverCompose.composeWallpaper(s.src, s.w, s.h, s.bias, s.fullBlur);
                     composed = SystemClock.uptimeMillis();
                     sTmComposed = composed;
                     // Under the lyrics the picture that actually goes up is the frosted copy, and
@@ -2391,7 +2391,7 @@ public class WallpaperProbe {
                 android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND);
                 try {
                     CoverCompose.writeSource(new File(c.getFilesDir(), SRC_FILE),
-                            s.src, s.w, s.h, s.bias);
+                            s.src, s.w, s.h, s.bias, s.fullBlur);
                     File marker = new File(c.getFilesDir(), "mc_card_mode");
                     if (cardMode) marker.createNewFile();
                     else marker.delete();

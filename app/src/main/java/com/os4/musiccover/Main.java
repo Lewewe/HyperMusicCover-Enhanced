@@ -479,6 +479,7 @@ public class Main extends XposedModule {
      */
     private static final float DEFAULT_BIAS = 0.34f;
     static volatile float sBias = DEFAULT_BIAS;
+    static volatile int sFullBlur = 50;
     static volatile CoverCardStyle sCoverCardStyle = CoverCardStyle.defaults();
     private static volatile boolean sCoverCardPlaying;
 
@@ -2026,6 +2027,7 @@ public class Main extends XposedModule {
             f = af.startWrite();
             f.write(("cover=" + (sCoverMode ? 1 : 0)
                     + "\nbias=" + sBias
+                    + "\nfullBlur=" + sFullBlur
                     // Only the mode. The square's size, place and corners, the clock's offset,
                     // the glass end and the spring are all fixed now, and loadState does not read
                     // any of them - writing them down would be a value nothing could ever have
@@ -2181,6 +2183,7 @@ public class Main extends XposedModule {
                         if ("cover".equals(k)) cover = "1".equals(v);
                         // "auto" was a stored setting; following the card is unconditional now.
                         else if ("bias".equals(k)) sBias = Float.parseFloat(v);
+                        else if ("fullBlur".equals(k)) sFullBlur = Math.max(0, Math.min(100, Integer.parseInt(v)));
                         else if ("coverstyle".equals(k)) sCoverCardStyle =
                                 sCoverCardStyle.with("mode", Float.parseFloat(v));
                         // covercardfill, covercardpos, covercardcorner and the dp covercardsize
@@ -2452,6 +2455,7 @@ public class Main extends XposedModule {
                     } else if ("pushart".equals(op)) {
                         boolean on = i.getBooleanExtra("on", true);
                         if (i.hasExtra("bias")) sBias = clamp01(i.getFloatExtra("bias", sBias));
+                        if (i.hasExtra("fullBlur")) sFullBlur = Math.max(0, Math.min(100, i.getIntExtra("fullBlur", sFullBlur)));
                         sTrackKey = on ? trackKey(pickController(c)) : "";
                         setCoverEnabled(on, i.getBooleanExtra("anim", true), false);
                     } else if ("coverstyle".equals(op)) {
@@ -3078,6 +3082,8 @@ public class Main extends XposedModule {
                         setResultExtras(previewBundle(c, i));
                     } else if ("bias".equals(op)) {
                         setBias(i.getFloatExtra("v", DEFAULT_BIAS));
+                    } else if ("fullBlur".equals(op)) {
+                        setFullBlur(i.getIntExtra("v", 50));
                     } else if ("clockscale".equals(op)) {
                         setClockHeightDp(i.getFloatExtra("v", DEFAULT_CLOCK_HEIGHT_DP));
                         saveState();
@@ -3192,6 +3198,7 @@ public class Main extends XposedModule {
                         if (shortcuts != null) out.putFloatArray("minishortcuts", shortcuts);
                         out.putBoolean("auto", sAuto);
                         out.putFloat("bias", sBias);
+                        out.putInt("fullBlur", sFullBlur);
                         out.putInt("coverstyle", sCoverCardStyle.mode);
                         out.putBoolean("hideplayerbackground", sHidePlayerBackground);
                         out.putInt("wallpaperdim", sWallpaperDim);
@@ -6958,6 +6965,13 @@ public class Main extends XposedModule {
         sBias = clamp01(v);
         saveState();
         Xp.log(TAG + "cover bias = " + sBias);
+        if (sCoverMode) CoverPush.pushArtAsync(true, false);
+    }
+
+    private static void setFullBlur(int v) {
+        sFullBlur = Math.max(0, Math.min(100, v));
+        saveState();
+        Xp.log(TAG + "cover fullBlur = " + sFullBlur);
         if (sCoverMode) CoverPush.pushArtAsync(true, false);
     }
 

@@ -54,7 +54,6 @@ import top.yukonga.miuix.kmp.basic.SliderDefaults
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.basic.TabRow
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
@@ -185,6 +184,9 @@ internal fun TweaksPageView(
     var restartPending by rememberSaveable { mutableStateOf(false) }
     var restarting by remember { mutableStateOf(false) }
     var restartFailed by remember { mutableStateOf(false) }
+    var sinkRestartPending by rememberSaveable { mutableStateOf(false) }
+    var sinkRestarting by remember { mutableStateOf(false) }
+    var sinkRestartFailed by remember { mutableStateOf(false) }
     PageScaffold(
         title = stringResource(R.string.features_tweaks_title),
         isBlurEnabled = isBlurEnabled,
@@ -239,6 +241,92 @@ internal fun TweaksPageView(
                         }
                     }
                 }
+                SmallTitle(text = stringResource(R.string.fingerprint_section))
+                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    // These controls apply independently of cover mode. No onCardRestyled(): the
+                    // preview draws no fingerprint.
+                    SwitchPreference(
+                        title = stringResource(R.string.hide_fingerprint),
+                        checked = module.hideFingerprint,
+                        enabled = module.alive,
+                        onCheckedChange = {
+                            module = module.copy(hideFingerprint = it)
+                            ModuleBridge.setHideFingerprint(context, it)
+                        },
+                    )
+                    SwitchPreference(
+                        title = stringResource(R.string.fod_after_face),
+                        summary = stringResource(R.string.fod_after_face_summary),
+                        checked = module.fodAfterFace,
+                        enabled = module.alive,
+                        onCheckedChange = {
+                            module = module.copy(fodAfterFace = it)
+                            ModuleBridge.setFodAfterFace(context, it)
+                        },
+                    )
+                    // Three states rather than a switch: "off" would have to mean both "stop reserving the
+                    // space" and "reserve it even with no print enrolled", which are opposite requests.
+                    //
+                    // The two directions are named differently on the two sides of the wire: the module and
+                    // the OEM call it avoidance, because that is what the fingerprint icon makes the
+                    // notification do - move up - and the hook's own job is to override it. The rows say
+                    // what the notification does instead, so "sinks" is avoidance switched off: item 1 is
+                    // the module's fpavoid=1 and item 2 its fpavoid=2. Change the order here and the
+                    // setting silently means the opposite of what it says.
+                    val avoidModes = listOf(
+                        stringResource(R.string.fp_sink_system),
+                        stringResource(R.string.fp_sink_always),
+                        stringResource(R.string.fp_sink_never),
+                    )
+                    val avoidIndex = module.fpAvoid.coerceIn(0, avoidModes.lastIndex)
+                    WindowDropdownPreference(
+                        title = stringResource(R.string.fp_sink),
+                        summary = stringResource(R.string.fp_sink_summary),
+                        items = avoidModes,
+                        selectedIndex = avoidIndex,
+                        enabled = module.alive,
+                        onSelectedIndexChange = {
+                            if (it != avoidIndex) {
+                                module = module.copy(fpAvoid = it)
+                                ModuleBridge.setFingerprintAvoid(context, it)
+                                sinkRestartPending = true
+                                sinkRestartFailed = false
+                            }
+                        },
+                    )
+                    if (sinkRestartPending) {
+                        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
+                            MiuixText(
+                                text = stringResource(
+                                    if (sinkRestartFailed) R.string.fp_sink_restart_failed
+                                    else R.string.fp_sink_restart_hint,
+                                ),
+                                fontSize = 13.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                modifier = Modifier.padding(bottom = 12.dp),
+                            )
+                            TextButton(
+                                text = stringResource(R.string.restart_systemui),
+                                enabled = module.alive && !sinkRestarting,
+                                modifier = Modifier.fillMaxWidth(),
+                                onClick = {
+                                    sinkRestarting = true
+                                    scope.launch {
+                                        try {
+                                            val restarted = withContext(Dispatchers.IO) {
+                                                ModuleBridge.restartSystemUi()
+                                            }
+                                            sinkRestartFailed = !restarted
+                                            if (restarted) sinkRestartPending = false
+                                        } finally {
+                                            sinkRestarting = false
+                                        }
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -253,16 +341,7 @@ internal fun TweaksPageView(
  * does, and still follows the three settings here that change the look - the style, where a
  * full-screen cover sits, and how small the clock goes.
  *
- * Two decisions about the layout, both departures from KernelSU's colour-palette screen this
- * follows:
- *
- * - **The preview is outside the scrolling area.** KernelSU makes its preview the first item of
- *   the list, which scrolls away; it can afford to because its controls are short. Here the
- *   preview answers the sliders under it, so scrolling it off the screen would defeat the page.
- * - **The tabs swap the controls in place, they do not navigate.** So there is one preview for
- *   the whole page rather than one per group, which is also the rule for the app as a whole:
- *   never two live previews on one screen, because that is two copies of a state to keep in
- *   step for no gain.
+ * Cover, clock and media card settings share one list, each in its own section.
  *
  * Deliberately absent are the things that should never need a button. Hiding the wallpaper's
  * subject cut-out and giving the lock screen its own wallpaper are not choices - without them
@@ -278,7 +357,6 @@ internal fun CoverPageView(
     val context = LocalContext.current
 
     var module by remember { mutableStateOf(ModuleBridge.State()) }
-    var group by remember { mutableIntStateOf(0) }
 
     // Re-asked until it answers: this screen is reached straight after "重启全部作用域" as often
     // as not, and a single query then lands before SystemUI has a receiver - leaving every
@@ -323,42 +401,30 @@ internal fun CoverPageView(
     }
 
     val enabled = module.alive
-    // The cover has one setting of its own, too few for a tab, and it is about the same picture
-    // the clock sits on - so the two share one. The lyrics get the third.
-    val groups = listOf(
-        stringResource(R.string.cover_clock_section),
-        stringResource(R.string.card_section),
-    )
+    // One scrolling list groups the cover, clock and media card settings.
 
     PageScaffold(
         title = stringResource(R.string.features_cover_title),
         isBlurEnabled = isBlurEnabled,
         extraBottomPadding = extraBottomPadding,
         onBack = onBack,
-        pinned = {
-            Spacer(Modifier.height(8.dp))
-            TabRow(
-                tabs = groups,
-                selectedTabIndex = group,
-                onTabSelected = { group = it },
-                modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp),
-            )
-        },
     ) {
         item {
-            Card(
-                modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)
-            ) {
-                when (group) {
-                    0 -> Column {
-                        CoverGroup(enabled, module) { module = it }
-                        ClockGroup(enabled, module) { module = it }
-                    }
-                    1 -> CardGroup(enabled, module) { module = it }
+            Column {
+                SmallTitle(text = stringResource(R.string.cover_section))
+                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    CoverGroup(enabled, module) { module = it }
+                }
+                SmallTitle(text = stringResource(R.string.clock_section))
+                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    ClockGroup(enabled, module) { module = it }
+                }
+                SmallTitle(text = stringResource(R.string.card_section))
+                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    CardGroup(enabled, module) { module = it }
                 }
             }
         }
-
     }
 }
 
@@ -441,6 +507,64 @@ private fun CoverGroup(
                 ModuleBridge.setCoverStyle(context, "mode", it.toFloat())
             },
         )
+        if (!module.hidePlayerBackground) {
+            ValueSlider(title = stringResource(R.string.cover_full_blur),
+                summary = stringResource(R.string.cover_full_blur_summary),
+                value = module.fullBlur.toFloat(), valueRange = 0f..100f,
+                enabled = enabled, detent = 50f,
+                label = { "${it.toInt()}%" }, onValueChange = {
+                    onChange(module.copy(fullBlur = it.toInt()))
+                    ModuleBridge.setFullBlur(context, it.toInt())
+                })
+        }
+        // The square's size, place and corners were sliders here and are fixed - it fills the room
+        // it has, sits in the middle of it, and takes the media card's own corner radius, all of
+        // which are the same answer on every device. See CoverCardStyle.
+        //
+        // The one slider left belongs to the full-screen cover alone, and it is the one that has
+        // to stay a slider: where the cover sits vertically is a share of the screen, and the
+        // screen is not the same on every phone.
+        if (module.coverStyle == 0 && !module.hidePlayerBackground) {
+            ValueSlider(
+                title = stringResource(R.string.cover_bias),
+                value = module.bias,
+                valueRange = 0f..1f,
+                detent = 0.34f,
+                enabled = enabled,
+                onValueChange = {
+                    onChange(module.copy(bias = it))
+                    ModuleBridge.setBias(context, it)
+                },
+            )
+        }
+        SwitchPreference(
+            title = stringResource(R.string.cover_hide_player_background),
+            summary = stringResource(R.string.cover_hide_player_background_summary),
+            checked = module.hidePlayerBackground,
+            enabled = enabled && !changingBackdrop,
+            onCheckedChange = { hide ->
+                changingBackdrop = true
+                scope.launch {
+                    try {
+                        if (ModuleBridge.applyHidePlayerBackground(context, hide)) {
+                            onChange(module.copy(hidePlayerBackground = hide))
+                        }
+                    } finally {
+                        changingBackdrop = false
+                    }
+                }
+            },
+        )
+        if (module.hidePlayerBackground) {
+            ValueSlider(title = stringResource(R.string.cover_wallpaper_dim),
+                summary = stringResource(R.string.cover_wallpaper_dim_summary),
+                value = module.wallpaperDim.toFloat(), valueRange = 0f..80f,
+                enabled = enabled && !changingBackdrop, detent = 35f,
+                label = { "${it.toInt()}%" }, onValueChange = {
+                    onChange(module.copy(wallpaperDim = it.toInt()))
+                    ModuleBridge.setWallpaperDim(context, it.toInt())
+                })
+        }
         SwitchPreference(
             title = stringResource(R.string.cover_flip),
             summary = stringResource(R.string.cover_flip_summary),
@@ -489,54 +613,6 @@ private fun CoverGroup(
                 ModuleBridge.setMiniConfig(context, next)
             },
         )
-        SwitchPreference(
-            title = stringResource(R.string.cover_hide_player_background),
-            summary = stringResource(R.string.cover_hide_player_background_summary),
-            checked = module.hidePlayerBackground,
-            enabled = enabled && !changingBackdrop,
-            onCheckedChange = { hide ->
-                changingBackdrop = true
-                scope.launch {
-                    try {
-                        if (ModuleBridge.applyHidePlayerBackground(context, hide)) {
-                            onChange(module.copy(hidePlayerBackground = hide))
-                        }
-                    } finally {
-                        changingBackdrop = false
-                    }
-                }
-            },
-        )
-        if (module.hidePlayerBackground) {
-            ValueSlider(title = stringResource(R.string.cover_wallpaper_dim),
-                summary = stringResource(R.string.cover_wallpaper_dim_summary),
-                value = module.wallpaperDim.toFloat(), valueRange = 0f..80f,
-                enabled = enabled && !changingBackdrop, detent = 35f,
-                label = { "${it.toInt()}%" }, onValueChange = {
-                    onChange(module.copy(wallpaperDim = it.toInt()))
-                    ModuleBridge.setWallpaperDim(context, it.toInt())
-                })
-        }
-        // The square's size, place and corners were sliders here and are fixed - it fills the room
-        // it has, sits in the middle of it, and takes the media card's own corner radius, all of
-        // which are the same answer on every device. See CoverCardStyle.
-        //
-        // The one slider left belongs to the full-screen cover alone, and it is the one that has
-        // to stay a slider: where the cover sits vertically is a share of the screen, and the
-        // screen is not the same on every phone.
-        if (module.coverStyle == 0 && !module.hidePlayerBackground) {
-            ValueSlider(
-                title = stringResource(R.string.cover_bias),
-                value = module.bias,
-                valueRange = 0f..1f,
-                detent = 0.34f,
-                enabled = enabled,
-                onValueChange = {
-                    onChange(module.copy(bias = it))
-                    ModuleBridge.setBias(context, it)
-                },
-            )
-        }
     }
 }
 
@@ -1273,10 +1349,6 @@ private fun CardGroup(
     onChange: (ModuleBridge.State) -> Unit,
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var sinkRestartPending by rememberSaveable { mutableStateOf(false) }
-    var sinkRestarting by remember { mutableStateOf(false) }
-    var sinkRestartFailed by remember { mutableStateOf(false) }
     Column {
         // Two switches were here and are gone: hiding the card's thumbnail, and bringing it back
         // while the lyrics are up. Both are on and neither is a setting - the artwork is the
@@ -1306,91 +1378,6 @@ private fun CardGroup(
                 ModuleBridge.setMediaBarGlow(context, it)
             },
         )
-        // Sits here because that is where it was asked for, but it is not a card setting and does
-        // not follow cover mode, unlike the switches above it - which the rows no longer say, so
-        // it is only in the module and in this comment. No onCardRestyled(): the preview above
-        // draws no fingerprint.
-        SwitchPreference(
-            title = stringResource(R.string.hide_fingerprint),
-            checked = module.hideFingerprint,
-            enabled = enabled,
-            onCheckedChange = {
-                onChange(module.copy(hideFingerprint = it))
-                ModuleBridge.setHideFingerprint(context, it)
-            },
-        )
-        SwitchPreference(
-            title = stringResource(R.string.fod_after_face),
-            summary = stringResource(R.string.fod_after_face_summary),
-            checked = module.fodAfterFace,
-            enabled = enabled,
-            onCheckedChange = {
-                onChange(module.copy(fodAfterFace = it))
-                ModuleBridge.setFodAfterFace(context, it)
-            },
-        )
-        // Three states rather than a switch: "off" would have to mean both "stop reserving the
-        // space" and "reserve it even with no print enrolled", which are opposite requests.
-        //
-        // The two directions are named differently on the two sides of the wire: the module and
-        // the OEM call it avoidance, because that is what the fingerprint icon makes the
-        // notification do - move up - and the hook's own job is to override it. The rows say
-        // what the notification does instead, so "sinks" is avoidance switched off: item 1 is
-        // the module's fpavoid=1 and item 2 its fpavoid=2. Change the order here and the
-        // setting silently means the opposite of what it says.
-        val avoidModes = listOf(
-            stringResource(R.string.fp_sink_system),
-            stringResource(R.string.fp_sink_always),
-            stringResource(R.string.fp_sink_never),
-        )
-        val avoidIndex = module.fpAvoid.coerceIn(0, avoidModes.lastIndex)
-        WindowDropdownPreference(
-            title = stringResource(R.string.fp_sink),
-            summary = stringResource(R.string.fp_sink_summary),
-            items = avoidModes,
-            selectedIndex = avoidIndex,
-            enabled = enabled,
-            onSelectedIndexChange = {
-                if (it != avoidIndex) {
-                    onChange(module.copy(fpAvoid = it))
-                    ModuleBridge.setFingerprintAvoid(context, it)
-                    sinkRestartPending = true
-                    sinkRestartFailed = false
-                }
-            },
-        )
-        if (sinkRestartPending) {
-            Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
-                MiuixText(
-                    text = stringResource(
-                        if (sinkRestartFailed) R.string.fp_sink_restart_failed
-                        else R.string.fp_sink_restart_hint,
-                    ),
-                    fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.padding(bottom = 12.dp),
-                )
-                TextButton(
-                    text = stringResource(R.string.restart_systemui),
-                    enabled = enabled && !sinkRestarting,
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = {
-                        sinkRestarting = true
-                        scope.launch {
-                            try {
-                                val restarted = withContext(Dispatchers.IO) {
-                                    ModuleBridge.restartSystemUi()
-                                }
-                                sinkRestartFailed = !restarted
-                                if (restarted) sinkRestartPending = false
-                            } finally {
-                                sinkRestarting = false
-                            }
-                        }
-                    },
-                )
-            }
-        }
     }
 }
 

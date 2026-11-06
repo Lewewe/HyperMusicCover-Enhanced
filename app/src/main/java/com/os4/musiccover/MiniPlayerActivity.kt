@@ -27,6 +27,7 @@ import com.os4.musiccover.ui.theme.AppTheme
 import com.os4.musiccover.ui.util.PageScaffold
 import org.json.JSONObject
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
@@ -91,8 +92,9 @@ private fun MiniPlayerPage(blur: Boolean, refreshKey: Int, onBack: () -> Unit) {
             // sliders and are fixed - see MiniPlayerConfig, which no longer reads them from
             // anything the app sends. What is left is whether it is on, and whether it widens
             // into a switched-off shortcut's place.
-            Card(Modifier.padding(horizontal = 12.dp, vertical = 12.dp)) {
-                Column {
+            Column {
+                SmallTitle(text = stringResource(R.string.mini_general_section))
+                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
                     // The one line the switch still carries, and only while the module is away:
                     // a switch that cannot be moved and does not say why reads as the switch
                     // being broken. Nothing here describes the feature itself any more.
@@ -137,6 +139,9 @@ private fun MiniPlayerPage(blur: Boolean, refreshKey: Int, onBack: () -> Unit) {
                         checked = config.optBoolean(MiniPlayerConfig.STATUS_AT_DATE),
                         enabled = alive && config.optBoolean(MiniPlayerConfig.ENABLED),
                         onCheckedChange = { push(MiniPlayerConfig.STATUS_AT_DATE, it) })
+                }
+                SmallTitle(text = stringResource(R.string.mini_notifications_section))
+                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
                     SwitchPreference(title = stringResource(R.string.mini_notification_compact),
                         summary = stringResource(when {
                             compactAvailable -> R.string.mini_notification_compact_summary
@@ -159,6 +164,9 @@ private fun MiniPlayerPage(blur: Boolean, refreshKey: Int, onBack: () -> Unit) {
                             label = { "${it.toInt()} dp" },
                             onValueChange = { push(MiniPlayerConfig.NOTIFICATION_DROP, it) })
                     }
+                }
+                SmallTitle(text = stringResource(R.string.mini_background_section))
+                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
                     SwitchPreference(title = stringResource(R.string.islands_background_blur),
                         summary = stringResource(R.string.islands_background_blur_summary),
                         checked = config.optBoolean(MiniPlayerConfig.BACKGROUND_BLUR),

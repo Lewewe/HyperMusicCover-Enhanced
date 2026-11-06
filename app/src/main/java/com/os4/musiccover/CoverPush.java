@@ -252,7 +252,7 @@ final class CoverPush {
             try {
                 android.os.Trace.beginSection("MC push.source");
                 src = CoverCompose.prepareSource(art, w);
-                shared = writeSharedSource(src, w, h, Main.sBias);
+                shared = writeSharedSource(src, w, h, Main.sBias, Main.sFullBlur);
             } catch (Throwable t) {
                 Xp.w(Main.TAG + "source hand-over failed, sending the composed JPEG instead: " + t);
             } finally {
@@ -269,14 +269,14 @@ final class CoverPush {
                 long sent = android.os.SystemClock.uptimeMillis();
                 // Still composed here, but now after the send: the clock's tint and the shade
                 // both need the picture, and neither of them is what the user is waiting on.
-                // Same source, size and bias as the wallpaper process got, so the same pixels.
+                // Same source, size, bias and blur as the wallpaper process got, so the same pixels.
                 //
                 // The tint is all this copy is for, and it only depends on what is in the key:
                 // a run of taps in and out of cover mode on one song composed the same full-screen
                 // picture every time (trace 2026-09-30), so the same key takes the last answer.
                 String tintKey = artPrint(src) + ":" + src.getWidth() + "x" + src.getHeight()
-                        + ":" + w + "x" + h + ":" + Main.sBias + ":" + Main.bandKey() + ":"
-                        + Main.effectiveCoverStyle().mode;
+                        + ":" + w + "x" + h + ":" + Main.sBias + ":" + Main.sFullBlur
+                        + ":" + Main.bandKey() + ":" + Main.effectiveCoverStyle().mode;
                 boolean reused = tintKey.equals(sTintKey);
                 if (reused) {
                     Main.sCoverTint = sTintValue;
@@ -285,7 +285,7 @@ final class CoverPush {
                     Bitmap full;
                     android.os.Trace.beginSection("MC push.compose");
                     try {
-                        full = composeWallpaper(src, w, h, Main.sBias);
+                        full = composeWallpaper(src, w, h, Main.sBias, Main.sFullBlur);
                     } catch (Throwable t) {
                         Xp.w(Main.TAG + "composeWallpaper failed after the hand-over: " + t);
                         return;
@@ -322,7 +322,7 @@ final class CoverPush {
         }
         Bitmap full;
         try {
-            full = composeWallpaper(art, w, h, Main.sBias);
+            full = composeWallpaper(art, w, h, Main.sBias, Main.sFullBlur);
         } catch (Throwable t) {
             // This runs on a HandlerThread, and an uncaught throw on one reaches
             // KillApplicationHandler - so an OutOfMemoryError composing a full-screen cover
@@ -1522,10 +1522,10 @@ final class CoverPush {
     static final String SHARE_SOURCE = "mc_src.raw";
 
     /** The source, where the wallpaper process can read it. See CoverCompose.writeSource(). */
-    private static String writeSharedSource(Bitmap src, int w, int h, float bias)
+    private static String writeSharedSource(Bitmap src, int w, int h, float bias, int fullBlur)
             throws java.io.IOException {
         java.io.File f = new java.io.File(SHARE_DIR, SHARE_SOURCE);
-        CoverCompose.writeSource(f, src, w, h, bias);
+        CoverCompose.writeSource(f, src, w, h, bias, fullBlur);
         return f.getAbsolutePath();
     }
 
@@ -2552,10 +2552,10 @@ final class CoverPush {
      * See CoverCompose.composeWallpaper(); kept here so the call sites read as they did. In card
      * mode the wallpaper is only the blurred backdrop - the square itself is CoverCardLayer.
      */
-    private static Bitmap composeWallpaper(Bitmap src, int w, int h, float bias) {
+    private static Bitmap composeWallpaper(Bitmap src, int w, int h, float bias, int fullBlur) {
         return Main.effectiveCoverStyle().mode == CoverCardStyle.CARD
-                ? CoverCompose.cardBackground(src, w, h)
-                : CoverCompose.composeWallpaper(src, w, h, bias);
+                ? CoverCompose.cardBackground(src, w, h, fullBlur)
+                : CoverCompose.composeWallpaper(src, w, h, bias, fullBlur);
     }
 
     /** Fills w x h from the source without distorting it, the way CENTER_CROP would. */

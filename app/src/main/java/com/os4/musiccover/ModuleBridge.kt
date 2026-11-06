@@ -42,6 +42,7 @@ object ModuleBridge {
         val cover: Boolean = false,
         val auto: Boolean = false,
         val bias: Float = 0.34f,
+        val fullBlur: Int = 50,
         val coverStyle: Int = 0,
         val hidePlayerBackground: Boolean = false,
         val wallpaperDim: Int = 35,
@@ -449,6 +450,7 @@ object ModuleBridge {
     fun setCover(context: Context, on: Boolean) = send(context, "pushart") { putExtra("on", on) }
 
     fun setBias(context: Context, v: Float) = send(context, "bias") { putExtra("v", v) }
+    fun setFullBlur(context: Context, v: Int) = send(context, "fullBlur") { putExtra("v", v) }
 
     fun setCoverStyle(context: Context, key: String, value: Float) =
         send(context, "coverstyle") {
@@ -902,6 +904,7 @@ object ModuleBridge {
             cover = b.getBoolean("cover", false),
             auto = b.getBoolean("auto", false),
             bias = b.getFloat("bias", 0.34f),
+            fullBlur = b.getInt("fullBlur", 50),
             coverStyle = b.getInt("coverstyle", 0),
             hidePlayerBackground = b.getBoolean("hideplayerbackground", false),
             wallpaperDim = b.getInt("wallpaperdim", 35),
