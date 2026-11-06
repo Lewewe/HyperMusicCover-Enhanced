@@ -626,6 +626,11 @@ final class LockLyrics {
         return wantsAttached() && (hasBpmCompanion() || bpmSearchingLyrics());
     }
 
+    /** The kaomoji companion takes the interlude dots' place, for the players it is on for. */
+    static boolean kaomojiInterludes() {
+        return sBpmEnabled && Main.bpmPlayerAllowed(sController);
+    }
+
     static boolean hasBpmCompanion() {
         return sBpmEnabled && Main.bpmPlayerAllowed(sController) && !sKey.isEmpty() && sLines.isEmpty();
     }
@@ -665,8 +670,10 @@ final class LockLyrics {
     }
 
     /** Reconcile capture when the page, lock screen, display, track or playback changes. */
-    private static void syncBpmCapture() {
-        boolean capture = BpmCompanionPolicy.capture(sBpmEnabled && !sLoading && !sKey.isEmpty(),
+    static void syncBpmCapture() {
+        boolean interlude = kaomojiInterludes() && sView != null && sView.dotsLive();
+        boolean capture = BpmCompanionPolicy.capture(
+                hasBpmCompanion() && !bpmSearchingLyrics() || interlude,
                 wantsShown(), sView != null && sView.isAttachedToWindow(),
                 Main.screenOnCached(), !lockScreenGone(), playing(), still());
         if (!capture) {

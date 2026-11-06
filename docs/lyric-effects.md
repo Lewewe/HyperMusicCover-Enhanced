@@ -28,10 +28,13 @@ scale; Eye-candy keeps the larger companion presentation. A faint
 cover-colored halo responds to beat onsets without adding another card or panel. FFT/BPM still
 shapes the face's hop, pulse and halo, but the label stays minimal so it does not compete with
 the face or the incoming lyric. The face remains stable for the pause, then fades cleanly as the
-next lyric arrives. Subtle and Dramatic keep a small additional gap between lyric rows so their
-motion remains readable. All modes use their normal lyric renderer
-when the next line arrives.
-The countdown uses lyric timestamps, so it remains stable even when FFT capture is unavailable.
+next lyric arrives. All modes use their normal lyric renderer when the next line arrives.
+The countdown uses lyric timestamps, so it remains stable even when FFT capture is unavailable;
+it is hidden while the lock screen is still, which does not redraw each second.
+
+The face follows the companion's player list: a player left out of it keeps the dots. Audio is
+captured for the hop only while an interlude is actually up and playing, never through the
+lyrics themselves. The halo's gradient is built once per cover colour and placed by a matrix.
 
 ## Inactive lyrics blur
 
@@ -53,7 +56,7 @@ to their timing and retain their measured shaping, karaoke gradient and existing
 HDR highlighting remains controlled by its separate setting. No new letter reveal, trails,
 breathing or translation motion is applied in this mode.
 
-Subtle and Dramatic retain the normal renderer with a little extra row spacing: all word-timed letters remain visible, and the fill
+Subtle and Dramatic retain the normal renderer: all word-timed letters remain visible, and the fill
 cursor drives each safe grapheme's rise. As the fill passes, each letter eases smoothly back to
 baseline. They also provide their mode-specific trails, breathing and translation motion, but neither
 flies letters in from off-screen nor hides upcoming lyric lines. The full-line blur crossfade is
