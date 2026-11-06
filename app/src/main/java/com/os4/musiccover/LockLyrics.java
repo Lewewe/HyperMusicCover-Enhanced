@@ -280,7 +280,8 @@ final class LockLyrics {
                                         || !cfg.sameSettings(translationConfig())) return;
                                 setLines(merged, fromCache ? "cached + online translation"
                                         : "online translation");
-                                NextLyrics.persistReady(readyPkg, readyMediaId, merged,
+                                NextLyrics.persistReady(readyPkg, readyMediaId,
+                                        titleOf(sController), merged,
                                         readySource, true, readyContext);
                             }
                         });
@@ -1374,6 +1375,32 @@ final class LockLyrics {
             NextLyrics.onLyricsFinal();
             return;
         }
+        // A SystemUI restart empties CACHE; the disk copy saves the network. Never over the
+        // session's own lyric, or a file player's local one, which outrank any stored copy.
+        final int restoreGen = sGen + 1;
+        if (!LyricSource.usable(LyricSource.infoFor(c)) && LyricSource.streaming(pkgOf(key))
+                && NextLyrics.restoreCurrent(c, new NextLyrics.LyricsCallback() {
+            @Override public void onReady(final NextLyrics.Lyrics result) {
+                if (restoreGen != sGen || !awaitedKey.equals(sKey) || sDemo) return;
+                // Settings changed during the read: settlePrefetched would drop it, so look up.
+                if (result != null && !result.lines.isEmpty() && NextLyrics.isCurrent(result.context)) {
+                    settlePrefetched(awaitedKey, result);
+                    return;
+                }
+                sInfoSeen = LyricSource.infoFor(c);
+                if (sInfoSeen == null
+                        && ((lastChange > 0L && sTrackAt - lastChange < BURST_MS)
+                        || staleDuration(lastKey, awaitedKey))) {
+                    Main.main().postDelayed(SETTLED_LOOKUP, SETTLE_MS);
+                    return;
+                }
+                lookup(awaitedKey, c, false);
+            }
+        })) {
+            sGen = restoreGen;
+            Main.main().postDelayed(LOOKUP_WATCHDOG, LOOKUP_TIMEOUT_MS);
+            return;
+        }
         // What the lookup about to start will read the session as, so a payload that turns up
         // after it - the provider module's real one - can be told apart from this one.
         sInfoSeen = LyricSource.infoFor(c);
@@ -1611,8 +1638,8 @@ final class LockLyrics {
         Main.main().removeCallbacks(LOOKUP_WATCHDOG);
         sSource = ahead.source;
         CACHE.put(want, new Cached(QueuedLyricCache.withoutOnline(ahead.lines), ahead.source));
-        NextLyrics.persistReady(sReadyPkg, sReadyMediaId, ahead.lines, ahead.source,
-                ahead.translated, ahead.context);
+        NextLyrics.persistReady(sReadyPkg, sReadyMediaId, titleOf(sController), ahead.lines,
+                ahead.source, ahead.translated, ahead.context);
         setLines(ahead.lines, ahead.translated ? "prefetched + online translation"
                 : "prefetched lyrics");
         sLoading = false;
@@ -1730,8 +1757,15 @@ final class LockLyrics {
     }
 
     private static void persistReady(List<LyricLine> lines, int source, boolean translated) {
-        NextLyrics.persistReady(sReadyPkg, sReadyMediaId, lines, source, translated,
-                NextLyrics.context());
+        NextLyrics.persistReady(sReadyPkg, sReadyMediaId, titleOf(sController), lines, source,
+                translated, NextLyrics.context());
+    }
+
+    /** The session's title, which a stored lyric is checked against. See QueuedLyricCache. */
+    private static String titleOf(MediaController controller) {
+        android.media.MediaMetadata metadata = Main.sessionMetadata(controller);
+        return metadata == null ? null
+                : metadata.getString(android.media.MediaMetadata.METADATA_KEY_TITLE);
     }
 
     /**

@@ -14,10 +14,21 @@ final class QueuedLyricCache {
         final List<LyricLine> lines;
         final int source;
         final boolean translated;
-        Entry(List<LyricLine> lines, int source, boolean translated) {
+        /** The title it was stored under; null in entries written before titles were kept. */
+        final String title;
+        Entry(List<LyricLine> lines, int source, boolean translated, String title) {
             this.lines = lines;
             this.source = source;
             this.translated = translated;
+            this.title = title;
+        }
+
+        /**
+         * A media id is only as unique as the player makes it; an entry stored under another
+         * title is another song's lyric. Unknown on either side counts as the same.
+         */
+        boolean sameSong(String otherTitle) {
+            return title == null || otherTitle == null || title.equals(otherTitle);
         }
     }
 
@@ -33,16 +44,18 @@ final class QueuedLyricCache {
                 if (line != null) lines.add(line);
             }
             return lines.isEmpty() ? null : new Entry(lines, root.optInt("source"),
-                    root.optBoolean("translated"));
+                    root.optBoolean("translated"), root.has("title") ? root.optString("title") : null);
         } catch (Throwable ignored) {
             return null;
         }
     }
 
-    static void write(String pkg, String mediaId, List<LyricLine> lines, int source,
+    static void write(String pkg, String mediaId, String title, List<LyricLine> lines, int source,
                       boolean translated, String configuration) {
         if (lines == null || lines.isEmpty()) return;
         Entry old = read(pkg, mediaId, configuration);
+        // Another song's entry under a reused id is replaced, whatever its quality.
+        if (old != null && !old.sameSong(title)) old = null;
         // A live lookup may have richer metadata than queue prefetch, but it must not turn an
         // already cached word-timed lyric back into a merely line-timed one. A translated result
         // is also retained over an otherwise equal untranslated refresh.
@@ -53,6 +66,7 @@ final class QueuedLyricCache {
             JSONObject root = new JSONObject();
             root.put("source", source);
             root.put("translated", translated);
+            if (title != null) root.put("title", title);
             JSONArray rows = new JSONArray();
             for (LyricLine line : lines) if (line != null) rows.put(json(line));
             root.put("lines", rows);

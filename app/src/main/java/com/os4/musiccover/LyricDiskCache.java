@@ -38,7 +38,8 @@ final class LyricDiskCache {
                     count += read;
                 }
                 if (count <= 0) return null;
-                file.setLastModified(System.currentTimeMillis());
+                // Not renewed on read: a song played often would keep its first answer forever
+                // and never be looked up again. Ninety days after it was written, it is.
                 return new JSONObject(new String(bytes, 0, count, StandardCharsets.UTF_8));
             } catch (Throwable ignored) {
                 file.delete();

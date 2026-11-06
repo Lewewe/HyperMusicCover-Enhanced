@@ -170,7 +170,7 @@ final class NextLyrics {
                 try {
                     if (!isCurrent(context)) return;
                     QueuedLyricCache.Entry cached = QueuedLyricCache.read(pkg, item.mediaId, context.configuration);
-                    if (cached != null) {
+                    if (cached != null && cached.sameSong(item.title)) {
                         LocalRomanizer.apply(cached.lines);
                         complete(key, request, context, new Lyrics(pkg, item, cached.lines, cached.source,
                                 cached.translated, context));
@@ -193,7 +193,7 @@ final class NextLyrics {
                                                     List<LyricLine> ready = merged == null
                                                             ? java.util.Collections.<LyricLine>emptyList()
                                                             : merged;
-                                                    QueuedLyricCache.write(pkg, item.mediaId, ready,
+                                                    QueuedLyricCache.write(pkg, item.mediaId, item.title, ready,
                                                             source, translated, context.configuration);
                                                     complete(key, request, context, new Lyrics(pkg, item, ready, source,
                                                             translated, context));
@@ -222,6 +222,38 @@ final class NextLyrics {
         return null;
     }
 
+    static boolean restoreCurrent(final MediaController controller, final LyricsCallback callback) {
+        if (controller == null || callback == null || !LockLyrics.sOfflineCache) return false;
+        final Prefetch.Item item = itemOf(controller);
+        if (item == null || item.mediaId == null || item.mediaId.isEmpty()) return false;
+        final String pkg = controller.getPackageName();
+        final Context context = context();
+        // Not lyricWork(): a read-ahead holds that thread for the whole of a network search.
+        diskWork().post(new Runnable() {
+            @Override public void run() {
+                Lyrics restored = null;
+                try {
+                    QueuedLyricCache.Entry cached = QueuedLyricCache.read(
+                            pkg, item.mediaId, context.configuration);
+                    if (cached != null && !cached.lines.isEmpty() && cached.sameSong(item.title)) {
+                        LocalRomanizer.apply(cached.lines);
+                        restored = new Lyrics(pkg, item, cached.lines, cached.source,
+                                cached.translated, context);
+                    }
+                } catch (Throwable t) {
+                    Xp.w(TAG + "restoring current lyrics failed: " + t);
+                }
+                final Lyrics result = restored;
+                Main.main().post(new Runnable() {
+                    @Override public void run() {
+                        callback.onReady(result);
+                    }
+                });
+            }
+        });
+        return true;
+    }
+
     static boolean await(MediaController controller, LyricsCallback callback) {
         if (controller == null || callback == null) return false;
         Prefetch.Item item = itemOf(controller);
@@ -245,12 +277,16 @@ final class NextLyrics {
         warmAhead();
     }
 
-    static void persistReady(String pkg, String mediaId, List<LyricLine> lines, int source,
-                             boolean translated, Context context) {
+    static void persistReady(final String pkg, final String mediaId, final String title,
+                             List<LyricLine> lines, final int source, final boolean translated,
+                             final Context context) {
         if (!isCurrent(context)) return;
         if (pkg == null || pkg.isEmpty() || mediaId == null || mediaId.isEmpty()
                 || lines == null || lines.isEmpty()) return;
-        QueuedLyricCache.write(pkg, mediaId, lines, source, translated, context.configuration);
+        // Off SystemUI's main thread, and from a copy: romanization may still change the lines.
+        final List<LyricLine> copy = LocalRomanizer.copyLines(lines);
+        diskWork().post(() -> QueuedLyricCache.write(pkg, mediaId, title, copy, source,
+                translated, context.configuration));
         String key = LyricCacheScope.track(context.configuration, pkg, mediaId);
         synchronized (READY) {
             if (!isCurrent(context)) return;
@@ -375,5 +411,17 @@ final class NextLyrics {
             sWork = new Handler(thread.getLooper());
         }
         return sWork;
+    }
+
+    private static Handler sDisk;
+
+    private static synchronized Handler diskWork() {
+        if (sDisk == null) {
+            HandlerThread thread = new HandlerThread("mc-lyricdisk",
+                    android.os.Process.THREAD_PRIORITY_BACKGROUND);
+            thread.start();
+            sDisk = new Handler(thread.getLooper());
+        }
+        return sDisk;
     }
 }
