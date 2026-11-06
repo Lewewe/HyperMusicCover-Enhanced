@@ -223,12 +223,13 @@ final class NextLyrics {
     }
 
     static boolean restoreCurrent(final MediaController controller, final LyricsCallback callback) {
-        if (controller == null || callback == null) return false;
+        if (controller == null || callback == null || !LockLyrics.sOfflineCache) return false;
         final Prefetch.Item item = itemOf(controller);
         if (item == null || item.mediaId == null || item.mediaId.isEmpty()) return false;
         final String pkg = controller.getPackageName();
         final Context context = context();
-        lyricWork().post(new Runnable() {
+        // Not lyricWork(): a read-ahead holds that thread for the whole of a network search.
+        diskWork().post(new Runnable() {
             @Override public void run() {
                 Lyrics restored = null;
                 try {
@@ -406,5 +407,17 @@ final class NextLyrics {
             sWork = new Handler(thread.getLooper());
         }
         return sWork;
+    }
+
+    private static Handler sDisk;
+
+    private static synchronized Handler diskWork() {
+        if (sDisk == null) {
+            HandlerThread thread = new HandlerThread("mc-lyricdisk",
+                    android.os.Process.THREAD_PRIORITY_BACKGROUND);
+            thread.start();
+            sDisk = new Handler(thread.getLooper());
+        }
+        return sDisk;
     }
 }

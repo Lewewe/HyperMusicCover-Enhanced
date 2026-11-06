@@ -1367,11 +1367,15 @@ final class LockLyrics {
             NextLyrics.onLyricsFinal();
             return;
         }
+        // A SystemUI restart empties CACHE; the disk copy saves the network. Never over the
+        // session's own lyric, or a file player's local one, which outrank any stored copy.
         final int restoreGen = sGen + 1;
-        if (NextLyrics.restoreCurrent(c, new NextLyrics.LyricsCallback() {
+        if (!LyricSource.usable(LyricSource.infoFor(c)) && LyricSource.streaming(pkgOf(key))
+                && NextLyrics.restoreCurrent(c, new NextLyrics.LyricsCallback() {
             @Override public void onReady(final NextLyrics.Lyrics result) {
                 if (restoreGen != sGen || !awaitedKey.equals(sKey) || sDemo) return;
-                if (result != null && !result.lines.isEmpty()) {
+                // Settings changed during the read: settlePrefetched would drop it, so look up.
+                if (result != null && !result.lines.isEmpty() && NextLyrics.isCurrent(result.context)) {
                     settlePrefetched(awaitedKey, result);
                     return;
                 }
