@@ -32,7 +32,8 @@ next lyric arrives. All modes use their normal lyric renderer when the next line
 The countdown uses lyric timestamps, so it remains stable even when FFT capture is unavailable;
 it is hidden while the lock screen is still, which does not redraw each second.
 
-The face follows the companion's player list: a player left out of it keeps the dots. Audio is
+The dots need a pause of 4 s; the face, which counts down, takes pauses from 2.5 s, so turning
+the companion on or off lays the lyrics out again. The face follows the companion's player list: a player left out of it keeps the dots. Audio is
 captured for the hop only while an interlude is actually up and playing, never through the
 lyrics themselves. The halo's gradient is built once per cover colour and placed by a matrix.
 

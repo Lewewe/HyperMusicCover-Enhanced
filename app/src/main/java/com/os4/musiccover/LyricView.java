@@ -253,6 +253,8 @@ final class LyricView extends View {
 
     /** A gap between lines at least this long gets the interlude dots. */
     private static final int LULL_MS = 4000;
+    /** The kaomoji face, which carries a countdown, takes shorter pauses than the dots. */
+    private static final int FACE_LULL_MS = 2500;
 
     // ---- interlude dots, in text sizes and milliseconds (see drawDots)
     /** With the kaomoji companion on, the interlude holds this face instead (drawInterludeFace). */
@@ -358,6 +360,8 @@ final class LyricView extends View {
     private int builtTrans = LockLyrics.BELOW_TRANS;
     /** The alignment pref the layout now in use was made under; see LockLyrics.sAlign. */
     private int builtAlign = LockLyrics.ALIGN_LEFT;
+    /** Whether the layout now in use holds slots for the kaomoji face; see FACE_LULL_MS. */
+    private boolean builtFaces;
     /** Diagnostics: how long the last layout took on its thread. */
     private long layoutMs;
     /** From this distance on the blur is wide enough to be made at a quarter of the resolution. */
@@ -623,6 +627,8 @@ final class LyricView extends View {
                 // The alignment is in the layout too, and asked for the same way: against what
                 // the layout in use was built with, not against the field.
                 || LockLyrics.sAlign != builtAlign
+                // The face's slots are in the layout too: switching the companion moves them.
+                || LockLyrics.kaomojiInterludes() != builtFaces
                 || !LockLyrics.sStyle.sameLayout(layoutStyle))
                 && (LockLyrics.wantsAttached() || show == 0f)
                 && !(swapping && pageFade > 0f)) {
@@ -1754,6 +1760,7 @@ final class LyricView extends View {
 
     /** One layout of the lines, made wherever build ran. */
     private static final class Built {
+        boolean faces;
         int version, width, w;
         LyricStyle style;
         /** The translation and romanisation switches this layout was made under; see LockLyrics.below(). */
@@ -1797,6 +1804,8 @@ final class LyricView extends View {
         b.style = style;
         b.transOn = transOn;
         b.align = alignOn;
+        b.faces = LockLyrics.kaomojiInterludes();
+        int lull = b.faces ? FACE_LULL_MS : LULL_MS;
         b.lines = ls;
         int n = ls.size();
         int w = Math.max(1, width - Math.round(2f * buildSidePx));
@@ -1819,7 +1828,7 @@ final class LyricView extends View {
             LyricLine l = ls.get(i);
             // A long gap before this line holds the interlude dots, in a slot of their own.
             long gapStart = i == 0 ? 0L : ls.get(i - 1).end;
-            if (l.start - gapStart >= LULL_MS) {
+            if (l.start - gapStart >= lull) {
                 b.dotsTop[i] = y;
                 y += DOTS_SLOT_EM * buildTextPx + gap;
             } else {
@@ -1892,6 +1901,7 @@ final class LyricView extends View {
         version = b.version;
         builtTrans = b.transOn;
         builtAlign = b.align;
+        builtFaces = b.faces;
         lines = b.lines;
         rapidGroups = new RapidLyricGroups(lines);
         layoutWidth = b.width;
