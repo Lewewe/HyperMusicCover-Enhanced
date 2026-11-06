@@ -280,7 +280,8 @@ final class LockLyrics {
                                         || !cfg.sameSettings(translationConfig())) return;
                                 setLines(merged, fromCache ? "cached + online translation"
                                         : "online translation");
-                                NextLyrics.persistReady(readyPkg, readyMediaId, merged,
+                                NextLyrics.persistReady(readyPkg, readyMediaId,
+                                        titleOf(sController), merged,
                                         readySource, true, readyContext);
                             }
                         });
@@ -1630,8 +1631,8 @@ final class LockLyrics {
         Main.main().removeCallbacks(LOOKUP_WATCHDOG);
         sSource = ahead.source;
         CACHE.put(want, new Cached(QueuedLyricCache.withoutOnline(ahead.lines), ahead.source));
-        NextLyrics.persistReady(sReadyPkg, sReadyMediaId, ahead.lines, ahead.source,
-                ahead.translated, ahead.context);
+        NextLyrics.persistReady(sReadyPkg, sReadyMediaId, titleOf(sController), ahead.lines,
+                ahead.source, ahead.translated, ahead.context);
         setLines(ahead.lines, ahead.translated ? "prefetched + online translation"
                 : "prefetched lyrics");
         sLoading = false;
@@ -1749,8 +1750,15 @@ final class LockLyrics {
     }
 
     private static void persistReady(List<LyricLine> lines, int source, boolean translated) {
-        NextLyrics.persistReady(sReadyPkg, sReadyMediaId, lines, source, translated,
-                NextLyrics.context());
+        NextLyrics.persistReady(sReadyPkg, sReadyMediaId, titleOf(sController), lines, source,
+                translated, NextLyrics.context());
+    }
+
+    /** The session's title, which a stored lyric is checked against. See QueuedLyricCache. */
+    private static String titleOf(MediaController controller) {
+        android.media.MediaMetadata metadata = Main.sessionMetadata(controller);
+        return metadata == null ? null
+                : metadata.getString(android.media.MediaMetadata.METADATA_KEY_TITLE);
     }
 
     /**
