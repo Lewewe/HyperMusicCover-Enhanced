@@ -570,10 +570,8 @@ object MediaCardRuntime {
             if (on(scope, "animate") && old != null) {
                 view.setImageDrawable(TransitionDrawable(arrayOf(old, drawable)).apply { isCrossFadeEnabled = true; startTransition(250) })
             } else view.setImageDrawable(drawable)
-            // The previous drawable is retained only through the short transition.
-            val previous = rendered
+            // Do not recycle: the transition may first draw much later when the shade opens.
             rendered = bitmap
-            if (previous != null && previous !== bitmap) main.postDelayed({ if (rendered !== previous && !previous.isRecycled) previous.recycle() }, 300L)
             foreground(colors.textPrimary, colors.textSecondary)
         }
 
