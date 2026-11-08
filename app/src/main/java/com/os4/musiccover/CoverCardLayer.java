@@ -432,6 +432,10 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
             Xp.log("[MCCard] hidden outside keyguard on " + from);
         }
         if (getVisibility() != GONE || ticking || opacity != 0f) hideImmediately();
+        // Unlocked: the lit places belong to that lock screen's layout (an expanded player, say).
+        // A sleep straight from an app must not hold them through its doze.
+        lockPlace = null;
+        bigCoverPlace = null;
     }
 
     /**
@@ -805,8 +809,11 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
             // Placed live, the big clock's bottom pushes it small and low against the media card.
             goal = restPlace;
         } else if (phase == ClockCollapse.Phase.AOD) {
+            // No lit place since the unlock: take one once and hold it, not the 70% stand-in's
+            // re-derivation every frame of the doze zoom.
+            if (lockPlace == null && bigCoverPlace == null) lockPlace = placeNow();
             CoverCardStyle.Rect held = Main.aodArtworkExpanded() && bigCoverPlace != null
-                    ? bigCoverPlace : lockPlace != null ? lockPlace : placeNow();
+                    ? bigCoverPlace : lockPlace;
             goal = held == null ? null : aodPlace(held);
         } else {
             goal = placeNow();
@@ -919,7 +926,7 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
         }
         float y = top + room / 2f - (held.side - artHeight) / 2f;
         aodPlaceNote = "centred clock=" + clock + " media=" + media + " k=" + k
-                + " y=" + Math.round(held.y) + "->" + Math.round(y);
+                + " y=" + Math.round(held.y) + "->" + Math.round(y) + " side=" + Math.round(held.side);
         return new CoverCardStyle.Rect(held.x, y, held.side);
     }
 

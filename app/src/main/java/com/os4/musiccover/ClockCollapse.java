@@ -43,6 +43,7 @@ final class ClockCollapse {
     enum Phase { OFF, ENTER, ON, EXIT, AOD }
 
     private static volatile Phase sPhase = Phase.OFF;
+    private static boolean sPoseDrawn;
     /** This EXIT is the fall into the AOD, and lands in AOD rather than OFF. */
     private static boolean sExitToAod;
 
@@ -449,6 +450,7 @@ final class ClockCollapse {
         sFullUnit = Float.NaN;
         prepareGlass();
         install();
+        sPoseDrawn = false;
         if (!animate || Main.sContainer == null) {
             noteEntry(src, wake, false, false, Float.NaN, Float.NaN, Float.NaN, Float.NaN, LIVE.unit);
             stopFrame();
@@ -565,7 +567,9 @@ final class ClockCollapse {
         // phone, the keyguard's clock is not laid out to be measured, the held doze kept a NaN
         // pose, the OEM's big clock was drawn over the artwork, and the artwork compacting away
         // from it handed the lock screen back - the player alone on the AOD, the cover on wake.
-        if (flying && (Main.aodArtworkExpanded() || Float.isNaN(sFromTop))
+        // Or read off a keyguard clock no frame has posed since the cover look came on (cover
+        // mode begun while unlocked): it measures as the OEM's native big clock.
+        if (flying && (Main.aodArtworkExpanded() || Float.isNaN(sFromTop) || !sPoseDrawn)
                 && !Float.isNaN(sCoverRestTop)) {
             sFromTop = sCoverRestTop;
             sFromUnit = sCoverRestUnit;
@@ -843,6 +847,7 @@ final class ClockCollapse {
     }
 
     static void onDetached() {
+        sPoseDrawn = false;
         uninstall();
         // A transition that was running has lost its views; land it where it was going.
         if (sPhase == Phase.ENTER) {
@@ -1817,6 +1822,7 @@ final class ClockCollapse {
         stopAodCoverZoom();
         sAodCoverZoom = 1f;
         sPhase = Phase.OFF;
+        sPoseDrawn = false;
         sExitToAod = false;
         sAodHeld = false;
         sAodFullScreen = false;
@@ -2764,6 +2770,7 @@ final class ClockCollapse {
                 : sCenterFrom + (sCenterTo - sCenterFrom) * Math.max(0f, Math.min(1f, sT));
 
         android.os.Trace.beginSection("MC c.write"); try { writePose(m, top, unit, date, phase == Phase.ENTER && sGlyphTail); } finally { android.os.Trace.endSection(); }
+        if (phase == Phase.ENTER || phase == Phase.ON) sPoseDrawn = true;
         if (phase == Phase.ON) { android.os.Trace.beginSection("MC c.note"); try { notePose(m, top, unit, date, full, room); } finally { android.os.Trace.endSection(); } }
         // Once per drawn frame: onGlyphDrawn re-places from inside the draw, so this runs
         // three times a frame on this style and a trace that kept them all covered a third of
