@@ -61,9 +61,10 @@ internal object HyperImmersiveBridge {
     /**
      * What StandBy needs and cannot ask for without a screen: notification access (the
      * artwork), opening from the background, its watcher's notification, the calendar (its 4x2
-     * widget's events), and taking the lock screen. HyperOS can set that last one to ignore when
-     * an update adds a permission; 10020 and 10021 are its own show-when-locked and
-     * background-start ops. Root only.
+     * widget's events), the photos (its photo widgets), and taking the lock screen. HyperOS can
+     * set that last one to ignore when an update adds a permission; 10020 and 10021 are its own
+     * show-when-locked and background-start ops. 10008 is its autostart: without it, the system
+     * may not bind the artwork's listener again once the extension's process has died. Root only.
      */
     suspend fun grant(): Boolean = withContext(Dispatchers.IO) {
         runCatching {
@@ -75,8 +76,10 @@ internal object HyperImmersiveBridge {
                 "appops set --user $user $PACKAGE USE_FULL_SCREEN_INTENT allow; " +
                 "appops set --user $user $PACKAGE 10020 allow; " +
                 "appops set --user $user $PACKAGE 10021 allow; " +
+                "appops set --user $user $PACKAGE 10008 allow; " +
                 "pm grant --user $user $PACKAGE android.permission.POST_NOTIFICATIONS; " +
-                "pm grant --user $user $PACKAGE android.permission.READ_CALENDAR")
+                "pm grant --user $user $PACKAGE android.permission.READ_CALENDAR; " +
+                "pm grant --user $user $PACKAGE android.permission.READ_MEDIA_IMAGES")
                 .redirectErrorStream(true).start()
             if (!process.waitFor(15, java.util.concurrent.TimeUnit.SECONDS)) {
                 process.destroyForcibly()
