@@ -8,12 +8,11 @@ import com.os4.musiccover.LsposedService
 import com.os4.musiccover.ModuleBridge
 import kotlin.concurrent.thread
 
-/** The first thing the new build does after a root install: load itself into the whole scope. */
+/** Restarts the whole scope after every package replacement, regardless of installer. */
 class UpdateReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
-        if (!UpdateInstaller.takeRestartRequest(context)) return
         val pending = goAsync()
         val app = context.applicationContext
         thread {

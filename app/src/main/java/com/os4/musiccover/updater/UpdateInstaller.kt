@@ -71,8 +71,6 @@ object UpdateInstaller {
     private const val DOWNLOAD_DIR = "updates"
 
     private const val ROOT_COPY = "/data/local/tmp/hmce-update.apk"
-    private const val PREFS = "self_update"
-    private const val KEY_RESTART = "restart_scope_after_install"
 
     /**
      * Process-scoped, deliberately not the composition's.
@@ -132,7 +130,7 @@ object UpdateInstaller {
                             .putString(expectedPackage, version)
                             .putString("${expectedPackage}.file", file.name).apply()
                     }
-                    if ((expectedPackage == app.packageName && rootInstall(app, file)) || handOff(app, file)) {
+                    if ((expectedPackage == app.packageName && rootInstall(file)) || handOff(app, file)) {
                         InstallOutcome.HandedOff
                     } else {
                         saveToDownloads(app, file)?.let { InstallOutcome.SavedToDownloads(it) }
@@ -239,9 +237,7 @@ object UpdateInstaller {
      * the new build rather than chained here; a root shell started from this app is killed with
      * it on root managers that run su inside the caller's cgroup.
      */
-    private fun rootInstall(context: Context, file: File): Boolean {
-        val prefs = context.getSharedPreferences(PREFS, 0)
-        prefs.edit().putBoolean(KEY_RESTART, true).commit()
+    private fun rootInstall(file: File): Boolean {
         val script = "cp '${file.absolutePath}' $ROOT_COPY && chmod 644 $ROOT_COPY && pm install -r $ROOT_COPY; " +
             "r=\$?; rm -f $ROOT_COPY; exit \$r"
         val installed = try {
@@ -250,16 +246,7 @@ object UpdateInstaller {
             Log.i(TAG, "self-update: no root to install with", t)
             false
         }
-        if (!installed) prefs.edit().remove(KEY_RESTART).commit()
         return installed
-    }
-
-    /** True once, in the new build, when [rootInstall] is what replaced the old one. */
-    fun takeRestartRequest(context: Context): Boolean {
-        val prefs = context.getSharedPreferences(PREFS, 0)
-        val asked = prefs.getBoolean(KEY_RESTART, false)
-        if (asked) prefs.edit().remove(KEY_RESTART).commit()
-        return asked
     }
 
     /**

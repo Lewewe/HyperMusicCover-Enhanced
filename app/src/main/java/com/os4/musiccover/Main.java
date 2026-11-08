@@ -1,6 +1,7 @@
 package com.os4.musiccover;
 
 import android.animation.ValueAnimator;
+import android.app.Application;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -18,6 +19,7 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.os.PatternMatcher;
 import android.text.Layout;
 import android.view.ViewGroup;
 import android.widget.ImageView;
@@ -940,6 +942,50 @@ public class Main extends XposedModule {
         }
     }
 
+    private static boolean sModuleUpdateHooked;
+    private static boolean sModuleUpdateRegistered;
+
+    private static synchronized void installModuleUpdateReceiver() {
+        if (sModuleUpdateHooked) return;
+        try {
+            // attach also reaches secondary processes and applications that override onCreate.
+            Xp.hook(Xp.findMethodExact(Application.class, "attach", Context.class), chain -> {
+                Object result = chain.proceed();
+                registerModuleUpdateReceiver((Context) chain.getThisObject());
+                return result;
+            });
+            sModuleUpdateHooked = true;
+            // A plugin can load after the host application's attach has already finished.
+            Context ctx = (Context) Class.forName("android.app.ActivityThread")
+                    .getMethod("currentApplication").invoke(null);
+            if (ctx != null) registerModuleUpdateReceiver(ctx);
+        } catch (Throwable t) {
+            Xp.w(TAG + "module update hook failed: " + t);
+        }
+    }
+
+    private static synchronized void registerModuleUpdateReceiver(Context ctx) {
+        if (sModuleUpdateRegistered) return;
+        try {
+            IntentFilter filter = new IntentFilter(Intent.ACTION_PACKAGE_REPLACED);
+            filter.addDataScheme("package");
+            filter.addDataSchemeSpecificPart(BuildConfig.APPLICATION_ID,
+                    PatternMatcher.PATTERN_LITERAL);
+            // PACKAGE_REPLACED is protected; only the system can send it.
+            ctx.registerReceiver(new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context c, Intent i) {
+                    Xp.log(TAG + "module updated, restarting " + Application.getProcessName());
+                    new Handler(Looper.getMainLooper()).postDelayed(
+                            () -> android.os.Process.killProcess(android.os.Process.myPid()), 1500);
+                }
+            }, filter, Context.RECEIVER_EXPORTED);
+            sModuleUpdateRegistered = true;
+        } catch (Throwable t) {
+            Xp.w(TAG + "module update receiver registration failed: " + t);
+        }
+    }
+
     @Override
     public void onModuleLoaded(ModuleLoadedParam param) {
         Xp.attach(this);
@@ -956,18 +1002,21 @@ public class Main extends XposedModule {
         Xp.attach(this);
         String pkg = param.getPackageName();
         if ("com.miui.miwallpaper".equals(pkg)) {
+            installModuleUpdateReceiver();
             WallpaperProbe.handle(param);
             return;
         }
         // The lock screen editor and the always-on display, which judge a wallpaper's depth with
         // their own copies of the same classes and hold the ceiling on saved lock screens.
         if ("com.miui.aod".equals(pkg)) {
+            installModuleUpdateReceiver();
             HyperTweaks.aod(param.getDefaultClassLoader());
             return;
         }
         // The control centre plugin. Usually loaded into SystemUI's own loader, in which case
         // this never fires and the attempt below is the one that lands.
         if ("miui.systemui.plugin".equals(pkg)) {
+            installModuleUpdateReceiver();
             HyperTweaks.plugin(param.getDefaultClassLoader());
             IslandIphoneGestures.install(param.getDefaultClassLoader());
             return;
@@ -975,16 +1024,19 @@ public class Main extends XposedModule {
         // Apple's lyric never reaches the session on its own, so it is fetched and published
         // from inside the player.
         if (AppleLyrics.PKG.equals(pkg)) {
+            installModuleUpdateReceiver();
             AppleLyrics.handle(param.getDefaultClassLoader());
             return;
         }
         // 高德, for the navigation map on the lock screen: only watching whether its page is ready
         // to draw one. See AmapImmerse and AmapNavScene.
         if (AmapImmerse.PKG.equals(pkg)) {
+            installModuleUpdateReceiver();
             AmapImmerse.handle(param.getDefaultClassLoader());
             return;
         }
         if (!"com.android.systemui".equals(pkg)) return;
+        installModuleUpdateReceiver();
 
         final ClassLoader cl = param.getDefaultClassLoader();
         Xp.log(TAG + "loaded into SystemUI");
