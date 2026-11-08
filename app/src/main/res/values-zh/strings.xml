@@ -422,6 +422,8 @@
     <string name="hypercanvas_show_in_pill_summary">播放器收起为药丸后继续显示 Canvas，关闭后会隐藏并暂停视频。</string>
     <string name="cover_hide_player_background">使用锁屏壁纸背景</string>
     <string name="cover_hide_player_background_summary">使用锁屏壁纸代替封面模糊背景，搭配悬浮封面和歌词，并可调节壁纸暗度。暂停 HyperCanvas 并禁用其开关，若已安装，更改此选项会重启 Spotify 和系统界面。</string>
+    <string name="cover_on_tap">点按显示封面</string>
+    <string name="cover_on_tap_summary">播放音乐时只显示播放器和原壁纸，点按封面缩略图才展开封面</string>
     <string name="hypercanvas_background_blocked">已暂停：请先关闭“使用锁屏壁纸背景”。</string>
     <string name="media_visualization_tab">音频可视化</string>
     <string name="media_appearance_tab">外观</string>

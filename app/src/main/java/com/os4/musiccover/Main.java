@@ -436,6 +436,12 @@ public class Main extends XposedModule {
     static final float DEFAULT_CLOCK_SIZE = 0.09f;
     static volatile float sClockSize = DEFAULT_CLOCK_SIZE;
     static volatile boolean sHidePlayerBackground;
+    static volatile boolean sCoverOnTap;
+
+    /** Cover on tap: the player alone, at entry or folded back to, sits on the native wallpaper. */
+    static boolean coverOnTapResting() {
+        return sCoverOnTap && sCoverMode && LockLyrics.playerPage();
+    }
     static volatile int sWallpaperDim = 35;
 
     private static CoverCardStyle sWallpaperStyleOf, sWallpaperCoverStyle;
@@ -2104,6 +2110,7 @@ public class Main extends XposedModule {
                     + "\ncovergap=" + CoverPush.sCoverFadeGapMs
                     + "\nwallpaperdim=" + sWallpaperDim
                     + "\nhideplayerbackground=" + (sHidePlayerBackground ? 1 : 0)
+                    + "\ncoverontap=" + (sCoverOnTap ? 1 : 0)
                     + "\nhidefp=" + (sHideFp ? 1 : 0)
                     + "\nfodface=" + (sFodFace ? 1 : 0)
                     + "\ncoverflip=" + (sCoverFlip ? 1 : 0)
@@ -2260,6 +2267,7 @@ public class Main extends XposedModule {
                         else if ("covergap".equals(k)) CoverPush.sCoverFadeGapMs = Long.parseLong(v);
                         else if ("wallpaperdim".equals(k)) sWallpaperDim = Math.max(0, Math.min(80, Integer.parseInt(v)));
                         else if ("hideplayerbackground".equals(k)) sHidePlayerBackground = "1".equals(v);
+                        else if ("coverontap".equals(k)) sCoverOnTap = "1".equals(v);
                         else if ("hidefp".equals(k)) sHideFp = "1".equals(v);
                         else if ("fodface".equals(k)) sFodFace = "1".equals(v);
                         else if ("coverflip".equals(k)) sCoverFlip = "1".equals(v);
@@ -3028,6 +3036,15 @@ public class Main extends XposedModule {
                         CoverBackdrop.sync(true);
                         if (sCoverMode) CoverPush.pushArtAsync(true, false);
                         LockLyrics.refresh();
+                    } else if ("coverontap".equals(op)) {
+                        boolean resting = coverOnTapResting();
+                        sCoverOnTap = i.getBooleanExtra("on", false);
+                        saveState();
+                        if (!sCoverOnTap && resting) {
+                            LockLyrics.setPlayerChosen(false);
+                            CoverBackdrop.sync(true);
+                            LockLyrics.refresh();
+                        }
                     } else if ("hidefp".equals(op)) {
                         sHideFp = i.getBooleanExtra("on", !sHideFp);
                         saveState();
@@ -3253,6 +3270,7 @@ public class Main extends XposedModule {
                         out.putInt("fullBlur", sFullBlur);
                         out.putInt("coverstyle", sCoverCardStyle.mode);
                         out.putBoolean("hideplayerbackground", sHidePlayerBackground);
+                        out.putBoolean("coverontap", sCoverOnTap);
                         out.putInt("wallpaperdim", sWallpaperDim);
                         out.putFloat("covercardfill", sCoverCardStyle.fill);
                         out.putFloat("covercardpos", sCoverCardStyle.pos);
@@ -7116,6 +7134,11 @@ public class Main extends XposedModule {
      */
     private static void enterCoverMode(boolean animate) {
         sCoverMode = true;
+        if (sCoverOnTap) {
+            LockLyrics.setPlayerChosen(true);
+            CanvasHostBridge.suspendForBackdrop();
+            CoverBackdrop.sync(true);
+        }
         StatusBarArtwork.refresh();
         // The cover is the media card's alone: the focus notifications stay out of the stack.
         LockIslands.INSTANCE.setCoverMode(true);
@@ -7150,7 +7173,8 @@ public class Main extends XposedModule {
         // The response is the slider's, read when the transition starts and nowhere else, which
         // is what makes a change land on the next transition and never mid-flight. The cut-out
         // goes with it; both are LockHold's, shared with the immersive pages.
-        LockHold.take(LockHold.Owner.COVER, animate, "cover");
+        if (!coverOnTapResting())
+            LockHold.take(LockHold.Owner.COVER, animate, "cover");
         CanvasHostBridge.sceneChanged();
         // An immersive page closing in the same tap fades out onto this cover, not ahead of it.
         ImmersiveHost.coverEntering();
@@ -7533,10 +7557,11 @@ public class Main extends XposedModule {
     }
 
     static void prepareAodArtwork(boolean heldAod) {
+        // Asleep straight from an app there are no lock-screen rows; the live reading is the doze transition's.
         if (sAodArtworkExpanded || !AodArtworkPolicy.shouldExpand(sCoverMode,
                 effectiveCoverStyle().mode == CoverCardStyle.CARD, heldAod,
                 sAodArtworkPolicy.notificationsExpanded(
-                        LockIslands.INSTANCE.notificationArtworkExpanded()),
+                        !CoverCardLayer.hiddenUnlocked() && LockIslands.INSTANCE.notificationArtworkExpanded()),
                 LockLyrics.userWantsCompactArtwork())) return;
         boolean compact = LockLyrics.wantsCompactArtwork();
         sAodArtworkFromCompact = compact;
@@ -9240,9 +9265,11 @@ public class Main extends XposedModule {
                 boolean undoLyricsTap = sArtHidLyrics && CoverMorphLayer.active();
                 sArtHidLyrics = false;
                 if (sCoverMode && LockLyrics.compactWithoutLyrics()) {
+                    boolean resting = coverOnTapResting();
                     beginCompactArtworkMorph(true);
                     FullCoverPop.play(true);
                     LockLyrics.setPlayerChosen(false);
+                    if (resting) CoverBackdrop.sync(true);
                     LockLyrics.setArtworkCompact(false);
                     // With lyrics the line above does nothing, and the blur still has to lift.
                     LockLyrics.refresh();

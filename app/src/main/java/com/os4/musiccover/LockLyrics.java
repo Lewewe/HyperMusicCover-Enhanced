@@ -781,6 +781,11 @@ final class LockLyrics {
         return sPlayerChosen;
     }
 
+    /** The player alone by the user's choice: picked, or the lyricless cover folded away. */
+    static boolean playerPage() {
+        return sPlayerChosen || sArtworkPage.compactWithoutLyrics(sEnabled, hasLyrics());
+    }
+
     /**
      * The big cover tapped on a song whose lyrics are hidden: the player alone over the blurred
      * artwork, a long press on its thumbnail there to show them, rather than out of the cover
@@ -805,7 +810,10 @@ final class LockLyrics {
 
     /** The user's page choice, before temporary notification or AOD overrides. */
     static boolean userWantsCompactArtwork() {
-        return wanted() && hasLyrics() || sArtworkPage.compactWithoutLyrics(sEnabled, hasLyrics());
+        // The player alone is a choice too: without it a notification that came in grew the
+        // square back in the doze, and only on the sleeps that had one.
+        return wanted() && hasLyrics() || sArtworkPage.compactWithoutLyrics(sEnabled, hasLyrics())
+                || sPlayerChosen;
     }
 
     static boolean wantsCompactArtwork() {

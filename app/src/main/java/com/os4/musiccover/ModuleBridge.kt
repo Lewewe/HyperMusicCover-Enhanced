@@ -45,6 +45,7 @@ object ModuleBridge {
         val fullBlur: Int = 50,
         val coverStyle: Int = 0,
         val hidePlayerBackground: Boolean = false,
+        val coverOnTap: Boolean = false,
         val wallpaperDim: Int = 35,
         /**
          * The square's side as a share of the room between the clock and the media card, and
@@ -446,6 +447,9 @@ object ModuleBridge {
 
     fun setHidePlayerBackground(context: Context, on: Boolean) =
         send(context, "hideplayerbackground") { putExtra("on", on) }
+
+    fun setCoverOnTap(context: Context, on: Boolean) =
+        send(context, "coverontap") { putExtra("on", on) }
 
     fun setCover(context: Context, on: Boolean) = send(context, "pushart") { putExtra("on", on) }
 
@@ -907,6 +911,7 @@ object ModuleBridge {
             fullBlur = b.getInt("fullBlur", 50),
             coverStyle = b.getInt("coverstyle", 0),
             hidePlayerBackground = b.getBoolean("hideplayerbackground", false),
+            coverOnTap = b.getBoolean("coverontap", false),
             wallpaperDim = b.getInt("wallpaperdim", 35),
             coverCardFill = b.getFloat("covercardfill", 1f),
             coverCardPos = b.getFloat("covercardpos", 0.5f),

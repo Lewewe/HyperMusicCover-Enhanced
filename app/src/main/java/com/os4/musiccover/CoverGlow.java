@@ -44,7 +44,7 @@ final class CoverGlow {
         }
         boolean base = now != null && !now.isRecycled() && sRegions != null && Main.coverModeOn()
                 && Main.effectiveCoverStyle().mode == CoverCardStyle.CARD
-                && !Main.sHidePlayerBackground;
+                && !CoverBackdrop.hidden();
         boolean drift = Main.sGlowDrift;
         // The mesh is a way of moving the colours; standing still they are always the regions.
         boolean mesh = drift && Main.sMeshBackdrop;

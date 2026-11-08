@@ -226,6 +226,7 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
                 }
                 if (!lastLockEligible) {
                     lastLockEligible = true;
+                    hiddenUnlocked = false;
                     start();
                 }
                 // The pad coming up or going moves nothing of ours, so nothing else asks for the
@@ -413,10 +414,17 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
         }
     }
 
+    static boolean hiddenUnlocked() {
+        return sView != null && sView.hiddenUnlocked;
+    }
+
     static void expandForAod(boolean fromThumbnail) {
         CoverCardLayer v = sView;
         if (v == null) return;
-        v.aodExpandPending = fromThumbnail || v.opacity <= 0f;
+        // Grown out of the player's thumbnail only when that thumbnail was on screen. Asleep
+        // straight from an app it was not, its box is stale, and the square popped out of a
+        // corner on some sleeps and faded in place on others; it fades in place on all of them.
+        v.aodExpandPending = !v.hiddenUnlocked && (fromThumbnail || v.opacity <= 0f);
         if (v.bigCoverPlace != null) v.lockPlace = v.bigCoverPlace;
         v.start();
     }
@@ -436,7 +444,13 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
         // A sleep straight from an app must not hold them through its doze.
         lockPlace = null;
         bigCoverPlace = null;
+        // A sleep from an app takes its new place, not the last lock screen's drawn size.
+        drawX = goalX = Float.NaN;
+        hiddenUnlocked = true;
     }
+
+    /** Hidden by an unlock and not drawn on a lock screen since: no thumbnail is on screen. */
+    private boolean hiddenUnlocked;
 
     /**
      * How far the PIN pad's blur has come over the square, 0..1.
@@ -749,6 +763,10 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
     private CoverCardStyle.Rect lockPlace;
     private CoverCardStyle.Rect bigCoverPlace;
     private CoverCardStyle.Rect lastGoal;
+    private CoverCardStyle.Rect aodUnshrunkGoal;
+    private float aodShrinkMedia = Float.NaN;
+    private float aodShrinkSeconds;
+    private static final float AOD_SHRINK_SETTLE_S = 0.15f;
     private boolean aodExpandPending;
     /**
      * The place of the landed cover look, Phase.ON only - what the big clock's fall and wake
@@ -805,6 +823,11 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
     private boolean followPlace(ClockCollapse.Phase phase, float dt, float response,
                                 float target) {
         CoverCardStyle.Rect goal;
+        if (phase != ClockCollapse.Phase.AOD || (afterBigClock && restPlace != null)) {
+            aodShrinkSeconds = 0f;
+            aodShrinkMedia = Float.NaN;
+            aodUnshrunkGoal = null;
+        }
         if (afterBigClock && restPlace != null) {
             // Placed live, the big clock's bottom pushes it small and low against the media card.
             goal = restPlace;
@@ -815,6 +838,19 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
             CoverCardStyle.Rect held = Main.aodArtworkExpanded() && bigCoverPlace != null
                     ? bigCoverPlace : lockPlace;
             goal = held == null ? null : aodPlace(held);
+            if (goal != null && goal.side < held.side - 0.5f) {
+                // A focus card can rise for a few frames while the doze lays out, and the stack
+                // glides down for ~400ms after a sleep from an app: only a card at rest shrinks it.
+                float media = Main.liveMediaTop();
+                aodShrinkSeconds = Math.abs(media - aodShrinkMedia) <= 1f ? aodShrinkSeconds + dt : 0f;
+                aodShrinkMedia = media;
+                if (aodShrinkSeconds < AOD_SHRINK_SETTLE_S) {
+                    goal = aodUnshrunkGoal != null ? aodUnshrunkGoal : held;
+                }
+            } else {
+                aodShrinkSeconds = 0f;
+                aodUnshrunkGoal = goal;
+            }
         } else {
             goal = placeNow();
             // An unlock shrinks the place frame by frame for 30ms before going-away is set (1106 to
@@ -1079,7 +1115,7 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
         boolean backdrop = Main.coverCardBackdropInAod() && current != null
                 && current.aodBackdrop != null;
         // Wallpaper mode and Canvas own their AOD backdrop; never overlay an artwork wash.
-        if (Main.sHidePlayerBackground || CanvasHostBridge.ownsVideoBackdrop()) wash.hideNow();
+        if (CoverBackdrop.hidden() || CanvasHostBridge.ownsVideoBackdrop()) wash.hideNow();
         else wash.show(backdrop);
         int visibility = opacity > 0f || target > 0f ? VISIBLE : GONE;
         if (getVisibility() != visibility) setVisibility(visibility);

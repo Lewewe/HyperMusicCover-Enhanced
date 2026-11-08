@@ -30,12 +30,12 @@ final class CoverBackdrop {
     }
 
     static boolean hidden() {
-        return Main.sHidePlayerBackground;
+        return Main.sHidePlayerBackground || Main.coverOnTapResting();
     }
 
     static boolean nativeWallpaperScene() {
         return Main.coverModeOn() && hidden() && LockLyrics.compactWithoutLyrics()
-                && !LockLyrics.hasLyrics();
+                && (!LockLyrics.hasLyrics() || Main.coverOnTapResting());
     }
 
     static void sync(boolean force) {
@@ -79,7 +79,7 @@ final class CoverBackdrop {
     }
 
     private static void updateDim() {
-        if (dimLayer == null && !Main.sHidePlayerBackground) return;
+        if (dimLayer == null && !hidden()) return;
         android.view.ViewGroup layer = CoverPush.coverLayer();
         if (layer == null) return;
         android.view.ViewGroup parent = layer;
@@ -116,7 +116,7 @@ final class CoverBackdrop {
         refreshVisibility();
         boolean dimScene = Main.coverModeOn() && (!LockLyrics.wantsCompactArtwork()
                 || LockLyrics.hasLyrics() && LockLyrics.wantsWindow());
-        float alpha = Main.sHidePlayerBackground && dimScene ? Main.sWallpaperDim / 100f : 0f;
+        float alpha = hidden() && dimScene ? Main.sWallpaperDim / 100f : 0f;
         if (alpha == dimTarget) return;
         dimTarget = alpha;
         dimLayer.animate().cancel();

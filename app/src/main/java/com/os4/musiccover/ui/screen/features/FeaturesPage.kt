@@ -541,7 +541,8 @@ private fun CoverGroup(
             title = stringResource(R.string.cover_hide_player_background),
             summary = stringResource(R.string.cover_hide_player_background_summary),
             checked = module.hidePlayerBackground,
-            enabled = enabled && !changingBackdrop,
+            // Cover on tap already puts the player alone on the wallpaper; the open cover keeps its blur.
+            enabled = enabled && !changingBackdrop && !module.coverOnTap,
             onCheckedChange = { hide ->
                 changingBackdrop = true
                 scope.launch {
@@ -552,6 +553,31 @@ private fun CoverGroup(
                     } finally {
                         changingBackdrop = false
                     }
+                }
+            },
+        )
+        SwitchPreference(
+            title = stringResource(R.string.cover_on_tap),
+            summary = stringResource(R.string.cover_on_tap_summary),
+            checked = module.coverOnTap,
+            enabled = enabled && !changingBackdrop,
+            onCheckedChange = { on ->
+                if (on && module.hidePlayerBackground) {
+                    // The wallpaper background is blocked while this is on, so it is turned off first.
+                    changingBackdrop = true
+                    scope.launch {
+                        try {
+                            if (ModuleBridge.applyHidePlayerBackground(context, false)) {
+                                onChange(module.copy(hidePlayerBackground = false, coverOnTap = true))
+                                ModuleBridge.setCoverOnTap(context, true)
+                            }
+                        } finally {
+                            changingBackdrop = false
+                        }
+                    }
+                } else {
+                    onChange(module.copy(coverOnTap = on))
+                    ModuleBridge.setCoverOnTap(context, on)
                 }
             },
         )

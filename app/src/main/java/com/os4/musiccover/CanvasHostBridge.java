@@ -27,7 +27,7 @@ final class CanvasHostBridge {
     /** The extension's last word, for a release decided between its frames. */
     private static boolean lastReady, lastTemporary;
     static void suspendForBackdrop() {
-        if (!Main.sHidePlayerBackground || !canvasReady && !frozenInAod
+        if (!CoverBackdrop.hidden() || !canvasReady && !frozenInAod
                 && !backdropHeld && !clockOwned) return;
         canvasReady = frozenInAod = backdropHeld = false;
         syncDepth();
@@ -142,7 +142,7 @@ final class CanvasHostBridge {
         String track = intent.getStringExtra("track");
         Bundle out = new Bundle();
         try {
-            if (Main.sHidePlayerBackground) {
+            if (CoverBackdrop.hidden()) {
                 suspendForBackdrop();
                 out.putBoolean("canvasBlocked", true);
                 out.putBoolean("canvasVisible", false);

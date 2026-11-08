@@ -414,6 +414,8 @@
     <string name="hypercanvas_show_in_pill_summary">Keep Canvas visible when the player folds into the pill. When off, the video is hidden and paused.</string>
     <string name="cover_hide_player_background">Use wallpaper background</string>
     <string name="cover_hide_player_background_summary">Show your wallpaper behind the floating cover and lyrics instead of the blurred artwork background. Suspends HyperCanvas and disables its switch. If HyperCanvas is installed, changing this option restarts Spotify and System UI.</string>
+    <string name="cover_on_tap">Cover on tap</string>
+    <string name="cover_on_tap_summary">Playing music shows only the player over your wallpaper. Tap the artwork to open the cover.</string>
     <string name="hypercanvas_background_blocked">Suspended. Turn off “Use wallpaper background” to use HyperCanvas.</string>
     <string name="media_visualization_tab">Audio visualization</string>
     <string name="media_appearance_tab">Appearance</string>

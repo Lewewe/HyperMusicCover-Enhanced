@@ -60,12 +60,12 @@ final class StatusBarArtwork {
                 canvas || Main.sCoverMode && !CoverBackdrop.nativeWallpaperScene(), Main.keyguardLocked(),
                 scene.getBlocksMiniPlayer() || scene.getControlCenterIsActive()
                         || scene.getKeyguardGoingAway(),
-                scene.getAodActive(), canvas || Main.sHidePlayerBackground ? 0d : sLuminance);
+                scene.getAodActive(), canvas || CoverBackdrop.hidden() ? 0d : sLuminance);
     }
 
     /** Canvas and wallpaper-backed artwork use white icons over their dimmed backdrop. */
     private static boolean darkIcons() {
-        return !CanvasHostBridge.ownsVideoBackdrop() && !Main.sHidePlayerBackground
+        return !CanvasHostBridge.ownsVideoBackdrop() && !CoverBackdrop.hidden()
                 && StatusBarContrast.darkIcons(sLuminance);
     }
 

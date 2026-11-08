@@ -98,6 +98,7 @@ object SettingsBackup {
             json.put(KEY_FULL_BLUR, module.fullBlur)
             json.put(KEY_COVER_STYLE, module.coverStyle)
             json.put("hidePlayerBackground", module.hidePlayerBackground)
+            json.put("coverOnTap", module.coverOnTap)
             json.put("wallpaperDim", module.wallpaperDim)
             if (module.clockSize > 0f) json.put(KEY_CLOCK_SIZE, module.clockSize.toDouble())
             json.put(KEY_CARD_TITLE_TAP, module.mcTitleTap)
@@ -149,6 +150,9 @@ object SettingsBackup {
             // Only when the file has one: a file without the module's half (exported while the
             // module did not answer, or from before it was included) used to reset it to FULL.
             if (obj.has("wallpaperDim")) ModuleBridge.setWallpaperDim(context, obj.getInt("wallpaperDim"))
+            if (obj.has("coverOnTap")) {
+                ModuleBridge.setCoverOnTap(context, obj.getBoolean("coverOnTap"))
+            }
             if (obj.has("hidePlayerBackground")) {
                 ModuleBridge.setHidePlayerBackground(context, obj.getBoolean("hidePlayerBackground"))
             }
