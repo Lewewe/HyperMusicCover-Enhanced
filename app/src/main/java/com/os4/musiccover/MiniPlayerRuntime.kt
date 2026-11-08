@@ -6201,7 +6201,7 @@ private class MiniPlayerController(
      * 2026-09-25). Null when it is neither.
      */
     fun cardHeldDy(card: View): Float? {
-        spread?.let { s -> s.media?.takeIf { viewWithin(it.native, card) }?.let {
+        spread?.takeUnless { it.phase == SPREAD_OPEN }?.let { s -> s.media?.takeIf { viewWithin(it.native, card) }?.let {
             // Native translation can change before the cover's pre-draw reads this offset.
             poseSpreadMedia(s)
             return it.dy
@@ -7313,6 +7313,9 @@ private class MiniPlayerController(
         var foldLast = 0L
         /** When the fold last asked the stack for NUMBER (see foldColorOs). */
         var foldAskedAt = 0L
+        /** The held media card's offset last frame, and how many frames it has stood there. */
+        var foldMediaDy = Float.NaN
+        var foldMediaStill = 0
         /** Folding: each card's place in the list as the fold began, centre x and top (closeFrom). */
         var closeFrom: Map<View, FloatArray>? = null
     }
@@ -7542,8 +7545,10 @@ private class MiniPlayerController(
         s.phase = SPREAD_OPENING
         // A flick released before row layout still needs the same continuous opening clock.
         if (colorOs() && held == null && s.footerBottom != null && s.stackSeat == SEAT_BIG) {
-            s.letGo = Jelly(if (s.items.isEmpty()) ColorOsNotificationMotion.openingResponse(s.notificationCount) else SPREAD_ROW_RESPONSE,
-                if (s.items.isEmpty()) ColorOsNotificationMotion.OPEN_DAMPING else SPREAD_FOLD_DAMPING)
+            val smoothOpen = s.items.isEmpty() || s.lead != null
+            s.letGo = Jelly(
+                if (smoothOpen) ColorOsNotificationMotion.openingResponse(s.notificationCount) else SPREAD_ROW_RESPONSE,
+                if (smoothOpen) ColorOsNotificationMotion.OPEN_DAMPING else SPREAD_FOLD_DAMPING)
                 .apply { target = 1f }
         }
         s.since = android.os.SystemClock.uptimeMillis()
@@ -7862,13 +7867,21 @@ private class MiniPlayerController(
         val native = media.native
         val parent = native.parent as? View ?: return
         parent.getLocationOnScreen(media.xy)
-        media.closingFrom = media.xy[1] - parent.scrollY + native.top + native.translationY + media.dy
+        val drawnY = if (pinned?.get() === native) {
+            val y = pinnedAt ?: pinY.value
+            unpinCard()
+            y
+        } else native.translationY + media.dy
+        media.closingFrom = media.xy[1] - parent.scrollY + native.top + drawnY
         media.closeAt = s.progress.coerceAtLeast(0.001f)
         media.closeOverlap = null
     }
 
     private fun releaseSpreadMedia(s: Spread) {
-        s.media?.let { it.native.setAnimationMatrix(it.saved) }
+        s.media?.let {
+            if (pinned?.get() === it.native) unpinCard()
+            it.native.setAnimationMatrix(it.saved)
+        }
         s.media = null
     }
 
@@ -8805,7 +8818,8 @@ private class MiniPlayerController(
         if (s.phase == SPREAD_OPENING && s.letGo?.let { kotlin.math.abs(p - it.target) > 0.001f } == true) return
         // A finished morph must not hand back to a native scroll still 100px short of LIST.
         if (s.phase == SPREAD_OPENING && s.letGo?.target == 1f && s.footerBottom != null &&
-            s.items.isEmpty() && !s.toStack && !s.rearHandoff.scrolling && kotlin.math.abs(y - s.cardsY) > dp(2f) &&
+            (s.items.isEmpty() || s.lead != null) && !s.toStack && !s.rearHandoff.scrolling &&
+            kotlin.math.abs(y - s.cardsY) > (if (s.items.any { it.key != MUSIC_ISLAND }) 1 else dp(2f)) &&
             android.os.SystemClock.uptimeMillis() - s.since < SPREAD_GIVE_UP_MS) return
         // At an end and the stack already reading that state, no finger on it: done now. The fold
         // overshoots - the scroll ran to -275 and took 700ms coming back to 0 - and waiting for it
@@ -8900,9 +8914,15 @@ private class MiniPlayerController(
             s.progress = f.value.coerceAtLeast(-0.05f)
             notificationStack()?.invalidate()
         }
-        // Keep the drawn player until the finger lets go and native layout catches up.
+        // Keep the drawn player until the finger lets go and native layout catches up. With a focus
+        // row still in the folded stack the native card rests a few px off the held one (6px,
+        // 2026-11-09) and never closes the gap: standing still counts as caught up, or the spread
+        // never ended and the card stayed up where the list had it until the next touch.
         val mediaSettled = s.media?.let {
-            !it.native.isAttachedToWindow || !stackDragged() && kotlin.math.abs(it.dy) < dp(1f)
+            s.foldMediaStill = if (kotlin.math.abs(it.dy - s.foldMediaDy) < 0.5f) s.foldMediaStill + 1 else 0
+            s.foldMediaDy = it.dy
+            !it.native.isAttachedToWindow || !stackDragged() &&
+                (kotlin.math.abs(it.dy) < dp(1f) || s.foldMediaStill >= SPREAD_STILL_FRAMES)
         } ?: true
         // Landed, and the stack folded under it (or long enough waiting for it).
         if (f.atRest() && mediaSettled && (NumState.inNumber == true || now - s.since > SPREAD_GIVE_UP_MS)) {
@@ -8981,18 +9001,21 @@ private class MiniPlayerController(
                 spreadTrace("spread to the pile at $stackY (pile p=${"%.2f".format(stackP)})")
             }
         }
-        val smoothOpen = s.footerBottom != null && s.stackSeat == SEAT_BIG && s.items.isEmpty() && f.toList && !s.toStack
-        if (colorOs()) s.letGo = Jelly(
-            if (smoothOpen) ColorOsNotificationMotion.openingResponse(s.notificationCount)
-                else if (s.footerBottom != null && s.stackSeat == SEAT_BIG) SPREAD_ROW_RESPONSE else SPREAD_FOLD_RESPONSE,
+        val capsuleOpening = s.footerBottom != null && s.stackSeat == SEAT_BIG
+        val smoothOpen = capsuleOpening && (s.items.isEmpty() || s.lead != null) && f.toList && !s.toStack
+        val response = when {
+            smoothOpen -> ColorOsNotificationMotion.openingResponse(s.notificationCount)
+            capsuleOpening -> SPREAD_ROW_RESPONSE
+            else -> SPREAD_FOLD_RESPONSE
+        }
+        if (colorOs()) s.letGo = Jelly(response,
             if (smoothOpen) ColorOsNotificationMotion.OPEN_DAMPING else SPREAD_FOLD_DAMPING).apply {
             value = s.progress
             target = if (f.toList || s.toStack) 1f else 0f
             // Continue the finger's motion instead of braking to zero on the release frame.
             val span = spreadOpeningSpan(s)
             if (!cancelled && span >= 1f) velocity = (-velocityY / span).coerceIn(-4f, 4f)
-            if (smoothOpen) velocity = ColorOsNotificationMotion.openingVelocity(value, velocity,
-                ColorOsNotificationMotion.openingResponse(s.notificationCount))
+            if (smoothOpen) velocity = ColorOsNotificationMotion.openingVelocity(value, velocity, response)
         }
         s.finger = null
         s.still = 0
@@ -9006,7 +9029,11 @@ private class MiniPlayerController(
     /** The list is open: the cards are the lock screen's own, the row's views put away. */
     private fun finishOpen(s: Spread, y: Int) {
         s.media?.let {
-            it.native.setAnimationMatrix(it.saved)
+            // The focus row can reach LIST before the native player reaches its seat.
+            if (colorOs() && s.items.any { item -> item.key != MUSIC_ISLAND } &&
+                !s.rearHandoff.scrolling && kotlin.math.abs(it.dy) > 0.5f) {
+                pinCard(it.native, emptyList(), from = it.native.translationY + it.dy)
+            } else it.native.setAnimationMatrix(it.saved)
             it.dy = 0f
         }
         endSpreadLead(s)
@@ -9136,6 +9163,11 @@ private class MiniPlayerController(
      */
     private fun endSpread(folded: Boolean, why: String) {
         val s = spread ?: return
+        val media = s.media?.takeIf {
+            folded && colorOs() && it.native.isAttachedToWindow &&
+                s.items.any { item -> item.key != MUSIC_ISLAND }
+        }
+        val mediaY = media?.let { it.native.translationY + it.dy }
         releaseSpreadMedia(s)
         spread = null
         Choreographer.getInstance().removeFrameCallback(spreadFrame)
@@ -9161,6 +9193,9 @@ private class MiniPlayerController(
             if (folded && item.key != MUSIC_ISLAND) hideRowUntilGone(native, item.key)
             else showRow(native)
         }
+        // Focus rows leave a layout pass later. Hold the pose the fold actually reached.
+        if (media != null && mediaY != null)
+            pinCard(media.native, s.items.map { it.key }, from = mediaY)
         player?.alpha = 1f
         // Whatever a cut-short morph or the capsule's fade left on its content.
         player?.setContentBlur(0f)
@@ -10024,7 +10059,8 @@ private class MiniPlayerController(
     fun stackForProbe(): ViewGroup? = notificationStack()
 
     fun spreadMotionForProbe(): String? {
-        val s = spread ?: return null
+        val pin = pinned?.get()?.let { "${it.translationY + pinnedDy},${it.translationY},$pinWant" }
+        val s = spread ?: return pin?.let { "idle pin=$it" }
         val box = s.lead?.containerBox()
         val row = s.leadRow
         return "ph=${s.phase} p=${s.progress} fill=${s.footerFill} scroll=${NumState.position()} " +
@@ -10033,7 +10069,7 @@ private class MiniPlayerController(
             "native=${row?.translationY},${row?.scaleX},${row?.transitionAlpha} " +
             "gesture=${MiniPlayerRuntime.stackGesture} up=${MiniPlayerRuntime.stackSwipedUp} " +
             "down=${MiniPlayerRuntime.stackPulledDown} drag=${stackDragged()} scrolling=${s.rearHandoff.scrolling} " +
-            "over=${NumState.overScroll()} media=${s.media?.let { "${it.top},${it.dy},${rowHeight(it.native)}" }}" + " art=${CoverMorphLayer.motionForProbe()}"
+            "over=${NumState.overScroll()} media=${s.media?.let { "${it.top},${it.dy},${rowHeight(it.native)}" }}" + " pin=$pin art=${CoverMorphLayer.motionForProbe()}"
     }
 
     fun rowTree(match: String): String {
