@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.os4.musiccover.LauncherIcon
 import com.os4.musiccover.LocaleHelper
+import com.os4.musiccover.LogExport
 import com.os4.musiccover.LogLevel
 import com.os4.musiccover.LsposedService
 import com.os4.musiccover.R
@@ -62,6 +63,18 @@ fun SettingsPageView(
                 } catch (_: Exception) {
                     Toast.makeText(context, R.string.export_failed, Toast.LENGTH_SHORT).show()
                 }
+            }
+        }
+    }
+
+    val logLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri: Uri? ->
+        uri?.let {
+            scope.launch {
+                val ok = LogExport.write(context, it)
+                Toast.makeText(context, if (ok) R.string.export_success else R.string.export_failed,
+                    Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -180,6 +193,11 @@ fun SettingsPageView(
                             level = levelValues[it]
                             LsposedService.setLogLevel(context, level)
                         },
+                    )
+                    ArrowPreference(
+                        title = stringResource(R.string.export_logs),
+                        summary = stringResource(R.string.export_logs_summary),
+                        onClick = { logLauncher.launch("HyperMusicCover_log.txt") }
                     )
                 }
 

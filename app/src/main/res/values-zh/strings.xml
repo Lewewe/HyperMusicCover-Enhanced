@@ -249,6 +249,8 @@
     <string name="log_level_summary">反馈问题前切到「详细」，再复现一次</string>
     <string name="log_level_normal">普通</string>
     <string name="log_level_verbose">详细</string>
+    <string name="export_logs">导出日志</string>
+    <string name="export_logs_summary">把本模块的 LSPosed 日志和最近的崩溃记录存成一个文件，反馈时附上即可。需要 Root</string>
     <string name="restart_confirm_summary">确认重启吗？</string>
     <string name="home_stale_title">模块已更新</string>
     <string name="home_stale_summary">%1$d 个进程还在运行旧版本，点按重启生效</string>
@@ -407,7 +409,7 @@
     <string name="tab_extensions">扩展</string>
     <string name="hypercanvas_title">Spotify Canvas 锁屏背景</string>
     <string name="hypercanvas_summary">将 Spotify Canvas 用作锁屏背景。视频就绪后，大封面会收回播放器，打开大封面或歌词页面时，视频背景会变得模糊并降低亮度。</string>
-    <string name="hypercanvas_missing">请先安装独立的 HyperCanvas 扩展 APK。</string>
+    <string name="hypercanvas_missing">仅支持 Spotify：请先安装 Spotify，再安装独立的 HyperCanvas 扩展 APK。LSPosed 作用域需同时勾选 Spotify 和系统界面。</string>
     <string name="hypercanvas_enable_module">请先在 LSPosed 中启用 HyperCanvas，扩展会请求批准缺少的作用域。</string>
     <string name="hypercanvas_approval">正在等待 LSPosed 批准，请查看 Spotify 和 SystemUI 的授权通知。</string>
     <string name="hypercanvas_restart">批准作用域后，请重启 Spotify 和 SystemUI 以加载 HyperCanvas。</string>
@@ -448,7 +450,7 @@
     <string name="hypercanvas_hook_connected">Hook · 已连接</string>
     <string name="hypercanvas_hook_disconnected">Hook · 未连接</string>
     <string name="hypercanvas_removed_restart_failed">HyperCanvas 已卸载，请手动重启 Spotify 和系统界面。</string>
-    <string name="hypercanvas_list_summary">Spotify 锁屏动态背景</string>
+    <string name="hypercanvas_list_summary">Spotify 锁屏动态背景 · 仅支持 Spotify，需先安装</string>
     <string name="extension_installed">已安装</string>
     <string name="extension_update">有可用更新</string>
     <string name="extension_downloaded">已下载</string>

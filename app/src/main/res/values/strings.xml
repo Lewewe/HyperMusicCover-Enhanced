@@ -243,6 +243,8 @@
     <string name="log_level_summary">Switch to Verbose and reproduce the problem before reporting it</string>
     <string name="log_level_normal">Normal</string>
     <string name="log_level_verbose">Verbose</string>
+    <string name="export_logs">Export logs</string>
+    <string name="export_logs_summary">Save this module\'s LSPosed log and recent crashes to one file to attach to a report. Needs root</string>
     <string name="restart_confirm_summary">Restart now?</string>
     <string name="home_stale_title">Module updated</string>
     <string name="home_stale_summary">%1$d processes are still running the old version. Tap to restart them.</string>
@@ -399,7 +401,7 @@
     <string name="tab_extensions">Extensions</string>
     <string name="hypercanvas_title">Spotify Canvas backgrounds</string>
     <string name="hypercanvas_summary">Use Spotify Canvas on the lock screen. When a video is ready, big cover art folds into the media player; the big cover and lyrics pages blur and dim the video.</string>
-    <string name="hypercanvas_missing">Install the separate HyperCanvas extension APK to enable this feature.</string>
+    <string name="hypercanvas_missing">Works with Spotify only: install Spotify, then the separate HyperCanvas extension APK. In LSPosed, Spotify and System UI must both be in its scope.</string>
     <string name="hypercanvas_enable_module">Enable HyperCanvas in LSPosed first. The extension will request approval for any missing scopes.</string>
     <string name="hypercanvas_approval">Waiting for LSPosed approval. Check its notification for Spotify and System UI.</string>
     <string name="hypercanvas_restart">After approving the scopes, restart Spotify and System UI to load HyperCanvas.</string>
@@ -440,7 +442,7 @@
     <string name="hypercanvas_hook_connected">Hooks · Connected</string>
     <string name="hypercanvas_hook_disconnected">Hooks · Disconnected</string>
     <string name="hypercanvas_removed_restart_failed">HyperCanvas removed. Please restart Spotify and System UI manually.</string>
-    <string name="hypercanvas_list_summary">Spotify Canvas backgrounds for your lock screen</string>
+    <string name="hypercanvas_list_summary">Spotify Canvas backgrounds for your lock screen · Requires the Spotify app</string>
     <string name="extension_installed">Installed</string>
     <string name="extension_update">Update available</string>
     <string name="extension_downloaded">Downloaded</string>
