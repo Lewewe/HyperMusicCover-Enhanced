@@ -2182,6 +2182,8 @@ public class Main extends XposedModule {
                     // the first frame after a SystemUI restart, instead of only once the phone
                     // has been locked again.
                     + "\ncardrect=" + sCardL + "," + sCardT + "," + sCardW + "," + sCardH
+                    // Also a measurement: the first doze after a SystemUI start needs it.
+                    + "\ncoverpose=" + ClockCollapse.coverRestPose()
                     + "\n").getBytes());
             af.finishWrite(f);
         } catch (Throwable t) {
@@ -2200,7 +2202,7 @@ public class Main extends XposedModule {
      * pre-draw listener while the card is animating in, and writing the file on every frame of
      * that would be a file write per frame for a number that settles in a few hundred ms.
      */
-    private static void saveStateSoon() {
+    static void saveStateSoon() {
         main().removeCallbacks(sSaveState);
         main().postDelayed(sSaveState, 500L);
     }
@@ -2343,6 +2345,7 @@ public class Main extends XposedModule {
                                 sCardW = Integer.parseInt(r[2]); sCardH = Integer.parseInt(r[3]);
                             }
                         }
+                        else if ("coverpose".equals(k)) ClockCollapse.restoreCoverRestPose(v);
                     } catch (Throwable t) {
                         Xp.log(TAG + "setting unreadable, keeping the default: "
                                 + k + "=" + v + " (" + t + ")");

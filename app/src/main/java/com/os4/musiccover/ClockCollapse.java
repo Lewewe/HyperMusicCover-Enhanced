@@ -904,6 +904,26 @@ final class ClockCollapse {
     private static float sCoverRestTop = Float.NaN, sCoverRestUnit, sCoverRestDate;
     private static float sPoseTop = Float.NaN, sPoseUnit = Float.NaN, sPoseDate = Float.NaN;
 
+    /**
+     * The rest pose survives a SystemUI restart. Without it, a cover that came on just before the
+     * first doze after a restart had no pose to hold: the doze kept a NaN pose, the OEM's big
+     * clock was drawn over the artwork, and the AOD showed the player alone (2026-11-14).
+     */
+    static String coverRestPose() {
+        return sCoverRestTop + "," + sCoverRestUnit + "," + sCoverRestDate;
+    }
+
+    static void restoreCoverRestPose(String v) {
+        String[] p = v.split(",");
+        if (p.length != 3) return;
+        float top = Float.parseFloat(p[0]);
+        // A pose that was never measured is written as NaN and stays unset.
+        if (Float.isNaN(top) || top < 0f || top > Main.sScreenH) return;
+        sCoverRestTop = top;
+        sCoverRestUnit = Float.parseFloat(p[1]);
+        sCoverRestDate = Float.parseFloat(p[2]);
+    }
+
     /** NaN counts as equal to NaN: a style with no date must not record a pose every frame. */
     private static boolean samePose(float a, float b) {
         if (Float.isNaN(a) && Float.isNaN(b)) return true;
@@ -918,9 +938,12 @@ final class ClockCollapse {
                 && AodArtworkPolicy.canRememberPose(Main.keyguardLocked() && Main.onKeyguardNow(),
                         MiniPlayerScene.INSTANCE.getKeyguardGoingAway(), Main.screenOnCached(),
                         top, unit, date, Main.sScreenH)) {
+            boolean moved = !samePose(top, sCoverRestTop) || !samePose(unit, sCoverRestUnit)
+                    || !samePose(date, sCoverRestDate);
             sCoverRestTop = top;
             sCoverRestUnit = unit;
             sCoverRestDate = date;
+            if (moved) Main.saveStateSoon();
         }
         if (samePose(top, sPoseTop) && samePose(unit, sPoseUnit) && samePose(date, sPoseDate)) {
             return;
