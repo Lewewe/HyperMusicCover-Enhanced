@@ -656,6 +656,10 @@ object ModuleBridge {
     fun setMiniConfig(context: Context, json: String) =
         send(context, "minicfg") { putExtra("json", MiniPlayerConfig.normalizedJson(json)) }
 
+    /** The lyrics SystemUI is showing, as LRC text; null when there are none or no answer. */
+    suspend fun lyricsLrc(context: Context): String? =
+        broadcast(context.applicationContext, intent("lyricexport"))?.data
+
     /**
      * Asks the module for everything at once. Returns a dead State rather than throwing when the
      * module is not there - "not installed" is a normal thing for this screen to display.

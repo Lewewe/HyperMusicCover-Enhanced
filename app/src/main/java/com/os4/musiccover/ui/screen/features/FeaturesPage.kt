@@ -3,6 +3,9 @@ package com.os4.musiccover.ui.screen.features
 import org.json.JSONObject
 import com.os4.musiccover.MiniPlayerConfig
 import android.content.Intent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
@@ -1029,6 +1032,50 @@ private fun TranslationCredentialsDialog(
     }
 }
 
+/** Saves the lyrics the lock screen is showing as an .lrc file. */
+@Composable
+private fun LyricExportPreference(enabled: Boolean) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var lrc by remember { mutableStateOf<String?>(null) }
+    // octet-stream, not text/plain: the picker would otherwise turn ".lrc" into ".lrc.txt".
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        val text = lrc ?: return@rememberLauncherForActivityResult
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) } != null
+                }.getOrDefault(false)
+            }
+            Toast.makeText(context, if (ok) R.string.export_success else R.string.export_failed,
+                Toast.LENGTH_SHORT).show()
+        }
+    }
+    ArrowPreference(
+        title = stringResource(R.string.lyrics_export),
+        summary = stringResource(R.string.lyrics_export_summary),
+        enabled = enabled,
+        onClick = {
+            scope.launch {
+                val text = ModuleBridge.lyricsLrc(context)
+                if (text.isNullOrBlank()) {
+                    Toast.makeText(context, R.string.lyrics_export_none, Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+                lrc = text
+                val tag = { k: String -> Regex("""^\[$k:(.*)]$""", RegexOption.MULTILINE)
+                    .find(text)?.groupValues?.get(1)?.trim() }
+                val name = listOfNotNull(tag("ar"), tag("ti")).joinToString(" - ")
+                    .ifBlank { "lyrics" }.replace(Regex("""[\\/:*?"<>|]"""), "_")
+                launcher.launch("$name.lrc")
+            }
+        },
+    )
+}
+
 @Composable
 private fun LyricSearchControls(
     enabled: Boolean,
@@ -1054,6 +1101,7 @@ private fun LyricSearchControls(
                     ModuleBridge.setLyricsSearchMode(context, it)
                 },
             )
+            LyricExportPreference(enabled)
         }
         if (showKeyDialog && module.lyricsSearchMode == 1 && module.spicyLyricsEnabled)  {
             SpicyLyricsKeyDialog(

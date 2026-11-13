@@ -2248,6 +2248,38 @@ final class LockLyrics {
     }
 
     /**
+     * The lyrics on screen as an LRC file, for the app's export button; null when there are none.
+     * A translation goes on its own line under the same timestamp, which most players read as a
+     * second line rather than a new one.
+     */
+    static String exportLrc() {
+        List<LyricLine> lines = sLines;
+        if (lines == null || lines.isEmpty()) return null;
+        StringBuilder sb = new StringBuilder();
+        MediaController mc = sController;
+        android.media.MediaMetadata md = mc == null ? null : mc.getMetadata();
+        if (md != null) {
+            String ti = md.getString(android.media.MediaMetadata.METADATA_KEY_TITLE);
+            String ar = md.getString(android.media.MediaMetadata.METADATA_KEY_ARTIST);
+            if (ti != null) sb.append("[ti:").append(ti).append("]\n");
+            if (ar != null) sb.append("[ar:").append(ar).append("]\n");
+        }
+        for (LyricLine l : lines) {
+            String stamp = lrcStamp(l.start);
+            sb.append(stamp).append(l.text).append('\n');
+            String tr = l.onlineTranslation != null ? l.onlineTranslation : l.translation;
+            if (tr != null && !tr.isEmpty()) sb.append(stamp).append(tr).append('\n');
+        }
+        return sb.toString();
+    }
+
+    static String lrcStamp(int ms) {
+        ms = Math.max(0, ms);
+        return String.format(java.util.Locale.ROOT, "[%02d:%02d.%02d]",
+                ms / 60000, ms / 1000 % 60, ms % 1000 / 10);
+    }
+
+    /**
      * The source list remains in the cache untouched, but online mode must never hand a
      * provider's translation to the renderer. Romanisation is retained as optional presentation
      * data, placed beneath the online result when the user enables it. This keeps the display

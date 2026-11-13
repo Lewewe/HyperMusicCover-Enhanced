@@ -318,6 +318,9 @@
     <string name="depth_open_restart_hint">请重启系统界面和锁屏编辑器以应用此更改。</string>
     <string name="lyrics_search_section">歌词搜索</string>
     <string name="lyrics_search_mode">搜索模式</string>
+    <string name="lyrics_export">导出当前歌词</string>
+    <string name="lyrics_export_summary">把锁屏正在显示的歌词保存为 .lrc 文件</string>
+    <string name="lyrics_export_none">当前没有显示歌词</string>
     <string name="lyrics_search_original">原版</string>
     <string name="lyrics_search_extended">扩展</string>
     <string name="lyrics_search_original_summary">使用原有歌词来源优先级与解析方式。</string>

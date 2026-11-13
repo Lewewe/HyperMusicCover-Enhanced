@@ -310,6 +310,9 @@
     <string name="depth_open_restart_hint">Restart System UI and the lock screen editor to apply this change.</string>
     <string name="lyrics_search_section">Lyric search</string>
     <string name="lyrics_search_mode">Search mode</string>
+    <string name="lyrics_export">Export current lyrics</string>
+    <string name="lyrics_export_summary">Save the lyrics shown on the lock screen as an .lrc file</string>
+    <string name="lyrics_export_none">No lyrics are showing right now</string>
     <string name="lyrics_search_original">Original</string>
     <string name="lyrics_search_extended">Extended</string>
     <string name="lyrics_search_original_summary">Uses the original source priority and lyric parser.</string>

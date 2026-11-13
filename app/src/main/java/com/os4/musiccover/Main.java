@@ -2396,6 +2396,8 @@ public class Main extends XposedModule {
                 try {
                     if ("info".equals(op)) {
                         dumpInfo();
+                    } else if ("lyricexport".equals(op)) {
+                        setResultData(LockLyrics.exportLrc());
                     } else if ("clockcontrast".equals(op)) {
                         setResultData(ClockBackdropContrast.describe());
                     } else if ("statusicons".equals(op)) {
