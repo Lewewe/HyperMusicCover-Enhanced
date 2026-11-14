@@ -644,7 +644,11 @@ final class CoverPush {
         sCoverGuard = new ViewTreeObserver.OnPreDrawListener() {
             @Override
             public boolean onPreDraw() { android.os.Trace.beginSection("MC coverGuard"); try {
-                counterAodShrink(cover);
+                // Still drawn inside the shrunk layout even counter-scaled: on the wake from the
+                // AOD it showed as a smaller box of blur inside the wallpaper window's, top and
+                // bottom (2026-11-14). The window is showing the same art full-screen, so while
+                // the layout is visibly shrunk the cover stays down and the window is the cover.
+                boolean shrunk = counterAodShrink(cover);
                 if (Main.sUncoverProbe) {
                     // PROBE `uncover`: our view out of the way, MIUI's layers left hidden, so the
                     // screen shows the wallpaper WINDOW - which is what this probe is for.
@@ -685,7 +689,7 @@ final class CoverPush {
                 // this the guard put it back on the next frame after anything hid it.
                 boolean backdropHidden = CoverBackdrop.hidden();
                 boolean suppressed = videoCoverSuppressed();
-                int want = onKeyguard && !suppressed ? View.VISIBLE : View.INVISIBLE;
+                int want = onKeyguard && !suppressed && !shrunk ? View.VISIBLE : View.INVISIBLE;
                 if (cover.getVisibility() != want) cover.setVisibility(want);
                 if (asleep && cover.getAlpha() > 0f) {
                     cover.animate().cancel();
@@ -743,7 +747,7 @@ final class CoverPush {
      * undone - an ancestor scaled by anything else (the unlock, the shade) is left to carry the
      * cover along as it always has.
      */
-    private static void counterAodShrink(View cover) {
+    private static boolean counterAodShrink(View cover) {
         float shrink = sAodShrink;
         View scaled = null;
         float offX = cover.getLeft(), offY = cover.getTop();
@@ -766,6 +770,9 @@ final class CoverPush {
             cover.setScaleX(want);
             cover.setScaleY(want);
         }
+        // Visibly shrunk only. The wake leaves the layout at 0.99999994, not 1, for as long as
+        // the lock screen stays up, and that counted as shrunk would keep the cover down for good.
+        return want > 1.001f;
     }
 
     /**

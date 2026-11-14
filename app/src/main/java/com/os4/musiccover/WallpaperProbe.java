@@ -3521,6 +3521,10 @@ public class WallpaperProbe {
             sSavedVideoAtMs = SystemClock.uptimeMillis();
             Xp.log(TAG + "videoWindowTakeover: the wallpaper's video was at "
                     + sSavedVideoPosMs + "ms");
+            // The way out in reverse: the reload drops the user's video in one frame, so it waits
+            // under SystemUI's cover until that has faded in over the video. Reloaded at once it
+            // landed 40ms into the fade and the background cut instead of dissolving (2026-11-14).
+            sReloadHoldUntil = SystemClock.uptimeMillis() + sFadeMs;
         }
         final boolean lyricBlur = sLyricBlur;
         final long checksum = sCurrentArtChecksum != 0
@@ -3600,7 +3604,7 @@ public class WallpaperProbe {
     /** The encoded cover goes into the engine's window. From the video worker. */
     private static void putCoverVideo(final Object eng, final int gen, final String path,
                                       final boolean lyricBlur) {
-        new Handler(Looper.getMainLooper()).post(() -> {
+        new Handler(Looper.getMainLooper()).postAtTime(() -> {
             if (gen != sTakeoverGen.get()) return;
             if (isDesktopEngine(eng) && !lockScreenUp()) {
                 // Unlocked while this encoded, on a shared video.
@@ -3624,8 +3628,11 @@ public class WallpaperProbe {
                 new Handler(Looper.getMainLooper()).postDelayed(
                         WallpaperProbe::clearTakeoverMark, TAKEOVER_SURVIVE_MS);
             });
-        });
+        }, Math.max(SystemClock.uptimeMillis(), sReloadHoldUntil));
     }
+
+    /** Until when a cover entering over the user's own video holds its reload. See above. */
+    private static volatile long sReloadHoldUntil;
 
     /**
      * Takes the cover off the engine it is on and gives that engine's window back to its own
