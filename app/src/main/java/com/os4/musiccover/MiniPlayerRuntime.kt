@@ -2165,8 +2165,8 @@ private class MiniPlayerController(
      */
     private fun followShortcuts() {
         val view = player ?: return
-        // The spread's morphs place the pill; out as the list, it is not drawn.
-        if (spread != null) {
+        // A spread without an island left in the pill owns its frame.
+        if (spread != null && spread?.rowSeats == null) {
             view.setAnimationMatrix(null)
             lastFollow.fill(0f)
             return
@@ -7304,6 +7304,9 @@ private class MiniPlayerController(
         var nudgeLast = 0L
         /** The capsule's rest place as the pull began: both ends of the morph are there. */
         var home: CoverMorphMotion.Box? = null
+        // Keep the capsule morph off the pill so the music can take its seat.
+        var rowSeats: Seats? = null
+        var leadView: MiniPlayerView? = null
         var footerBottom: Float? = null
         var footerFill = 0f
         var foldMorphEnd: Float? = null
@@ -7448,6 +7451,17 @@ private class MiniPlayerController(
         // Before the list moves the row: open, the capsule's rest rode up with the notifications,
         // and the card folded into a capsule 250px over its place, then dropped (2026-10-21).
         s.home = player?.restBoxOnScreen()
+        if (colorOs() && noPlayer && MUSIC_ISLAND in islandKeys && s.stackSeat == SEAT_BIG) {
+            s.leadView = prepareSmallView(STACK_ISLAND, pooled = true)?.also {
+                stylePillFace(it)
+                s.home?.let { home ->
+                    val xy = IntArray(2).also(host::getLocationOnScreen)
+                    it.setBaseTranslation(home.x - xy[0] - it.left, home.y - xy[1] - it.top)
+                }
+                it.alpha = 0f
+            }
+            if (s.leadView != null) s.rowSeats = Seats(big, small)
+        }
         s.since = android.os.SystemClock.uptimeMillis()
         // Read before the spread's rows come in (setSpread runs the pipeline on the next frame).
         s.focusBefore = NumState.focusCount()
@@ -7637,7 +7651,7 @@ private class MiniPlayerController(
     private fun startSpreadLead(s: Spread, toCards: Boolean) {
         s.lead?.cancel()
         s.lead = null
-        val pill = player ?: return
+        val pill = s.leadView ?: player ?: return
         // The list's first card, as ColorOS's capsule is (its proxy): every other card comes out
         // below it and folds back up under it. From the newest instead, not always the first,
         // the cards above it flew out over the capsule (recording 2026-10-25). By the stack's
@@ -7757,6 +7771,7 @@ private class MiniPlayerController(
             it.springNudgeBack(0f, 0f)
         }
         s.lead = null
+        s.leadView?.alpha = 0f
         // The morph leaves the first card's text in the capsule: its own back at once, not a
         // pipeline run later (the summary popped in 0.15 s after it had landed, 2026-10-21).
         if (had) handler.post { if (spread == null || spread?.phase == SPREAD_OPEN) refresh() }
@@ -7785,6 +7800,18 @@ private class MiniPlayerController(
 
     private fun applySpread(s: Spread, p: Float) {
         s.progress = p
+        s.rowSeats?.let { seats ->
+            val big = if (s.phase == SPREAD_CLOSING || s.letGo?.target == 0f) seats.big else MUSIC_ISLAND
+            if (selectedIsland != big) {
+                val oldBig = selectedIsland
+                val oldSmall = smallKey
+                selectedIsland = big
+                player?.clearNudge()
+                refresh()
+                startSwap(oldBig, oldSmall, intoSmall = big == seats.big,
+                    holdPill = big == seats.big, popIn = big == MUSIC_ISLAND)
+            }
+        }
         for (item in s.items) {
             val m = item.morph
             if (m != null) {
@@ -7944,9 +7971,10 @@ private class MiniPlayerController(
         // Not while the rows are still coming: the capsule faded to a blurred glass under the
         // finger, then came back sharp and jumped as its morph took it (the user, 2026-10-25).
         if (!led && s.phase != SPREAD_WAIT) {
-            fadeSeat(s.stackSeat, 1f - gone)
+            val capsule = s.leadView
+            if (capsule != null) capsule.alpha = 1f - gone else fadeSeat(s.stackSeat, 1f - gone)
             val blurMax = SPREAD_BLUR_PX * density() / COLOROS_DENSITY
-            if (s.stackSeat == SEAT_BIG) view?.setContentBlur(gone * blurMax)
+            if (s.stackSeat == SEAT_BIG) (capsule ?: view)?.setContentBlur(gone * blurMax)
         }
         if (pill == null) return
         val skip = s.items.mapNotNull { it.native?.takeIf { _ -> it.morph != null } }.toHashSet()
@@ -9050,12 +9078,13 @@ private class MiniPlayerController(
             item.standIn = false
             item.native?.let(::showRow)
         }
-        player?.visibility = View.INVISIBLE
+        if (s.rowSeats == null) player?.visibility = View.INVISIBLE
         player?.alpha = 1f
         smallIsland?.visibility = View.GONE
         smallIsland?.alpha = 1f
         if (s.items.any { it.key == MUSIC_ISLAND }) ensureNativeHeaderVisible()
         s.phase = SPREAD_OPEN
+        if (s.rowSeats != null) updateVisibility()
         s.rearHandoff.listOpened(MiniPlayerRuntime.stackGesture)
         s.cardsY = y
         s.still = 0
@@ -9175,6 +9204,15 @@ private class MiniPlayerController(
         spread = null
         Choreographer.getInstance().removeFrameCallback(spreadFrame)
         endSpreadLead(s)
+        s.leadView?.let {
+            endSwap()
+            recycleSmallView(it)
+        }
+        s.leadView = null
+        if (folded) s.rowSeats?.let {
+            selectedIsland = it.big
+            preferredSmall = it.small
+        }
         settleColorOsSpread(opened = !folded)
         for (item in s.items) {
             item.morph?.cancel()
@@ -9436,7 +9474,9 @@ private class MiniPlayerController(
     private var pillLandingBox: CoverMorphMotion.Box? = null
 
     /** The pill's place is a flight's - out of it and not let go, or coming home to it. */
-    private fun pillHeld(): Boolean = flight != null && flightHome == HOME_PILL &&
+    private fun pillHeld(): Boolean = spread?.let {
+        it.leadView != null && it.phase != SPREAD_WAIT && selectedIsland == it.rowSeats?.big
+    } == true || flight != null && flightHome == HOME_PILL &&
         selectedIsland == noteMorphKey && pillLandingBox == null &&
         // Pulled up, the pill itself follows the finger until the row is there to morph into.
         (morph != null || rowWaitKey == null)
@@ -10820,6 +10860,10 @@ private class MiniPlayerController(
         unpinCard()
         if (spread != null) {
             spread?.items?.forEach { it.morph?.cancel() }
+            spread?.takeIf { it.leadView != null }?.let { s ->
+                s.lead?.cancel()
+                s.leadView?.let(::recycleSmallView)
+            }
             spread = null
             LockIslands.setSpread(false)
         }
@@ -11334,6 +11378,12 @@ private class MiniPlayerController(
             // the pill shut till then: the pull went to swipe-to-unlock (filmed 2026-10-22).
             if (canShow() && !MiniPlayerScene.aodActive) view.setInteractionsEnabled(true)
         }
+        spread?.takeIf {
+            it.rowSeats != null && it.phase == SPREAD_OPEN && selectedIsMusic() && view.acceptsTouch()
+        }?.let {
+            NumState.goTo("NUMBER", anim = false, why = "music pill touched")
+            endSpread(folded = false, why = "music pill touched")
+        }
         val refused = when {
             view.visibility != View.VISIBLE -> "hidden"
             !view.isAttachedToWindow -> "detached"
@@ -11476,9 +11526,23 @@ private class MiniPlayerController(
             thumbShown = null
             lastTrack = ""
         }
-        // The row is out as the stack's list: its views are the spread's till it folds back,
-        // and it is put together again then (endSpread).
-        if (spread != null) return
+        // Keep the spread's seats frozen; only the island left in the pill is rebound.
+        spread?.let { s ->
+            if (s.rowSeats != null) {
+                val music = controller?.takeIf(::isUsable)
+                val note = selectedIsland?.let(LockIslands::noteFor)
+                val showsMusic = selectedIsMusic() && music != null
+                if (selectedIsMusic() && music != null) {
+                    trackMusic(music)
+                    bindMusic(player ?: return, music, config)
+                } else if (note != null) bindNote(player ?: return, note, config)
+                pillShowsMusic = showsMusic
+                pillUnbound = !selectedIsMusic() && note == null
+                updateVisibility()
+                schedulePosition()
+            }
+            return
+        }
         val musicMoving = group != null || musicComingDown || morph != null && noteMorphKey == null ||
             noteMorphKey == MUSIC_ISLAND || exchange?.has(MUSIC_ISLAND) == true
         // No music island without its card: a session outlives a dismissed card, and the row
@@ -12464,10 +12528,11 @@ private class MiniPlayerController(
 
     private fun updateVisibility() { android.os.Trace.beginSection("MC updateVisibility"); try {
         val view = player
-        // Spread out as the stack's list, the row, the small island and the media card are the
-        // spread's (endSpread hands them back).
-        if (spread != null) {
-            view?.setInteractionsEnabled(false)
+        // The spread owns its cards; only the music left in the pill can take touches.
+        spread?.let { s ->
+            view?.setInteractionsEnabled(s.rowSeats != null && s.phase == SPREAD_OPEN && selectedIsMusic() &&
+                canShow() && !MiniPlayerScene.aodActive && !MiniPlayerScene.blocksMiniPlayer &&
+                !MiniPlayerScene.controlCenterIsActive && !Main.miniPlayerControlCenterUp())
             return
         }
         val config = this.config
@@ -12927,7 +12992,7 @@ private class MiniPlayerController(
     private fun position() {
         updateNotificationCompacting()
         val view = player ?: return
-        if (view.visibility != View.VISIBLE || spread != null) return
+        if (view.visibility != View.VISIBLE || spread != null && spread?.rowSeats == null) return
         val small = smallKey != null
         val rest = pillRest(small) ?: return
         stylePillFace(view)
