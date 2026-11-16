@@ -827,14 +827,6 @@ final class CoverPush {
     static volatile int sVideoReloadSignals;
 
     /**
-     * The ceiling on a fade that is matched to the wallpaper process's own timing: a phone that
-     * was busy for a second on one transition must not leave the next one dissolving for a
-     * second and a half. The floor is coverFadeMs() itself, which the matched length never goes
-     * under (armCoverFade).
-     */
-    private static final long COVER_FADE_MAX_MS = 800L;
-
-    /**
      * How long the owed fade waits for that word before starting anyway.
      *
      * A fallback, not a timer: the cover video's encode is a few hundred milliseconds and the
@@ -864,13 +856,10 @@ final class CoverPush {
         // Started on the cover's first drawn frame, never held for the window. Held, the lock
         // screen sat on the user's video for the whole encode and reload - a third of a second
         // with the clock already collapsing - and then the cover arrived at once: "slow, and no
-        // transition". Instead the dissolve is stretched to the window's measured head start
-        // when that is the longer of the two, so it is still under way when the window swaps,
-        // and the glass and the cards change under a cover that is nearly opaque.
+        // transition". Not stretched to the window's head start either: the window now waits
+        // for this fade (WallpaperProbe.sReloadHoldUntil), and the gap it measured included that
+        // wait, so every entry dissolved slower than the one before it (2026-11-16).
         long ms = coverFadeMs();
-        if (sCoverFadeGapMs > 0) {
-            ms = Math.max(ms, Math.min(COVER_FADE_MAX_MS, sCoverFadeGapMs));
-        }
         sCoverFadeWaitMs = ms;
         sCoverFadeArmedAt = android.os.SystemClock.uptimeMillis();
         Main.main().removeCallbacks(sCoverFadeTimeout);
