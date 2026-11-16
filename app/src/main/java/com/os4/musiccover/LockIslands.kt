@@ -273,6 +273,9 @@ internal object LockIslands {
     /** The stack island tapped open: all of its notifications back in the stack, new ones too. */
     private var stackOut = false
 
+    /** The ordinary notifications are in the island, not out as the stack's list. */
+    fun stackInIsland(): Boolean = active && !stackOut
+
     /**
      * For NumStateProbe: ordinary notifications left in the stack instead of the stack island,
      * so the stack's own "N notifications" state can be looked at with them in it. Not saved.

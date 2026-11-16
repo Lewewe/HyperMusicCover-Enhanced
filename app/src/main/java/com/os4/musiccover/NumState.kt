@@ -88,9 +88,39 @@ internal object NumState {
                     .getOrNull() ?: target
             }
         }.onFailure { Xp.log("MCNum: hands-up unhookable: $it") }
+        // Pill only: a finger down where the "N notifications" line was is not the stack's. Read
+        // from the device's NotificationNumStateAreaTouchHandler: initOnDown marks the touch as
+        // the stack's, and a swipe up from there opened the list instead of unlocking (B8).
+        runCatching {
+            val handler = Xp.findClass("com.miui.systemui.notification.view.NotificationNumStateAreaTouchHandler", classLoader)
+            Xp.hookAll(handler, "initOnDown") { chain ->
+                val result = chain.proceed()
+                if (folding && MiniPlayerRuntime.pillOnlyNotifications()) {
+                    Xp.setBooleanField(chain.thisObject, "isDownInNumStateArea", false)
+                }
+                result
+            }
+        }.onFailure { Xp.log("MCNum: num state touch unhookable: $it") }
         // Wake on actual native scrolling, including STACK <-> LIST without number-state callbacks.
         runCatching {
             val stack = Xp.findClass("com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout", classLoader)
+            // Pill only, part two: folded into the island the stack is not always in its NUMBER
+            // state, and then it scrolls under any finger itself (setOwnScrollYByAnimOrDrag from
+            // customOverScrollBy, traced 2026-11-16) - the swipe up under the sensor opened the
+            // list instead of unlocking. A finger down on nothing shown is not the stack's then;
+            // one on a row or card still on screen (the media card) stays its own.
+            var blocked = false
+            Xp.hookAll(stack, "dispatchTouchEvent") { chain ->
+                val ev = chain.args.firstOrNull() as? android.view.MotionEvent
+                if (ev != null && ev.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
+                    blocked = folding && MiniPlayerRuntime.pillOnlyNotifications() && Main.onKeyguardNow() &&
+                        LockIslands.stackInIsland() && !onShownChild(chain.thisObject as ViewGroup, ev.y)
+                }
+                if (!blocked || ev == null) return@hookAll chain.proceed()
+                if (ev.actionMasked == android.view.MotionEvent.ACTION_UP ||
+                    ev.actionMasked == android.view.MotionEvent.ACTION_CANCEL) blocked = false
+                false
+            }
             for (name in listOf("setOwnScrollY", "setOverScrolledPixels")) {
                 runCatching {
                     Xp.hookAll(stack, name) { chain ->
@@ -110,6 +140,21 @@ internal object NumState {
             }
 
         }.onFailure { Xp.log("MCNum: artwork motion hooks unavailable: $it") }
+    }
+
+    /**
+     * A child of the stack drawn at [y]: shown, not faded out, its actual height covering it.
+     * A row in the island keeps alpha 1: it is hidden by its transitionAlpha (ours) or by the
+     * fold's numStateAlpha on its injector.
+     */
+    private fun onShownChild(stack: ViewGroup, y: Float): Boolean = (0 until stack.childCount).any { i ->
+        val v = stack.getChildAt(i)
+        val h = (runCatching { Xp.callMethod(v, "getActualHeight") }.getOrNull() as? Int) ?: v.height
+        val folded = runCatching {
+            (Xp.getObjectField(Xp.callMethod(v, "getInjector"), "numStateAlpha") as Float) <= 0.01f
+        }.getOrDefault(false)
+        v.visibility == View.VISIBLE && v.alpha > 0.01f && v.transitionAlpha > 0.01f && !folded &&
+            y >= v.y && y < v.y + h
     }
 
     fun addListener(l: (Boolean) -> Unit) { listeners.addIfAbsent(l) }

@@ -142,6 +142,11 @@ private fun MiniPlayerPage(blur: Boolean, refreshKey: Int, onBack: () -> Unit) {
                 }
                 SmallTitle(text = stringResource(R.string.mini_notifications_section))
                 Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    SwitchPreference(title = stringResource(R.string.mini_pill_only_notifications),
+                        summary = stringResource(R.string.mini_pill_only_notifications_summary),
+                        checked = config.optBoolean(MiniPlayerConfig.PILL_ONLY_NOTIFICATIONS),
+                        enabled = alive && config.optBoolean(MiniPlayerConfig.ENABLED),
+                        onCheckedChange = { push(MiniPlayerConfig.PILL_ONLY_NOTIFICATIONS, it) })
                     SwitchPreference(title = stringResource(R.string.mini_notification_compact),
                         summary = stringResource(when {
                             compactAvailable -> R.string.mini_notification_compact_summary

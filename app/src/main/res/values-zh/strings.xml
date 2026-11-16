@@ -327,6 +327,8 @@
     <string name="lyrics_search_extended_summary">使用扩展来源搜索与增强解析，可在下方设置歌词来源。</string>
     <string name="lyrics_display_section">显示</string>
     <string name="lyrics_behavior_section">行为</string>
+    <string name="mini_pill_only_notifications">仅从胶囊展开通知</string>
+    <string name="mini_pill_only_notifications_summary">只有在胶囊上向上滑动才会展开通知列表。关闭 HyperOS 自带的通知上滑手势，在其他位置上滑即可解锁。</string>
     <string name="mini_notification_compact">缩小通知胶囊</string>
     <string name="mini_notification_compact_summary">音乐播放器展开时缩小并下移通知胶囊，快捷按钮保持原位。</string>
     <string name="mini_notification_compact_unavailable">仅支持位置较低的屏下指纹，较高的屏下指纹及侧边指纹无法启用。</string>

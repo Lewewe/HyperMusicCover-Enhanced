@@ -319,6 +319,8 @@
     <string name="lyrics_search_extended_summary">Uses extended source search and enhanced parsing, with provider settings below.</string>
     <string name="lyrics_display_section">Display</string>
     <string name="lyrics_behavior_section">Behavior</string>
+    <string name="mini_pill_only_notifications">Open notifications from the pill only</string>
+    <string name="mini_pill_only_notifications_summary">Only swiping up on the pill opens the notification list. HyperOS\'s own swipe on the notifications is turned off, so swiping up elsewhere unlocks.</string>
     <string name="mini_notification_compact">Compact notification pill</string>
     <string name="mini_notification_compact_summary">Shrink and lower the notification pill while the media player is expanded, keeping shortcut buttons in place.</string>
     <string name="mini_notification_compact_unavailable">Requires a low under-display fingerprint sensor. High or side-mounted sensors are not supported.</string>

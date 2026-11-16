@@ -1002,6 +1002,9 @@ object MiniPlayerRuntime {
      */
     @JvmStatic fun islandsTakeRows(): Boolean = live().any { it.takesRows() }
 
+    /** Only the pill opens the notifications: HyperOS's own swipe on the folded stack is off. */
+    @JvmStatic fun pillOnlyNotifications(): Boolean = live().any { it.pillOnlyNotifications() }
+
     /** The pill is what the lock screen returns to, without starting a morph of its own. */
     @JvmStatic fun preferMini() = live().forEach { it.preferMini() }
 
@@ -11272,6 +11275,9 @@ private class MiniPlayerController(
     }
 
     fun takesRows(): Boolean = config.getBoolean(MiniPlayerConfig.ENABLED) && LockIslands.notes.isNotEmpty()
+
+    fun pillOnlyNotifications(): Boolean =
+        config.optBoolean(MiniPlayerConfig.ENABLED) && config.optBoolean(MiniPlayerConfig.PILL_ONLY_NOTIFICATIONS)
 
     fun wantsCardSwipe(): Boolean {
         if (!config.getBoolean(MiniPlayerConfig.ENABLED)) return false

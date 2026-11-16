@@ -61,6 +61,9 @@ object MiniPlayerConfig {
     /** ColorOS's torch, camera and capsule at their full size; the capsule gets shorter to fit. */
     const val COLOROS_FULL_SIZE = "colorOsFullSize"
 
+    /** Only a swipe up on the pill opens the notifications; HyperOS's swipe on the stack is off. */
+    const val PILL_ONLY_NOTIFICATIONS = "pillOnlyNotifications"
+
     const val COMPACT_NOTIFICATIONS = "compactNotifications"
     const val NOTIFICATION_SIZE = "notificationSizePercent"
     const val NOTIFICATION_DROP = "notificationDropDp"
@@ -84,6 +87,7 @@ object MiniPlayerConfig {
         NOTE_TEXT_SCROLL to true,
         COLOROS_FULL_SIZE to false,
         COMPACT_NOTIFICATIONS to false,
+        PILL_ONLY_NOTIFICATIONS to false,
         NOTIFICATION_SIZE to 80f,
         NOTIFICATION_DROP to 16f,
         BACKGROUND_BLUR to false,
@@ -122,7 +126,8 @@ object MiniPlayerConfig {
         val out = JSONObject()
         defaults.forEach { (key, fallback) ->
             out.put(key, if (key == ENABLED || key == MEDIA_COLLAPSED_DEFAULT || key == ADAPTIVE_WIDTH || key == BACKGROUND_BLUR || key == STATUS_AT_DATE || key == COMPACT_NOTIFICATIONS ||
-                key == LIST_WITHOUT_PLAYER || key == NOTE_TEXT_SCROLL || key == COLOROS_FULL_SIZE) {
+                key == LIST_WITHOUT_PLAYER || key == NOTE_TEXT_SCROLL || key == COLOROS_FULL_SIZE ||
+                key == PILL_ONLY_NOTIFICATIONS) {
                 runCatching { input.getBoolean(key) }.getOrDefault(fallback)
             } else if (key == PILL_STYLE) {
                 input.optInt(key, STYLE_COLOROS).coerceIn(STYLE_COLOROS, STYLE_HYPEROS)
