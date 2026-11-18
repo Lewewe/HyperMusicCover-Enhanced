@@ -7803,7 +7803,10 @@ private class MiniPlayerController(
         if (left > 1f) player?.let {
             it.setNudge(0f, -left)
             it.springNudgeBack(0f, 0f)
-        }
+        // The finger's lift held on the pill (beginNoteDrag) was the morph's to carry: carried
+        // home, the pill's own copy stayed, and it sat 77px up once the music pill no longer
+        // swapped in under the finger to clear it (the user, 2026-11-18).
+        } else if (had) player?.clearNudge()
         s.lead = null
         s.leadView?.alpha = 0f
         // The morph leaves the first card's text in the capsule: its own back at once, not a
