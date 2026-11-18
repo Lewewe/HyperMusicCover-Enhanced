@@ -2956,6 +2956,14 @@ private class MiniPlayerController(
         val ghostContent = Jelly(ALPHA_RESPONSE, ALPHA_DAMPING).apply { value = 0f; target = 1f }
         /** The old small island going into hiding where it is, on HIDDEN_EASE. */
         val ghostDisc = Jelly(HIDDEN_RESPONSE, HIDDEN_DAMPING).apply { value = 0f; target = 1f }
+        /** ColorOS: the old big island's stand-in going the way popIn brings one in, backwards. */
+        var poppingOut = false
+
+        /** How far popIn would be at this point of the way out: its path played backwards. */
+        fun popOutAt(now: Long): Float {
+            val i = ((now - started) * POP_PATH_HZ / 1000L).toInt()
+            return POP_IN_PATH[(POP_IN_PATH.size - 1 - i).coerceAtLeast(0)]
+        }
         var ghostFrom: CoverMorphMotion.Box? = null
         var ghost = false
         var disc = false
@@ -3005,7 +3013,8 @@ private class MiniPlayerController(
         fun atRest(now: Long) = if (kind == SWAP_UPDATE) width.atRest() && grown && newBlur.atRest() &&
             oldAlpha.atRest() else spring.atRest() && small.atRest() &&
             (kind != SWAP_PREV || pillKept || (now - started >= CONTENT_IN_DELAY_MS && contentIn.atRest())) &&
-            (!ghost || (ghostBox.atRest() && ghostContent.atRest())) && (!disc || ghostDisc.atRest())
+            (!ghost || (ghostBox.atRest() && ghostContent.atRest())) && (!disc || ghostDisc.atRest()) &&
+            (!poppingOut || (now - started) * POP_PATH_HZ / 1000L >= POP_IN_PATH.size)
     }
 
     private var swap: Swap? = null
@@ -3051,7 +3060,9 @@ private class MiniPlayerController(
                           /** The finger's speed let go, px/s: the pill's frame starts at it. */
                           flingPx: Float = 0f,
                           /** ColorOS: the next island takes the capsule as a notification comes in (Swap.popIn). */
-                          popIn: Boolean = false) {
+                          popIn: Boolean = false,
+                          /** ColorOS: the old big island has nowhere on screen to go, so it pops out where it is. */
+                          popOut: Boolean = false) {
         val view = player ?: return
         // A switch cut short goes on from what it was drawing, at its speed - the super island's
         // folme.to from the current value and velocity. Restarted from rest, the pill lost its
@@ -3160,6 +3171,12 @@ private class MiniPlayerController(
             s.ghostKey = oldBig
             // Two buttons in the big island: it had them if it was alone there.
             s.ghostSecond = if (oldSmall == null) 1f else 0f
+        }
+        // Gone in a frame as the card was pulled down or the list folded (the user, 2026-11-18).
+        if (popOut && !s.ghost && !s.ghostSmall && oldBig != null && oldBig != selectedIsland &&
+            oldRest != null && startGhost(oldBig, oldRest)) {
+            s.ghostFrom = oldRest
+            s.poppingOut = true
         }
         // The old small island into hiding (SmallIslandToHidden): a stand-in of it, where it is.
         // Also when the island leaving the pill takes the small place from it: with three
@@ -3565,6 +3582,11 @@ private class MiniPlayerController(
     }
 
     private fun applyGhost(s: Swap) {
+        if (s.poppingOut) {
+            val view = ghostPill ?: return
+            applyPopIn(view, s.ghostFrom ?: return, s.popOutAt(android.os.SystemClock.uptimeMillis()))
+            return
+        }
         if (s.ghostSmall) {
             // BigIslandToSmallIsland, on CHANGE_EASE: the island's own pill shrinks into the
             // small island's circle, its lines going first and its picture staying.
@@ -3636,6 +3658,7 @@ private class MiniPlayerController(
             it.endMorph()
             it.setContentBlur(0f)
             it.setContentAlpha(1f)
+            it.setAppearScale(1f)
             it.alpha = 1f
             it.visibility = View.GONE
         }
@@ -5647,7 +5670,7 @@ private class MiniPlayerController(
                 val oldSmall = smallKey
                 selectedIsland = MUSIC_ISLAND
                 refresh()
-                startSwap(oldBig, oldSmall, intoSmall = true)
+                startSwap(oldBig, oldSmall, intoSmall = true, popOut = colorOs())
             }
             refresh()
             position()
@@ -7813,7 +7836,7 @@ private class MiniPlayerController(
                 player?.clearNudge()
                 refresh()
                 startSwap(oldBig, oldSmall, intoSmall = big == seats.big,
-                    holdPill = big == seats.big, popIn = big == MUSIC_ISLAND)
+                    holdPill = big == seats.big, popIn = big == MUSIC_ISLAND, popOut = big == seats.big)
             }
         }
         for (item in s.items) {
@@ -13198,6 +13221,21 @@ private const val APPEAR_SCALE = 0.6f
 private const val APPEAR_BLUR_DP = 8f
 /** Below this share of the way it is fully faded out. */
 private const val APPEAR_FADE_FROM = 0.25f
+
+private const val POP_PATH_HZ = 120
+
+/** popIn's spring from 0 to rest, sampled at [POP_PATH_HZ]: backwards, an island popping out (Swap.popOutAt). */
+private val POP_IN_PATH: FloatArray by lazy {
+    val j = Jelly(APPEAR_RESPONSE, APPEAR_DAMPING).apply { value = 0f; target = 1f }
+    val path = ArrayList<Float>()
+    // To within 1%, not the spring's own rest: backwards, its long tail held the pill still first.
+    while ((kotlin.math.abs(j.value - 1f) >= 0.01f || kotlin.math.abs(j.velocity) >= 0.1f) && path.size < POP_PATH_HZ * 3) {
+        path += j.value
+        j.step(1f / POP_PATH_HZ)
+    }
+    path += 1f
+    path.toFloatArray()
+}
 private const val SHOW_RESPONSE = 0.35f
 private const val SHOW_DAMPING = 0.95f
 private const val HIDDEN_RESPONSE = 0.2f
