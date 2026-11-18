@@ -7832,20 +7832,31 @@ private class MiniPlayerController(
             if (colorOs()) it.coerceAtLeast(dp(NOTE_SPAN_MIN_DP * 2f).toFloat()) else it
         }
 
+    /**
+     * The music pill takes the seat only once the capsule has gone: let go into the list, or the
+     * pile opened. Under the finger it is not yet known which, and on a light pull to the pile it
+     * popped in before the capsule had become the pile's card (the user, 2026-11-18).
+     */
+    private fun seatSpreadRow(s: Spread) {
+        val seats = s.rowSeats ?: return
+        val music = s.phase == SPREAD_OPEN ||
+            // To the pile: half way, once the capsule has mostly become its card; at the open it
+            // came 0.6s after the let-go, too late (the user, 2026-11-18).
+            s.phase == SPREAD_OPENING && s.letGo?.target == 1f && (!s.toStack || s.progress >= 0.5f)
+        val big = if (music) MUSIC_ISLAND else seats.big
+        if (selectedIsland == big) return
+        val oldBig = selectedIsland
+        val oldSmall = smallKey
+        selectedIsland = big
+        player?.clearNudge()
+        refresh()
+        startSwap(oldBig, oldSmall, intoSmall = big == seats.big,
+            holdPill = big == seats.big, popIn = big == MUSIC_ISLAND, popOut = big == seats.big)
+    }
+
     private fun applySpread(s: Spread, p: Float) {
         s.progress = p
-        s.rowSeats?.let { seats ->
-            val big = if (s.phase == SPREAD_CLOSING || s.letGo?.target == 0f) seats.big else MUSIC_ISLAND
-            if (selectedIsland != big) {
-                val oldBig = selectedIsland
-                val oldSmall = smallKey
-                selectedIsland = big
-                player?.clearNudge()
-                refresh()
-                startSwap(oldBig, oldSmall, intoSmall = big == seats.big,
-                    holdPill = big == seats.big, popIn = big == MUSIC_ISLAND, popOut = big == seats.big)
-            }
-        }
+        seatSpreadRow(s)
         for (item in s.items) {
             val m = item.morph
             if (m != null) {
@@ -9102,7 +9113,9 @@ private class MiniPlayerController(
         s.still = 0
         s.nudged = false
         NumState.goTo(if (s.toStack) "STACK" else if (f.toList) "LIST" else "NUMBER",
-            anim = !(colorOs() && s.footerBottom != null && s.items.isEmpty() && f.toList && !s.toStack),
+            // To the pile as well: the held viewport sat at LIST, and folme's 777 -> 395 slid the
+            // rear cards from list to pile as they faded in, a jump before the pile (2026-11-18).
+            anim = !(colorOs() && s.footerBottom != null && s.items.isEmpty() && (f.toList || s.toStack)),
             why = "spread let go")
         return true
     }
@@ -9134,6 +9147,7 @@ private class MiniPlayerController(
         smallIsland?.alpha = 1f
         if (s.items.any { it.key == MUSIC_ISLAND }) ensureNativeHeaderVisible()
         s.phase = SPREAD_OPEN
+        seatSpreadRow(s)
         if (s.rowSeats != null) updateVisibility()
         s.rearHandoff.listOpened(MiniPlayerRuntime.stackGesture)
         s.cardsY = y
