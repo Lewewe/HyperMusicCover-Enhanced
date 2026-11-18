@@ -5284,8 +5284,12 @@ private class MiniPlayerController(
                 glass.setAnimationMatrix(gooFollowMatrix)
             }
             // At rest the brackets stand about the rest frame; a nudge carries the pill off it.
-            val nx = if (gooActive) 0f else view.nudgeX
-            val ny = if (gooActive) 0f else view.nudgeY
+            // With the list's lead as the capsule they go with the lead: the hidden pill still
+            // held the finger's first lift, and they came back 77px up, then jumped (2026-11-18).
+            val lead = spread?.lead?.takeIf { it.active }?.containerBox()
+            val rest = if (lead != null) view.restBoxOnScreen() else null
+            val nx = if (gooActive) 0f else if (lead != null && rest != null) lead.cx() - rest.cx() else view.nudgeX
+            val ny = if (gooActive) 0f else if (lead != null && rest != null) lead.y - rest.y else view.nudgeY
             if (glass.translationX != gooGlassX + nx) glass.translationX = gooGlassX + nx
             if (glass.translationY != gooGlassY + ny) glass.translationY = gooGlassY + ny
         }
