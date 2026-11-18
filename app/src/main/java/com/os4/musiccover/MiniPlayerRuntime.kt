@@ -8832,6 +8832,20 @@ private class MiniPlayerController(
         }
         // ColorOS: pulled back down while still opening, it folds the same way as from open.
         if (colorOs() && s.phase == SPREAD_OPENING && s.finger?.ended != false && s.lead != null &&
+            s.items.none { it.morph != null } && stackDragged() && MiniPlayerRuntime.stackPulledDown &&
+            s.progress >= SPREAD_FOLD_BELOW) {
+            // All but open: folded as from the list. Folded from here, the cards behind the first
+            // kept the opening's fill and stood whole under it all the way down (the user's video, 2026-11-18).
+            val islandsY = NumState.scrollTo("NUMBER")
+            val y = NumState.position()
+            if (islandsY != null && y != null) {
+                s.lead?.cancel()
+                s.lead = null
+                closeFromList(s, islandsY, y)
+                spreadTrace("spread closing (pulled back all but open): " + describeSpread())
+            }
+        }
+        if (colorOs() && s.phase == SPREAD_OPENING && s.finger?.ended != false && s.lead != null &&
             s.items.none { it.morph != null } && stackDragged() && MiniPlayerRuntime.stackPulledDown) {
             s.closeFrom = spreadRows(s).associateWith { row ->
                 val xy = IntArray(2)
@@ -9174,42 +9188,47 @@ private class MiniPlayerController(
         // over the empty lock screen above the pile, and the pile stayed (recording 2026-10-25).
         val pileSwiped = colorOs() && s.toStack && MiniPlayerRuntime.lockPull > pullAt
         if (folded || pulledFar || pulled || pileSwiped) {
-            s.islandsY = islandsY
-            // The list's places now, before the stack piles them at its foot as it folds. From our
-            // pile, its cards fold from where they are drawn (still ours), not the stack's places.
-            s.closeFrom = if (colorOs() && !s.toStack) spreadRows(s).associateWith { row ->
-                val xy = IntArray(2)
-                (row.parent as? View)?.getLocationOnScreen(xy)
-                val bounds = android.graphics.RectF(0f, 0f, row.width.toFloat(), rowHeight(row))
-                row.matrix.mapRect(bounds)
-                floatArrayOf(xy[0] + row.left + bounds.centerX(), xy[1] + row.top + bounds.top,
-                    bounds.width(), bounds.height())
-            } else null
-            if (colorOs() && s.stackSeat == SEAT_BIG && !s.toStack) {
-                s.footerBottom = NumState.bottomOnKeyguard()
-                val footer = s.footerBottom
-                val home = s.home
-                val front = s.closeFrom?.values?.firstOrNull()
-                s.foldMorphEnd = if (footer != null && home != null && front != null && footer < home.y)
-                    ColorOsSpreadGeometry.foldMorphEnd(home.y, footer, front[1], front[3]) else null
-                s.footerFill = 1f
-                if (s.foldMorphEnd != null) notificationStack()?.let(::keepSpreadShown)
-            }
-            startSpreadMorphs(s, toCards = false)
-            s.phase = SPREAD_CLOSING
-            s.since = android.os.SystemClock.uptimeMillis()
-            s.still = 0
-            s.nudged = false
-            s.wasDragged = stackDragged()
-            s.letGoSent = false
-            s.fold = null
-            s.lastY = Int.MIN_VALUE
-            // The captured fold pose already includes the user's downward pull.
-            applySpread(s, if (s.foldMorphEnd != null) 1f else spreadProgress(s, y))
+            closeFromList(s, islandsY, y)
             spreadTrace("spread closing (${if (folded) "folded" else "pulled"} over=${NumState.overScrollParts()} toward=$toward): " + describeSpread())
             return
         }
         if (!listPulled() && !NumState.busy()) s.cardsY = y
+    }
+
+    /** Every card home from where it is drawn in the list: the fold from an open list. */
+    private fun closeFromList(s: Spread, islandsY: Int, y: Int) {
+        s.islandsY = islandsY
+        // The list's places now, before the stack piles them at its foot as it folds. From our
+        // pile, its cards fold from where they are drawn (still ours), not the stack's places.
+        s.closeFrom = if (colorOs() && !s.toStack) spreadRows(s).associateWith { row ->
+            val xy = IntArray(2)
+            (row.parent as? View)?.getLocationOnScreen(xy)
+            val bounds = android.graphics.RectF(0f, 0f, row.width.toFloat(), rowHeight(row))
+            row.matrix.mapRect(bounds)
+            floatArrayOf(xy[0] + row.left + bounds.centerX(), xy[1] + row.top + bounds.top,
+                bounds.width(), bounds.height())
+        } else null
+        if (colorOs() && s.stackSeat == SEAT_BIG && !s.toStack) {
+            s.footerBottom = NumState.bottomOnKeyguard()
+            val footer = s.footerBottom
+            val home = s.home
+            val front = s.closeFrom?.values?.firstOrNull()
+            s.foldMorphEnd = if (footer != null && home != null && front != null && footer < home.y)
+                ColorOsSpreadGeometry.foldMorphEnd(home.y, footer, front[1], front[3]) else null
+            s.footerFill = 1f
+            if (s.foldMorphEnd != null) notificationStack()?.let(::keepSpreadShown)
+        }
+        startSpreadMorphs(s, toCards = false)
+        s.phase = SPREAD_CLOSING
+        s.since = android.os.SystemClock.uptimeMillis()
+        s.still = 0
+        s.nudged = false
+        s.wasDragged = stackDragged()
+        s.letGoSent = false
+        s.fold = null
+        s.lastY = Int.MIN_VALUE
+        // The captured fold pose already includes the user's downward pull.
+        applySpread(s, if (s.foldMorphEnd != null) 1f else spreadProgress(s, y))
     }
 
     /**
