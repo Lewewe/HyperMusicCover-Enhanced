@@ -2467,7 +2467,8 @@ private class MiniPlayerController(
      */
     private fun canSwitchIsland(next: Boolean): Boolean {
         val keys = islandKeys
-        if (keys.size < 2) return false
+        // Out as the list, the stack leaves only the pill's island to show (2026-11-16).
+        if (keys.size < 2 || !rowPages()) return false
         // ColorOS goes round: the brackets either side are there whichever island is in.
         if (colorOs()) return true
         val at = keys.indexOf(selectedIsland).coerceAtLeast(0)
@@ -3338,7 +3339,7 @@ private class MiniPlayerController(
             if (s.oldAlpha.value >= 0.99f) hideOldContent()
         }
         // The brackets keep to the capsule's ends as it narrows and widens.
-        if (islandKeys.size >= 2) {
+        if (islandKeys.size >= 2 && rowPages()) {
             gooShape.reset()
             ColorOsPill.neighbourPath(box, right = false, grow = 1f, out = gooOut(), stroke = gooStroke(), into = gooShape)
             ColorOsPill.neighbourPath(box, right = true, grow = 1f, out = gooOut(), stroke = gooStroke(), into = gooShape)
@@ -4971,7 +4972,7 @@ private class MiniPlayerController(
         val view = player ?: return
         // A switch still settling is finished where it was headed: the finger has the row now.
         if (swap != null) endSwap()
-        if (colorOs() && islandKeys.size >= 2) {
+        if (colorOs() && islandKeys.size >= 2 && rowPages()) {
             gooDrag(dx)
             return
         }
@@ -5472,7 +5473,7 @@ private class MiniPlayerController(
         val view = player ?: return false
         val rest = gooRest ?: return false
         val keys = islandKeys
-        if (keys.size < 2) return false
+        if (keys.size < 2 || !rowPages()) return false
         val next = gooNext
         val oldKey = selectedIsland?.takeIf { it in keys } ?: keys[0]
         val at = keys.indexOf(oldKey).coerceAtLeast(0)
@@ -5572,12 +5573,15 @@ private class MiniPlayerController(
     /** The lift the brackets were last drawn for (bracketLift). */
     private var hintsLift = 0f
 
+    /** The row's islands can be swiped through: not with the stack out as its list. */
+    private fun rowPages(): Boolean = spread == null
+
     /** The brackets at rest about the capsule, while there is anything to swipe to. */
     private fun placeHints() {
         // An update draws them about the capsule as it narrows and widens (applyUpdate).
         if (gooActive || swap?.kind == SWAP_UPDATE) return
         val view = player
-        val rest = view?.takeIf { colorOs() && islandKeys.size >= 2 && it.visibility == View.VISIBLE }
+        val rest = view?.takeIf { colorOs() && islandKeys.size >= 2 && rowPages() && it.visibility == View.VISIBLE }
             ?.restBoxOnScreen()
         if (rest == null) {
             hideGoo()
@@ -11377,12 +11381,6 @@ private class MiniPlayerController(
             // The row is not put back till the stack reads folded (~0.3 s on), and refresh left
             // the pill shut till then: the pull went to swipe-to-unlock (filmed 2026-10-22).
             if (canShow() && !MiniPlayerScene.aodActive) view.setInteractionsEnabled(true)
-        }
-        spread?.takeIf {
-            it.rowSeats != null && it.phase == SPREAD_OPEN && selectedIsMusic() && view.acceptsTouch()
-        }?.let {
-            NumState.goTo("NUMBER", anim = false, why = "music pill touched")
-            endSpread(folded = false, why = "music pill touched")
         }
         val refused = when {
             view.visibility != View.VISIBLE -> "hidden"
