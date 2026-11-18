@@ -9989,7 +9989,11 @@ public class Main extends XposedModule {
      */
     private static void enterFromTapNow(String why) {
         // Guarded on the two questions onMediaUpdate asks before it does anything.
-        int to = (LockLyrics.willAttachOnEntry() || LockLyrics.compactWithoutLyricsOnEntry())
+        // Over an open list the cover comes in compact: the artwork flew to the big cover first,
+        // then jumped to the card's thumbnail as the list read compact (filmed 2026-11-18).
+        boolean listCompact = sAuto && LockIslands.INSTANCE.notificationArtworkExpanded();
+        if (listCompact) LockLyrics.setNotificationCompact(true);
+        int to = (listCompact || LockLyrics.willAttachOnEntry() || LockLyrics.compactWithoutLyricsOnEntry())
                 ? CoverMorphRoute.LYRICS : CoverMorphRoute.COVER;
         if (sAuto && sCardShowing && MiniPlayerRuntime.prepareSceneEntry()) {
             beginMiniMorph(true, to == CoverMorphRoute.COVER);
