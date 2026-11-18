@@ -6,8 +6,9 @@ package com.os4.musiccover
 
 /** A rear card's starting pose is independent of the destination already requested by a fling. */
 internal class ColorOsRearCardMotion(startedOpen: Boolean, private val growIntoNative: Boolean = false) {
-    val place = Jelly(0.5f, 0.84f)
-    val width = Jelly(0.41f, 0.999f)
+    // ColorOS 17 CapsuleToStack (ExtStateAnimParams): translationY bounce 0.25 / 0.35s, clip bounce 0.3 / 0.45s.
+    val place = Jelly(0.35f, 0.75f)
+    val width = Jelly(0.45f, 0.7f)
     val height = Jelly(0.45f, 0.999f)
     val corner = Jelly(0.35f, 0.999f)
     val blur = Jelly(0.3f, 0.89f)

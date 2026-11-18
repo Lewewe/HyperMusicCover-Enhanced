@@ -7891,7 +7891,10 @@ private class MiniPlayerController(
                 s.lead?.nativeBoxY()?.takeIf { it >= 0 }?.toFloat()
                     ?: (footer - (s.leadRow?.let { rowHeight(it) * it.scaleX } ?: 1f)))
         } ?: p.coerceIn(0f, 1f)
-        val nudge = if (s.phase == SPREAD_CLOSING) 0f else s.leadNudge * (1f - p)
+        // The let-go's bounce past the card (ColorOS 17) moves the lead on, never grows it.
+        val over = s.letGo?.takeIf { s.phase == SPREAD_OPENING }?.let { (it.value - 1f).coerceAtLeast(0f) } ?: 0f
+        val travel = s.home?.y?.let { h -> s.lead?.nativeBoxY()?.takeIf { it >= 0 }?.let { kotlin.math.abs(h - it) } } ?: 0f
+        val nudge = if (s.phase == SPREAD_CLOSING) 0f else s.leadNudge * (1f - p) + over * travel
         s.lead?.takeIf { it.active }?.led(
             if (foldEnd != null) ColorOsSpreadGeometry.foldLeadProgress(p, foldEnd) else p, nudge)
         if (colorOs()) colorOsSpread(s, p) else fadeSeat(s.stackSeat, 1f - p)
@@ -8893,7 +8896,7 @@ private class MiniPlayerController(
             return
         }
         // Native idle is not morph idle: a quick flick can still have half its flight left.
-        if (s.phase == SPREAD_OPENING && s.letGo?.let { kotlin.math.abs(p - it.target) > 0.001f } == true) return
+        if (s.phase == SPREAD_OPENING && s.letGo?.let { !it.atRest() } == true) return
         // A finished morph must not hand back to a native scroll still 100px short of LIST.
         if (s.phase == SPREAD_OPENING && s.letGo?.target == 1f && s.footerBottom != null &&
             (s.items.isEmpty() || s.lead != null) && !s.toStack && !s.rearHandoff.scrolling &&

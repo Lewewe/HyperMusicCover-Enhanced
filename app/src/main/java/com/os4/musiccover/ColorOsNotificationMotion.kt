@@ -6,11 +6,12 @@ package com.os4.musiccover
 /** The summary capsule crosses complete faces; a group's individual messages are not anchors. */
 internal object ColorOsNotificationMotion {
     const val OPEN_RESPONSE = 0.54f
-    const val OPEN_DAMPING = 0.999f
+    // ColorOS 17 CapsuleToStack translationY: bounce 0.25 (damping = 1 - bounce).
+    const val OPEN_DAMPING = 0.75f
 
     fun openingResponse(notificationCount: Int) = if (notificationCount in 1..3) 0.45f else OPEN_RESPONSE
 
-    // Keep release speed below the non-overshooting spring's remaining stopping distance.
+    // Keep a flick's bounce near the spring's own: release speed capped by the distance left.
     fun openingVelocity(progress: Float, velocity: Float, response: Float = OPEN_RESPONSE): Float = velocity.coerceIn(0f,
         minOf(4f, (1f - progress).coerceIn(0f, 1f) * (2f * Math.PI.toFloat() / response)))
 
