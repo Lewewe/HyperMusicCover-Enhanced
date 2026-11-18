@@ -13228,8 +13228,9 @@ private const val POP_PATH_HZ = 120
 private val POP_IN_PATH: FloatArray by lazy {
     val j = Jelly(APPEAR_RESPONSE, APPEAR_DAMPING).apply { value = 0f; target = 1f }
     val path = ArrayList<Float>()
-    // To within 1%, not the spring's own rest: backwards, its long tail held the pill still first.
-    while ((kotlin.math.abs(j.value - 1f) >= 0.01f || kotlin.math.abs(j.velocity) >= 0.1f) && path.size < POP_PATH_HZ * 3) {
+    // Up to where it first reaches its size: backwards, the overshoot and the settling held the pill still for 0.2s,
+    // and the folding list's capsule landed on it (the user, 2026-11-18).
+    while (j.value < 1f && path.size < POP_PATH_HZ * 3) {
         path += j.value
         j.step(1f / POP_PATH_HZ)
     }
