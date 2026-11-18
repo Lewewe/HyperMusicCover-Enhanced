@@ -8832,17 +8832,16 @@ private class MiniPlayerController(
         }
         // ColorOS: pulled back down while still opening, it folds the same way as from open.
         if (colorOs() && s.phase == SPREAD_OPENING && s.finger?.ended != false && s.lead != null &&
-            s.items.none { it.morph != null } && stackDragged() && MiniPlayerRuntime.stackPulledDown &&
-            s.progress >= SPREAD_FOLD_BELOW) {
-            // All but open: folded as from the list. Folded from here, the cards behind the first
-            // kept the opening's fill and stood whole under it all the way down (the user's video, 2026-11-18).
+            s.items.none { it.morph != null } && stackDragged() && MiniPlayerRuntime.stackPulledDown) {
+            // Folded as from the list, from where the cards are drawn. Folded on the opening's own
+            // fill, the cards behind the first stood whole under it all the way down (the user's videos, 2026-11-18).
             val islandsY = NumState.scrollTo("NUMBER")
             val y = NumState.position()
             if (islandsY != null && y != null) {
                 s.lead?.cancel()
                 s.lead = null
                 closeFromList(s, islandsY, y)
-                spreadTrace("spread closing (pulled back all but open): " + describeSpread())
+                spreadTrace("spread closing (pulled back opening, as from the list): " + describeSpread())
             }
         }
         if (colorOs() && s.phase == SPREAD_OPENING && s.finger?.ended != false && s.lead != null &&
