@@ -5255,7 +5255,13 @@ private class MiniPlayerController(
     private fun followGlass(glass: GooGlass?, share: Float, lift: Float = 0f) {
         val view = player
         if (glass != null && view != null && glass.visibility == View.VISIBLE) {
-            val a = (if (view.visibility == View.VISIBLE) view.alpha * view.transitionAlpha else 0f) * share * (1f - lift)
+            // The list opening or folding: its stand-in is the capsule, the pill itself is out of sight.
+            val shown = when {
+                spread?.let { it.leadView != null && it.phase != SPREAD_OPEN } == true -> 1f
+                view.visibility == View.VISIBLE -> view.alpha * view.transitionAlpha
+                else -> 0f
+            }
+            val a = shown * share * (1f - lift)
             if (glass.alpha != a) glass.alpha = a
             // In whole pixels: a new blur effect is a new offscreen pass.
             val blur = kotlin.math.round(lift * BRACKET_LIFT_BLUR_DP * density())
@@ -5597,7 +5603,8 @@ private class MiniPlayerController(
     private var hintsLift = 0f
 
     /** The row's islands can be swiped through: not with the stack out as its list. */
-    private fun rowPages(): Boolean = spread == null
+    // Only while it is open: opening and folding, the brackets go and come with the capsule (bracketLift).
+    private fun rowPages(): Boolean = spread?.phase != SPREAD_OPEN
 
     /** The brackets at rest about the capsule, while there is anything to swipe to. */
     private fun placeHints() {
