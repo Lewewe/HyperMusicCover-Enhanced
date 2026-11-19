@@ -1227,7 +1227,9 @@ object MiniPlayerRuntime {
                     val sideways = kotlin.math.abs(dx) > kotlin.math.abs(dy)
                     val swipe = kotlin.math.max(48f * d, target.width * 0.15f)
                     val fling = 1200f * d
-                    if (!cancelled && sideways
+                    // Not on the ColorOS capsule: its sideways swipe is the row's alone, and with
+                    // the music alone it skipped the track with a spin (the user, 2026-11-19).
+                    if (!cancelled && sideways && !colorOsStyle()
                         && (kotlin.math.abs(dx) >= swipe || kotlin.math.abs(vx) > fling)) {
                         target.performSkip(next = dx < 0f)
                     } else if (!cancelled && !sideways && restoreScene
