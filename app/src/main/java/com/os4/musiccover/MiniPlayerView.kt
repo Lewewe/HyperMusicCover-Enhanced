@@ -228,9 +228,9 @@ internal class MiniPlayerView(context: Context) : FrameLayout(context) {
         artist.visibility = if (trackArtist.isNullOrBlank()) View.GONE else View.VISIBLE
         if (lastArtwork !== cover) setArtworkBitmap(cover)
         if (lastPlaying != playing) {
+            val was = lastPlaying
             lastPlaying = playing
-            if (toggleOverride == null) toggle.setImageDrawable(MiniPlayerPathDrawable(
-                if (playing) ICON_PAUSE else ICON_PLAY, Color.WHITE))
+            if (toggleOverride == null) setPlayFace(playing, animate = was != null)
         }
         onToggle = togglePlayback
         onPrevious = skipPrevious
@@ -345,9 +345,7 @@ internal class MiniPlayerView(context: Context) : FrameLayout(context) {
             toggle.scaleType = ImageView.ScaleType.CENTER
             toggle.setPadding(dp(8), dp(8), dp(8), dp(8))
             toggle.contentDescription = SystemUiLanguage.text("播放或暂停", "Play or pause")
-            lastPlaying?.let { playing ->
-                toggle.setImageDrawable(MiniPlayerPathDrawable(if (playing) ICON_PAUSE else ICON_PLAY, Color.WHITE))
-            }
+            lastPlaying?.let { setPlayFace(it, animate = false) }
             return
         }
         toggleFaceClick = face.onClick
@@ -1060,6 +1058,29 @@ internal class MiniPlayerView(context: Context) : FrameLayout(context) {
         if (fitArtwork == fit) return
         fitArtwork = fit
         updateGeometry(lastHeightRadiusDp)
+        if (toggleOverride == null) lastPlaying?.let { setPlayFace(it, animate = false) }
+    }
+
+    /**
+     * Play or pause. The ColorOS capsule wears HyperOS's own, SystemUI's AVDs as its media
+     * controls use them (MediaActionsKt.getStandardAction): ic_media_pause_animation runs from
+     * play into pause, ic_media_play_animation from pause into play, each showing its first
+     * face until started - so at rest the face is the other one's first (filmed both ways,
+     * 2026-11-19). The HyperOS pill keeps its drawn path.
+     */
+    private fun setPlayFace(playing: Boolean, animate: Boolean) {
+        val avd = if (!fitArtwork) null else runCatching {
+            val name = if (playing == animate) "ic_media_pause_animation" else "ic_media_play_animation"
+            context.getDrawable(resources.getIdentifier(name, "drawable", context.packageName))
+        }.getOrNull()?.mutate()?.apply { setTint(Color.WHITE) }
+        // As big as the drawn path's: its pause bars are 560/960 of the 34dp button less 8dp a
+        // side (10.5dp), the AVD's 66/120 of what it is given - 7.5dp a side. Edge to edge it
+        // was nearly twice that, at 9dp too small (the user, 2026-11-19).
+        val pad = if (avd != null) dp(7.5f) else dp(8)
+        toggle.scaleType = if (avd != null) ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER
+        toggle.setPadding(pad, pad, pad, pad)
+        toggle.setImageDrawable(avd ?: MiniPlayerPathDrawable(if (playing) ICON_PAUSE else ICON_PLAY, Color.WHITE))
+        if (animate) (avd as? android.graphics.drawable.Animatable)?.start()
     }
 
     // shortcut: past 1:2 / 2:1 the cover is cropped to that, upgrade if such art turns up.
@@ -1075,8 +1096,10 @@ internal class MiniPlayerView(context: Context) : FrameLayout(context) {
         val horizontalPadding = max(dp(10f * compactScale), height / 7)
         val shaped = fitArtwork && !artworkBare
         val artworkWidth = if (shaped) (artworkSize * artworkAspect(lastArtwork)).roundToInt() else artworkSize
+        // ColorOS: the picture a little in from the capsule's round end (the user, 2026-11-19).
+        val artLeft = horizontalPadding + if (fitArtwork) dp(ART_INSET_DP * compactScale) else 0
         slot.layoutParams = LayoutParams(artworkWidth, artworkSize, Gravity.CENTER_VERTICAL).apply {
-            leftMargin = horizontalPadding
+            leftMargin = artLeft
         }
         val toggleSize = dp(40f * compactScale).coerceAtMost((height - verticalPadding * 2).coerceAtLeast(dp(34f * compactScale)))
         val toggleW = max(toggleSize, toggleWidePx)
@@ -1093,7 +1116,7 @@ internal class MiniPlayerView(context: Context) : FrameLayout(context) {
         }
         textRightBase = if (toggleShown) toggleW + max(dp(10f * compactScale), verticalPadding) else horizontalPadding
         textColumn.layoutParams = LayoutParams(-1, -1, Gravity.CENTER_VERTICAL).apply {
-            leftMargin = horizontalPadding + artworkWidth + max(dp(10f * compactScale), height / 8)
+            leftMargin = artLeft + artworkWidth + max(dp(10f * compactScale), height / 8)
             rightMargin = textRightBase + ((toggle2W + toggleGapPx) * secondShown).toInt()
         }
         val radius = if (shaped) artworkSize * ART_CORNER_SHARE else artworkSize / 2f
@@ -1137,6 +1160,9 @@ private const val SECOND_MS = 320L
 
 /** A shaped (ColorOS) picture's corner, of its height. */
 private const val ART_CORNER_SHARE = 0.22f
+
+/** How much further in from the capsule's end a ColorOS picture sits. */
+private const val ART_INSET_DP = 4f
 
 /** Room round a focus button's picture, and between two of them. */
 private const val FACE_PAD_DP = 4
