@@ -808,6 +808,23 @@ final class LockLyrics {
         sNotificationCompact = compact;
     }
 
+    /**
+     * A list of more than one notification is open over the lock screen: a long one ran over
+     * the lines, which showed between its cards (CoolApk B7, 2026-11-19). Only the lines fade
+     * (LyricView.showTarget); in wantsShown() it took the card's thumbnail with them.
+     */
+    private static boolean sUnderList;
+
+    static boolean underList() {
+        return sUnderList;
+    }
+
+    static void setUnderList(boolean under) {
+        if (sUnderList == under) return;
+        sUnderList = under;
+        refresh();
+    }
+
     /** The user's page choice, before temporary notification or AOD overrides. */
     static boolean userWantsCompactArtwork() {
         // The player alone is a choice too: without it a notification that came in grew the

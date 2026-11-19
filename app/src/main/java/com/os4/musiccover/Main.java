@@ -9875,6 +9875,8 @@ public class Main extends XposedModule {
 
     static void notificationListArtwork(boolean open, int count, boolean settled) {
         rememberNotificationArtwork();
+        // The lyrics page has no big cover to make compact: its lines go instead.
+        LockLyrics.setUnderList(open && count > 1);
         if (sAodArtworkPolicy.wakePending()) {
             if (!sScreenOn || !sAodArtworkPolicy.finishWake(settled)) return;
             boolean compact = NotificationArtworkPolicy.compact(LockLyrics.notificationCompact(),

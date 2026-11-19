@@ -1037,7 +1037,7 @@ final class LyricView extends View {
      * wherever the OEM fades the clock - the bouncer, the shade over the lock screen).
      */
     private float showTarget() {
-        if (!LockLyrics.wantsShown() || !bandOk
+        if (!LockLyrics.wantsShown() || LockLyrics.underList() || !bandOk
                 || (lines.isEmpty() && !LockLyrics.hasBpmCompanion()
                 && !LockLyrics.bpmSearchingLyrics() && !pageSwapping())) return 0f;
         // With the HDR highlight the lyrics are a window of their own above the shade window,
