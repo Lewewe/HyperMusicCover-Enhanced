@@ -6078,6 +6078,11 @@ private class MiniPlayerController(
      */
     private fun spreadShare(c: View): Float? {
         val s = spreadMoving() ?: return null
+        // The capsule's own spread: its rows come out of the capsule by the spread's progress. At
+        // a light let-go they stood at their LIST places for ~100ms before the pile's, and the
+        // clock leapt up for a list nobody saw, then came back down (the user, 2026-11-19).
+        if (s.items.isEmpty() && s.footerBottom != null)
+            return if (c.javaClass.name.endsWith("ExpandableNotificationRow")) s.progress else null
         val item = s.items.firstOrNull { item ->
             item.native?.let { isInside(it, c) } == true && !(item.wasOut && s.phase != SPREAD_CLOSING)
         } ?: return null
@@ -7721,8 +7726,11 @@ private class MiniPlayerController(
         val leadXY = IntArray(2)
         val leadBounds = android.graphics.RectF()
         // shortcut: focus/media rows have separate slots; keep their live destination until calibrated.
-        val listTop = if (toCards && s.items.isEmpty() && NumState.focusCount() == 0)
-            s.footerBottom?.minus((s.cardsY - s.islandsY).toFloat())?.takeIf { it > 0f } else null
+        val fixedTop = toCards && s.items.isEmpty() && NumState.focusCount() == 0
+        // Read each frame: a light let-go re-aims cardsY from the list to the pile, and a top kept
+        // from the start flew the card up to its list place before it dropped to the pile (2026-11-19).
+        fun listTop(): Float? = if (!fixedTop) null
+            else s.footerBottom?.minus((s.cardsY - s.islandsY).toFloat())?.takeIf { it > 0f }
         // This capsule summarizes the whole list, not this row. In a notification group,
         // rowLanding can pick a child's line: bridging to it duplicates that line over the
         // group's other messages and rewrites the capsule midway through a slow pull.
@@ -7740,7 +7748,7 @@ private class MiniPlayerController(
                     row.matrix.mapRect(leadBounds)
                     val remaining = s.cardsY - (NumState.position() ?: s.islandsY)
                     ColorOsSpreadGeometry.routeWidth(h.y, h.w,
-                        listTop ?: (leadXY[1] - parent.scrollY + row.top + leadBounds.top - remaining),
+                        listTop() ?: (leadXY[1] - parent.scrollY + row.top + leadBounds.top - remaining),
                         leadBounds.width(), top + if (toCards) s.leadNudge * (1f - s.progress) else 0f,
                         s.notificationCount)
                 } else row.width.toFloat()
@@ -7760,7 +7768,7 @@ private class MiniPlayerController(
                         // stack scrolls without moving its position, and the first card stood still while
                         // the list left, then the column vanished at hand-back (recording 2026-10-30).
                         if (s.rearHandoff.scrolling) leadXY[1] - parent.scrollY + row.top + leadBounds.top
-                        else listTop ?: (leadXY[1] - parent.scrollY + row.top + leadBounds.top - remaining),
+                        else listTop() ?: (leadXY[1] - parent.scrollY + row.top + leadBounds.top - remaining),
                         leadBounds.width(), leadBounds.height())
                 } else if (toCards || s.foldMorphEnd == null || from == null || footer == null) null else
                     CoverMorphMotion.Box(from[0] - from[2] / 2f,

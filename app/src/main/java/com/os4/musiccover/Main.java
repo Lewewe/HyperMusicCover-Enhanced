@@ -6080,8 +6080,61 @@ public class Main extends XposedModule {
             return Float.MAX_VALUE;
         }
         float out = Float.isNaN(top) || top <= requested ? requested : top;
+        out = justClear(out);
         ClockMove.noteRoom(requested, top, out);
         return out;
+    }
+
+    /**
+     * The y that moves the clock only as far as the rows need. all_in_one centres the clock in the
+     * room left above them (KeyguardClockNotifInteractor.calculateClockSqueezeInternal, "Space
+     * Squeeze": up by topRatio share of the rows' reach), so a pile that came nowhere near it
+     * still lifted it ~300px (the user, 2026-11-19). Only while the OEM merely moves the clock: a
+     * reach that squeezes it is left as asked. Any field missing, the y as it was.
+     */
+    private static float justClear(float y) {
+        if (Float.isNaN(y) || y >= Float.MAX_VALUE / 2f) return y;
+        final View v = sContainer;
+        if (v == null) return y;
+        try {
+            Object it = Xp.getObjectField(v, "keyguardClockNotifInteractor");
+            if (it == null) return y;
+            android.graphics.Rect edit = (android.graphics.Rect) Xp.getObjectField(it, "maxEditRect");
+            float margin = ((Number) Xp.getObjectField(it, "clockNotificationMargin")).floatValue();
+            float topR = ((Number) Xp.getObjectField(it, "adaptClockTopRatio")).floatValue();
+            float botR = ((Number) Xp.getObjectField(it, "adaptClockBottomRatio")).floatValue();
+            float maxSpace = ((Number) Xp.getObjectField(it, "maxSpace")).floatValue();
+            Object repo = Xp.getObjectField(it, "repository");
+            float magazine = ((Number) Xp.callMethod(Xp.getObjectField(repo, "magazineHeight"), "getValue")).floatValue();
+            if (edit == null || edit.height() <= 0) return y;
+            float up = topR == 0f && botR == 0f ? 0.46153846f : topR / (topR + botR);
+            float above = edit.height() * topR;
+            float below = maxSpace - above;
+            float reach = Math.max(edit.bottom - y + margin, 0f) + magazine;
+            if (reach > maxSpace || reach <= magazine) return y;
+            // What the OEM would lift for a reach, and what the rows need: only their overlap.
+            // A little more air than the OEM's margin alone, which sat tight on the pile (the user).
+            float need = Math.max(0f, reach - below + JUST_CLEAR_GAP_DP * v.getResources().getDisplayMetrics().density);
+            if (shift(reach, up, above, below) <= need) return y;
+            // shift() is monotonic in the reach: find the one that lifts by exactly what is needed.
+            float lo = magazine, hi = reach;
+            for (int i = 0; i < 24; i++) {
+                float mid = (lo + hi) / 2f;
+                if (shift(mid, up, above, below) < need) lo = mid; else hi = mid;
+            }
+            return edit.bottom + margin - Math.max(hi - magazine, 0f);
+        } catch (Throwable t) {
+            return y;
+        }
+    }
+
+    private static final float JUST_CLEAR_GAP_DP = 12f;
+
+    /** calculateClockSqueezeInternal's Space Squeeze lift for a reach of [f8], as a positive px. */
+    private static float shift(float f8, float up, float above, float below) {
+        float f16 = above - up * f8;
+        if (f16 >= 0f && below - (1f - up) * f8 >= 0f) return up * f8;
+        return f16 >= 0f ? f8 - below : above;
     }
 
     /**
