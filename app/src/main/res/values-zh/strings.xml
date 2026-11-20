@@ -419,7 +419,6 @@
     <string name="hypercanvas_approval">正在等待 LSPosed 批准，请查看 Spotify 和 SystemUI 的授权通知。</string>
     <string name="hypercanvas_restart">批准作用域后，请重启 Spotify 和 SystemUI 以加载 HyperCanvas。</string>
     <string name="hypercanvas_scope_failed">作用域授权尚未完成，关闭后重新开启此选项可再次申请。</string>
-    <string name="hypercanvas_connected">Spotify 和 SystemUI 已连接扩展。</string>
     <string name="hypercanvas_dim">Canvas 背景变暗程度</string>
     <string name="hypercanvas_cover_blur">大封面或歌词背后的 Canvas 模糊程度</string>
     <string name="hypercanvas_cover_dim">大封面或歌词背后的 Canvas 变暗程度</string>
@@ -448,14 +447,11 @@
     <string name="hypercanvas_update">更新 HyperCanvas</string>
     <string name="hypercanvas_up_to_date">已安装最新版本。</string>
     <string name="hypercanvas_already_downloaded">此版本已下载。</string>
-    <string name="hypercanvas_uninstall">卸载 HyperCanvas</string>
     <string name="hypercanvas_uninstall_summary">使用 root 卸载扩展，然后重启 Spotify 和系统界面。</string>
     <string name="hypercanvas_removed">HyperCanvas 已卸载，作用域已重启。</string>
     <string name="hypercanvas_remove_failed">无法卸载 HyperCanvas，请检查 root 权限。</string>
-    <string name="hypercanvas_hook_connected">Hook · 已连接</string>
-    <string name="hypercanvas_hook_disconnected">Hook · 未连接</string>
     <string name="hypercanvas_removed_restart_failed">HyperCanvas 已卸载，请手动重启 Spotify 和系统界面。</string>
-    <string name="hypercanvas_list_summary">Spotify 锁屏动态背景 · 仅支持 Spotify，需先安装</string>
+    <string name="hypercanvas_list_summary">Spotify 锁屏动态背景</string>
     <string name="extension_installed">已安装</string>
     <string name="extension_update">有可用更新</string>
     <string name="extension_downloaded">已下载</string>
@@ -468,7 +464,6 @@
     <string name="hypercanvas_setup_verifying_summary">正在等待 SystemUI 加载扩展，无需打开 Spotify。</string>
     <string name="hypercanvas_setup_restart_failed">无法重启作用域，请检查 root 权限后重试。</string>
     <string name="extension_installed_version">版本：%1$s</string>
-    <string name="extension_new_version">新版本：%1$s</string>
     <string name="mini_media_collapsed">播放音乐时不自动展开封面</string>
     <string name="mini_media_collapsed_summary">启用锁屏岛时，开始播放先显示音乐胶囊，点击或上滑后再展开，保留已选择的封面或歌词状态。</string>
     <string name="lyrics_depth_blur">非当前歌词模糊</string>
@@ -491,8 +486,6 @@
     <string name="hyperimmersive_list_summary">待机显示：手机横放充电时显示全屏时钟、音乐与小组件</string>
     <string name="hyperimmersive_title">待机显示</string>
     <string name="hyperimmersive_summary">充电时将手机横放即可显示待机界面</string>
-    <string name="hyperimmersive_watching">运行中</string>
-    <string name="hyperimmersive_stopped">已停止</string>
     <string name="hyperimmersive_blur">模糊封面背景</string>
     <string name="hyperimmersive_blur_summary">播放音乐时以封面填充背景</string>
     <string name="hyperimmersive_lyrics_beside">歌词时保留封面</string>
@@ -519,7 +512,6 @@
     <string name="hyperimmersive_setup_restart_summary">重启系统界面以加载 HyperImmersive。屏幕会闪烁，随后回到锁屏。</string>
     <string name="hyperimmersive_setup_restart_failed">无法重启系统界面。请检查 Root 权限后重试。</string>
     <string name="hyperimmersive_setup_verifying_summary">正在等待系统界面加载扩展。</string>
-    <string name="hyperimmersive_uninstall">卸载 HyperImmersive</string>
     <string name="hyperimmersive_uninstall_summary">使用 Root 移除扩展，然后重启系统界面。</string>
     <string name="hyperimmersive_removed">HyperImmersive 已移除。</string>
     <string name="hyperimmersive_removed_restart_failed">HyperImmersive 已移除，但无法重启系统界面。</string>
@@ -530,4 +522,26 @@
     <string name="mini_general_section">常规</string>
     <string name="mini_notifications_section">通知</string>
     <string name="mini_background_section">背景</string>
+    <string name="extension_status_running">运行中</string>
+    <string name="extension_status_setup">需要设置</string>
+    <string name="extension_status_off">已关闭</string>
+    <string name="extension_group_display">显示</string>
+    <string name="extension_group_effects">效果</string>
+    <string name="extension_group_appearance">外观</string>
+    <string name="extension_group_lyrics">歌词</string>
+    <string name="extension_group_timing">时间</string>
+    <string name="extension_group_permissions">权限</string>
+    <string name="extension_group_manage">管理</string>
+    <string name="extension_update_to">更新到 %1$s</string>
+    <string name="extension_update_summary">下载并安装新版本</string>
+    <string name="extension_uninstall">卸载 %1$s</string>
+    <string name="extension_uninstall_confirm_title">卸载 %1$s？</string>
+    <string name="extension_uninstall_confirm">卸载</string>
+    <string name="extension_needs_ok">✓ 已安装 %1$s</string>
+    <string name="extension_needs_missing">需要 %1$s，尚未安装</string>
+    <string name="extension_needs_scope">已安装 %1$s，但尚未加入 LSPosed 作用域</string>
+    <string name="extension_status_ready">已就绪</string>
+    <string name="extension_set_up">完成设置</string>
+    <string name="extension_settings">设置</string>
 </resources>
+

@@ -411,7 +411,6 @@
     <string name="hypercanvas_approval">Waiting for LSPosed approval. Check its notification for Spotify and System UI.</string>
     <string name="hypercanvas_restart">After approving the scopes, restart Spotify and System UI to load HyperCanvas.</string>
     <string name="hypercanvas_scope_failed">Scope approval was not completed. Turn this off and on again to request it.</string>
-    <string name="hypercanvas_connected">Spotify and System UI hooks are connected.</string>
     <string name="hypercanvas_dim">Canvas dimming</string>
     <string name="hypercanvas_cover_blur">Canvas blur behind cover or lyrics</string>
     <string name="hypercanvas_cover_dim">Canvas dimming behind cover or lyrics</string>
@@ -440,14 +439,11 @@
     <string name="hypercanvas_update">Update HyperCanvas</string>
     <string name="hypercanvas_up_to_date">The latest version is installed.</string>
     <string name="hypercanvas_already_downloaded">This version has already been downloaded.</string>
-    <string name="hypercanvas_uninstall">Uninstall HyperCanvas</string>
     <string name="hypercanvas_uninstall_summary">Remove the extension using root, then restart Spotify and System UI.</string>
     <string name="hypercanvas_removed">HyperCanvas removed. Scoped apps restarted.</string>
     <string name="hypercanvas_remove_failed">Could not remove HyperCanvas. Check root access.</string>
-    <string name="hypercanvas_hook_connected">Hooks · Connected</string>
-    <string name="hypercanvas_hook_disconnected">Hooks · Disconnected</string>
     <string name="hypercanvas_removed_restart_failed">HyperCanvas removed. Please restart Spotify and System UI manually.</string>
-    <string name="hypercanvas_list_summary">Spotify Canvas backgrounds for your lock screen · Requires the Spotify app</string>
+    <string name="hypercanvas_list_summary">Spotify Canvas on your lock screen</string>
     <string name="extension_installed">Installed</string>
     <string name="extension_update">Update available</string>
     <string name="extension_downloaded">Downloaded</string>
@@ -460,7 +456,6 @@
     <string name="hypercanvas_setup_verifying_summary">Waiting for System UI to load the extension. Spotify can stay closed.</string>
     <string name="hypercanvas_setup_restart_failed">Could not restart the scoped apps. Check root access and try again.</string>
     <string name="extension_installed_version">Version: %1$s</string>
-    <string name="extension_new_version">New: %1$s</string>
     <string name="mini_media_collapsed">Keep music artwork collapsed</string>
     <string name="mini_media_collapsed_summary">With the lock screen island enabled, music starts as a pill. Tap or swipe up to open it. Your selected cover or lyrics view stays the same.</string>
     <string name="lyrics_depth_blur">Inactive lyrics blur</string>
@@ -484,8 +479,6 @@
     <string name="hyperimmersive_list_summary">StandBy: a full-screen clock, music and widgets while the phone charges on its side</string>
     <string name="hyperimmersive_title">StandBy</string>
     <string name="hyperimmersive_summary">Turn the phone on its side while it charges to show StandBy</string>
-    <string name="hyperimmersive_watching">Running</string>
-    <string name="hyperimmersive_stopped">Stopped</string>
     <string name="hyperimmersive_blur">Blurred artwork background</string>
     <string name="hyperimmersive_blur_summary">While music plays, its cover fills the background</string>
     <string name="hyperimmersive_lyrics_beside">Keep the cover with the lyrics</string>
@@ -512,7 +505,6 @@
     <string name="hyperimmersive_setup_restart_summary">Restart System UI to load HyperImmersive. The screen blinks and the lock screen comes back.</string>
     <string name="hyperimmersive_setup_restart_failed">Could not restart System UI. Check root access and try again.</string>
     <string name="hyperimmersive_setup_verifying_summary">Waiting for System UI to load the extension.</string>
-    <string name="hyperimmersive_uninstall">Uninstall HyperImmersive</string>
     <string name="hyperimmersive_uninstall_summary">Remove the extension using root, then restart System UI.</string>
     <string name="hyperimmersive_removed">HyperImmersive was removed.</string>
     <string name="hyperimmersive_removed_restart_failed">HyperImmersive was removed, but System UI could not be restarted.</string>
@@ -523,4 +515,26 @@
     <string name="mini_general_section">General</string>
     <string name="mini_notifications_section">Notifications</string>
     <string name="mini_background_section">Background</string>
+    <string name="extension_status_running">Running</string>
+    <string name="extension_status_setup">Needs setup</string>
+    <string name="extension_status_off">Off</string>
+    <string name="extension_group_display">Display</string>
+    <string name="extension_group_effects">Effects</string>
+    <string name="extension_group_appearance">Appearance</string>
+    <string name="extension_group_lyrics">Lyrics</string>
+    <string name="extension_group_timing">Timing</string>
+    <string name="extension_group_permissions">Permissions</string>
+    <string name="extension_group_manage">Manage</string>
+    <string name="extension_update_to">Update to %1$s</string>
+    <string name="extension_update_summary">Download the new version and install it</string>
+    <string name="extension_uninstall">Uninstall %1$s</string>
+    <string name="extension_uninstall_confirm_title">Uninstall %1$s?</string>
+    <string name="extension_uninstall_confirm">Uninstall</string>
+    <string name="extension_needs_ok">✓ %1$s is installed</string>
+    <string name="extension_needs_missing">Needs %1$s, which is not installed</string>
+    <string name="extension_needs_scope">%1$s is installed but not in the LSPosed scope yet</string>
+    <string name="extension_status_ready">Ready</string>
+    <string name="extension_set_up">Set up</string>
+    <string name="extension_settings">Settings</string>
 </resources>
+

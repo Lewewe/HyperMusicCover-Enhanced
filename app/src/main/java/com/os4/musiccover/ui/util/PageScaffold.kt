@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,6 +33,11 @@ import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.basic.SmallTopAppBar
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.scale
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
@@ -70,18 +77,30 @@ fun PageScaffold(
      * arrangement the other branch deliberately avoids.
      */
     pinned: (@Composable ColumnScope.() -> Unit)? = null,
+    /**
+     * A soft glow of this colour from the top of the screen, behind everything, and the small bar
+     * with no large title: for a page whose own header already names it.
+     */
+    topGlow: Color? = null,
     content: LazyListScope.() -> Unit,
 ) {
     val scrollBehavior = MiuixScrollBehavior()
+    val listState = rememberLazyListState()
     val backdrop = rememberBlurBackdrop()
     val blurActive = isBlurEnabled && backdrop != null
-    val barColor = if (blurActive) Color.Transparent else MiuixTheme.colorScheme.surface
+    val barColor = if (blurActive || topGlow != null) Color.Transparent else MiuixTheme.colorScheme.surface
 
     Scaffold(
         popupHost = { },
         topBar = {
             BlurredBar(backdrop, blurActive, scrollBehavior) {
-                TopAppBar(
+                if (topGlow != null) SmallTopAppBar(
+                    title = "",
+                    color = barColor,
+                    scrollBehavior = scrollBehavior,
+                    navigationIcon = { if (onBack != null) PageBackButton(onBack) },
+                    actions = { actions() },
+                ) else TopAppBar(
                     title = title,
                     color = barColor,
                     scrollBehavior = scrollBehavior,
@@ -93,10 +112,29 @@ fun PageScaffold(
         contentWindowInsets = WindowInsets.systemBars.add(WindowInsets.displayCutout)
             .only(WindowInsetsSides.Horizontal),
     ) { innerPadding ->
-        Box(modifier = if (blurActive) Modifier.layerBackdrop(backdrop) else Modifier) {
+        Box(modifier = (if (blurActive) Modifier.layerBackdrop(backdrop) else Modifier)
+            .then(if (topGlow == null) Modifier else Modifier.drawBehind {
+                // Fades out over the first ~third of a screen of scrolling; read here so only the draw reruns.
+                val scrolled = if (listState.firstVisibleItemIndex > 0) 1f
+                    else listState.firstVisibleItemScrollOffset / (size.height / 3f)
+                val fade = 1f - scrolled.coerceIn(0f, 1f)
+                if (fade <= 0f) return@drawBehind
+                // A soft light from just above the screen: eased stops so there is no visible rim.
+                val center = Offset(size.width / 2f, -size.width * .15f)
+                val r = size.width * .95f
+                scale(1.15f, .75f, center) {
+                    drawCircle(Brush.radialGradient(
+                        0f to topGlow.copy(alpha = .42f * fade),
+                        .35f to topGlow.copy(alpha = .22f * fade),
+                        .7f to topGlow.copy(alpha = .06f * fade),
+                        1f to Color.Transparent,
+                        center = center, radius = r), radius = r, center = center)
+                }
+            })) {
             val bottom = innerPadding.calculateBottomPadding() + extraBottomPadding
             if (pinned == null) {
                 PageList(
+                    state = listState,
                     scrollBehavior = scrollBehavior,
                     contentPadding = PaddingValues(
                         top = innerPadding.calculateTopPadding(),
@@ -115,6 +153,7 @@ fun PageScaffold(
                 ) {
                     pinned()
                     PageList(
+                        state = listState,
                         scrollBehavior = scrollBehavior,
                         contentPadding = PaddingValues(bottom = bottom),
                         content = content,
@@ -127,11 +166,13 @@ fun PageScaffold(
 
 @Composable
 private fun PageList(
+    state: LazyListState,
     scrollBehavior: ScrollBehavior,
     contentPadding: PaddingValues,
     content: LazyListScope.() -> Unit,
 ) {
     LazyColumn(
+        state = state,
         overscrollEffect = null,
         modifier = Modifier
             .fillMaxSize()
