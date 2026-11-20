@@ -875,6 +875,10 @@ private fun HyperImmersivePage(isBlurEnabled: Boolean, isCurrent: Boolean, extra
                     summary = stringResource(R.string.hyperimmersive_blur_summary),
                     checked = state.getBoolean("blurBackdrop"), enabled = enabled,
                     onCheckedChange = { set("blurBackdrop", it) })
+                SwitchPreference(title = stringResource(R.string.hyperimmersive_lyrics_beside),
+                    summary = stringResource(R.string.hyperimmersive_lyrics_beside_summary),
+                    checked = state.getBoolean("lyricsBeside"), enabled = enabled,
+                    onCheckedChange = { set("lyricsBeside", it) })
                 fun setTime(key: String, seconds: Int) {
                     state = Bundle(state).apply { putInt(key, seconds) }
                     scope.launch {
