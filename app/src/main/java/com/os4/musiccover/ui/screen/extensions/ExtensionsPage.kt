@@ -879,6 +879,18 @@ private fun HyperImmersivePage(isBlurEnabled: Boolean, isCurrent: Boolean, extra
                     summary = stringResource(R.string.hyperimmersive_lyrics_beside_summary),
                     checked = state.getBoolean("lyricsBeside"), enabled = enabled,
                     onCheckedChange = { set("lyricsBeside", it) })
+                // Which way the lyric opens beside the cover; greyed out until that switch is on.
+                WindowDropdownPreference(title = stringResource(R.string.hyperimmersive_lyrics_style),
+                    items = listOf(stringResource(R.string.hyperimmersive_lyrics_style_thumb),
+                        stringResource(R.string.hyperimmersive_lyrics_style_column)),
+                    selectedIndex = state.getInt("lyricsStyle", 0).coerceIn(0, 1),
+                    enabled = enabled && state.getBoolean("lyricsBeside"),
+                    onSelectedIndexChange = { i ->
+                        state = Bundle(state).apply { putInt("lyricsStyle", i) }
+                        scope.launch {
+                            HyperImmersiveBridge.configure(context, "lyricsStyle", i).takeIf { it.size() > 0 }?.let { state = it }
+                        }
+                    })
                 fun setTime(key: String, seconds: Int) {
                     state = Bundle(state).apply { putInt(key, seconds) }
                     scope.launch {

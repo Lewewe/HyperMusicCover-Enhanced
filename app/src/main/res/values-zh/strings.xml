@@ -497,6 +497,9 @@
     <string name="hyperimmersive_blur_summary">播放音乐时以封面填充背景</string>
     <string name="hyperimmersive_lyrics_beside">歌词与封面并排</string>
     <string name="hyperimmersive_lyrics_beside_summary">歌词按钮在封面旁打开歌词，而不是替换封面</string>
+    <string name="hyperimmersive_lyrics_style">歌词样式</string>
+    <string name="hyperimmersive_lyrics_style_thumb">封面缩入按钮</string>
+    <string name="hyperimmersive_lyrics_style_column">歌词在右侧栏</string>
     <string name="hyperimmersive_idle">进入休息前等待</string>
     <string name="hyperimmersive_idle_summary">无操作达到此时长后，待机显示会变暗并降低刷新率（10 秒至 60 分钟，0 表示从不）</string>
     <string name="hyperimmersive_idle_unit_seconds">秒</string>

@@ -490,6 +490,9 @@
     <string name="hyperimmersive_blur_summary">While music plays, its cover fills the background</string>
     <string name="hyperimmersive_lyrics_beside">Lyrics beside the cover</string>
     <string name="hyperimmersive_lyrics_beside_summary">The lyrics button opens the lyrics next to the cover instead of in its place</string>
+    <string name="hyperimmersive_lyrics_style">Lyrics style</string>
+    <string name="hyperimmersive_lyrics_style_thumb">Cover into the button</string>
+    <string name="hyperimmersive_lyrics_style_column">Lyrics in the column</string>
     <string name="hyperimmersive_idle">Rest after</string>
     <string name="hyperimmersive_idle_summary">With no touch for this long, StandBy dims and lowers its refresh rate (10 sec to 60 min, 0 is never)</string>
     <string name="hyperimmersive_idle_unit_seconds">Sec</string>
