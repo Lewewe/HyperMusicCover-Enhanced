@@ -488,8 +488,8 @@
     <string name="hyperimmersive_stopped">Stopped</string>
     <string name="hyperimmersive_blur">Blurred artwork background</string>
     <string name="hyperimmersive_blur_summary">While music plays, its cover fills the background</string>
-    <string name="hyperimmersive_lyrics_beside">Lyrics beside the cover</string>
-    <string name="hyperimmersive_lyrics_beside_summary">The lyrics button opens the lyrics next to the cover instead of in its place</string>
+    <string name="hyperimmersive_lyrics_beside">Keep the cover with the lyrics</string>
+    <string name="hyperimmersive_lyrics_beside_summary">The cover stays on screen while the lyrics are open and the lyrics button moves down to the controls. Pick how in Lyrics style</string>
     <string name="hyperimmersive_lyrics_style">Lyrics style</string>
     <string name="hyperimmersive_lyrics_style_thumb">Cover into the button</string>
     <string name="hyperimmersive_lyrics_style_column">Lyrics in the column</string>
