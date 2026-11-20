@@ -390,7 +390,12 @@ internal object LockIslands {
      * open. The islands put together again without a pipeline run - nothing in the stack changed.
      */
     private fun followStack(why: String) {
-        val out = !stackFolded()
+        val open = !stackFolded()
+        // Pulled down: the new ones go into the island with the rest. (Not on LIST: with one row
+        // out, the pile reads as the list.)
+        if (!open) endArrival(why)
+        // The new ones out alone leave the island where it stands (the user, 2026-11-20).
+        val out = open && !arrivalOut
         if (out != stackOut) {
             stackOut = out
             NumState.trace("$why: island ${if (out) "out" else "in"}")
@@ -617,6 +622,7 @@ internal object LockIslands {
         runCatching {
             ctx.registerReceiver(object : android.content.BroadcastReceiver() {
                 override fun onReceive(c: android.content.Context, i: android.content.Intent) {
+                    endArrival("screen off")
                     // The keyguard locks a moment after the screen goes: once then, once to be sure.
                     for (delay in SCREEN_OFF_READS) main.postDelayed({ invalidate("screen off") }, delay)
                 }
@@ -633,6 +639,8 @@ internal object LockIslands {
         if (hidden) return true
         val entry = args.firstOrNull() ?: return false
         if (!lockedOrLocking(filterObject)) {
+            postsArmed = false
+            endArrival("unlocked")
             // Unlocked: what a tap put back is an island again on the next lock screen - all but
             // 高德's, which stays open with its map as the cover stays up.
             clearReleased()
@@ -657,7 +665,11 @@ internal object LockIslands {
         // Folded natively, an ordinary notification is read for the stack island and left in
         // the stack: the stack's own fold hides it.
         if (!note.focus && nativeStack) {
+            noteArrival(entry)
             pending[note.key] = note
+            // While new notifications are out on their own, the rest wait in the island: left
+            // out by us, so not weighed for a later filter (dropUnshown would take them for gone).
+            if (arrivalOut && note.key !in arrivalKeys) return true
             // Passed here, it can still be left off the lock screen by a filter after this one:
             // weighed once the run is over (commit), by where the run put it.
             pendingEntries[note.key] = entry
@@ -675,6 +687,49 @@ internal object LockIslands {
         pending[note.key] = note
         return kept
     }
+
+    /**
+     * F1/F7 (the user, 2026-11-20): a notification posted while the lock screen is up shows on
+     * its own as a plain row - the stack's pile with every other ordinary notification left out -
+     * and goes into the stack island only when pulled down (the stack's own fold). Updates of one
+     * already here count only when they alert again (not ongoing, not alert-once).
+     */
+    private val postSeen = HashMap<String, Long>()
+    /** A locked run has filled [postSeen]: what the next one finds new was posted since. */
+    private var postsArmed = false
+    /** New posts not yet shown out, by key: their post time. */
+    private val arrived = HashMap<String, Long>()
+    /** The new notifications out on their own, until pulled down into the island. */
+    private val arrivalKeys = HashSet<String>()
+    @Volatile private var arrivalOut = false
+    fun arrivalShown(): Boolean = arrivalOut
+
+    private fun noteArrival(entry: Any) {
+        val sbn = Xp.getObjectField(entry, "mSbn") as? StatusBarNotification ?: return
+        if (postSeen.size > 300) postSeen.clear()
+        val before = postSeen.put(sbn.key, sbn.postTime)
+        // Posted a while ago: read late (SystemUI starting, a row coming back), not arriving.
+        if (!postsArmed || before == sbn.postTime ||
+            System.currentTimeMillis() - sbn.postTime > ARRIVAL_FRESH_MS) return
+        val quiet = before != null && (sbn.isOngoing ||
+            sbn.notification.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0)
+        if (!quiet) arrived[sbn.key] = sbn.postTime
+    }
+
+    private const val ARRIVAL_FRESH_MS = 10_000L
+
+    /** The rest of the ordinary notifications back in the stack. */
+    private fun endArrival(why: String) {
+        if (!arrivalOut) return
+        arrivalOut = false
+        arrivalKeys.clear()
+        NumState.trace("arrival over: $why")
+        main.post { invalidate("arrival over: $why") }
+    }
+
+    private fun screenOn(): Boolean = runCatching {
+        (Main.sAppCtx!!.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager).isInteractive
+    }.getOrDefault(false)
 
     /** The entry's row is there with its content laid out. Unreadable counts as there. */
     private fun rowInflated(entry: Any): Boolean = runCatching {
@@ -853,6 +908,15 @@ internal object LockIslands {
         // Only a locked run says what is there: the unlocked ones read nothing.
         if (lockedRun) runCatching { CountdownScene.INSTANCE.onNotes(all) }
             .onFailure { Xp.log("MCIsland: countdown not told: $it") }
+        // Only the island's own: a group's summary, reposted with each child, is never a row here.
+        val fresh = if (postsArmed) arrived.keys.filter { k -> all.any { it.key == k && !it.focus && !it.summary } }.toSet()
+            else emptySet()
+        // A new row is often not in the list yet on its first run (dropUnshown): it waits for the
+        // next one, as long as it is still fresh.
+        arrived.keys.removeAll(fresh)
+        val now = System.currentTimeMillis()
+        arrived.values.removeAll { now - it > ARRIVAL_FRESH_MS }
+        if (lockedRun) postsArmed = true
         lockedRun = false
         // A group shows as its children; its summary only when it has none here.
         val grouped = all.filter { !it.summary && it.group != null }.mapNotNull { it.group }.toSet()
@@ -872,10 +936,29 @@ internal object LockIslands {
         focusShown = shown.filter { it.focus && it.key !in released }
         if (nativeStack) {
             // The stack said nothing yet this lock screen: read where it is.
-            stackOut = !stackFolded()
+            stackOut = !stackFolded() && !arrivalOut
             // Not the spread's own run (its focus rows coming in): the stack is on its way to
             // the list, and read as a pile on the way it was folded back (2026-09-30).
-            if (active && !spreading && members.isNotEmpty()) NumState.foldIfPiled("notifications changed")
+            if (fresh.isNotEmpty()) NumState.trace("arrival ${fresh.size} active=$active spread=$spreading " +
+                "n=${members.size} folded=${stackFolded()} on=${screenOn()} out=$arrivalOut")
+            if (arrivalOut) {
+                // Dismissed, or gone: the rest come back. Another new one joins the ones out.
+                arrivalKeys.retainAll(stackMembers.toSet())
+                if (arrivalKeys.addAll(fresh)) main.post {
+                    invalidate("another new notification out")
+                    main.post { if (stackFolded()) NumState.goTo("STACK", why = "another new notification") }
+                }
+                if (arrivalKeys.isEmpty()) endArrival("its notifications gone")
+            } else if (fresh.isNotEmpty() && active && !spreading && stackFolded() && screenOn()) {
+                arrivalOut = true
+                arrivalKeys.addAll(fresh)
+                // Not from inside the pipeline's run: the rest left out on the next run, and the
+                // stack scrolled to its pile once that one has laid out.
+                main.post {
+                    invalidate("new notification out alone")
+                    main.post { NumState.goTo("STACK", why = "new notification") }
+                }
+            } else if (active && !spreading && members.isNotEmpty()) NumState.foldIfPiled("notifications changed")
         }
         publish()
     }
@@ -1055,7 +1138,10 @@ internal object LockIslands {
                 val state = NumState.state()
                 notificationArtworkState = state
                 val busy = NumState.busy()
-                val list = notificationArtworkNavigation.listOpen(open, state, busy, towardList)
+                // A new notification out on its own is the pile, not the list (one row reads as
+                // LIST): the cover makes room as for the pile instead of turning thumbnail.
+                val list = notificationArtworkNavigation.listOpen(open,
+                    if (arrivalOut && state == "LIST") "STACK" else state, busy, towardList && !arrivalOut)
                 val moving = notificationArtworkTouching || busy || now < artworkMotionUntil
                 val settled = !moving && ClockCollapse.phase() != ClockCollapse.Phase.ENTER
                 Main.notificationListArtwork(list, stackMembers.size, settled)

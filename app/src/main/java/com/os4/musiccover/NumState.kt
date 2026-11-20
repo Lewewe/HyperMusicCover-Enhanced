@@ -465,6 +465,8 @@ internal object NumState {
 
     private val foldCheck = Runnable {
         if (!folding || !LockIslands.foldsToCount()) return@Runnable
+        // A new notification's pile stays until the user pulls it down.
+        if (LockIslands.arrivalShown()) return@Runnable
         // The list the spread opened, passing through the pile on its way: not folded back.
         if (LockIslands.keepsPileOnFold()) return@Runnable
         if (LockIslands.spreadingNow()) { trace("pile check skipped: spread ($foldWhy)"); return@Runnable }
