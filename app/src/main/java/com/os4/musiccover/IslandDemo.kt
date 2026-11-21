@@ -33,8 +33,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
@@ -144,14 +142,8 @@ internal fun NotificationStylePicker(selectedStyle: Int, allowStack: Boolean, en
                     MiniPlayerConfig.NOTIFICATIONS_LIST -> R.drawable.island_preview_list
                     else -> R.drawable.island_preview_capsule
                 }
-                Box(Modifier.widthIn(max = 102.dp).fillMaxWidth(0.85f).aspectRatio(288f / 634f)) {
-                    Image(painterResource(preview), contentDescription = null, modifier = Modifier.matchParentSize())
-                    Canvas(Modifier.matchParentSize()) {
-                        drawCircle(Color(0xFFD9F3F5), radius = size.width * 0.058f,
-                            center = Offset(size.width / 2f, size.height * 0.921f),
-                            style = Stroke(size.width * 0.013f))
-                    }
-                }
+                Image(painterResource(preview), contentDescription = null,
+                    modifier = Modifier.widthIn(max = 102.dp).fillMaxWidth(0.85f).aspectRatio(288f / 634f))
                 Text(stringResource(title), modifier = Modifier.padding(top = 14.dp, bottom = 10.dp),
                     textAlign = TextAlign.Center, color = if (selected) activeColor else colors.onSurfaceVariantSummary)
                 Canvas(Modifier.size(19.dp)) {
