@@ -203,7 +203,7 @@ fun rememberUpdateController(isCurrent: () -> Boolean): UpdateController {
                     return@LaunchedEffect
                 }
 
-                is InstallOutcome.HandedOff -> {
+                is InstallOutcome.Installed, is InstallOutcome.HandedOff -> {
                     states.installing = false
                     return@LaunchedEffect
                 }

@@ -14,11 +14,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 /**
  * Getting the downloaded release installed.
  *
- * The APK is fetched into this app's cache and then handed to an installer app exactly the way
+ * If root is granted, the verified APK is installed directly. Otherwise it is handed to an installer app
  * any other app does it: an implicit `ACTION_VIEW` with the APK mime type and a `content://` URI,
  * resolved by the system against the device's own "default app for APKs". Nothing here names an
  * installer - whatever the user has chosen is what runs, and its own root or Shizuku setup stays
@@ -34,6 +35,8 @@ import java.io.IOException
  */
 
 sealed interface InstallOutcome {
+    data object Installed : InstallOutcome
+
     /** An installer app took the APK; whether it lands is that app's to report. */
     data object HandedOff : InstallOutcome
 
@@ -70,7 +73,7 @@ object UpdateInstaller {
     /** Cleared and rewritten on each attempt, so at most one APK is ever held. */
     private const val DOWNLOAD_DIR = "updates"
 
-    private const val ROOT_COPY = "/data/local/tmp/hmce-update.apk"
+    private const val ROOT_CONFIRMED = "HMC_E_ROOT_INSTALL"
 
     /**
      * Process-scoped, deliberately not the composition's.
@@ -124,16 +127,20 @@ object UpdateInstaller {
                     file.delete()
                     InstallOutcome.NotOurs
                 } else {
-                    if (expectedPackage != app.packageName) {
+                    val extension = expectedPackage != app.packageName
+                    if (extension) {
                         val version = app.packageManager.getPackageArchiveInfo(file.absolutePath, 0)?.versionName
                         app.getSharedPreferences("extension_downloads", 0).edit()
                             .putString(expectedPackage, version)
                             .putString("${expectedPackage}.file", file.name).apply()
                     }
-                    if ((expectedPackage == app.packageName && rootInstall(file)) || handOff(app, file)) {
-                        InstallOutcome.HandedOff
-                    } else {
-                        saveToDownloads(app, file)?.let { InstallOutcome.SavedToDownloads(it) }
+                    val user = if (extension) android.os.Process.myUid() / 100000 else null
+                    val rootOutcome = rootInstall(file, user)
+                    when {
+                        rootOutcome == InstallOutcome.Installed -> rootOutcome
+                        extension && rootOutcome != null -> rootOutcome
+                        handOff(app, file) -> InstallOutcome.HandedOff
+                        else -> saveToDownloads(app, file)?.let { InstallOutcome.SavedToDownloads(it) }
                             ?: InstallOutcome.NoInstaller
                     }
                 }
@@ -230,23 +237,29 @@ object UpdateInstaller {
     }
 
     /**
-     * Installs without asking, when root is granted. False sends the APK to [handOff] instead.
+     * Streams the APK from this app's private cache. Null means root was unavailable.
      *
-     * Copied out first: system_server is not allowed to read this app's cache directory. A
-     * successful install kills this process, so the scope restart is left to [UpdateReceiver] in
-     * the new build rather than chained here; a root shell started from this app is killed with
-     * it on root managers that run su inside the caller's cgroup.
+     * A successful self-update kills this process. [UpdateReceiver] handles its scope restart.
      */
-    private fun rootInstall(file: File): Boolean {
-        val script = "cp '${file.absolutePath}' $ROOT_COPY && chmod 644 $ROOT_COPY && pm install -r $ROOT_COPY; " +
-            "r=\$?; rm -f $ROOT_COPY; exit \$r"
-        val installed = try {
-            Runtime.getRuntime().exec(arrayOf("su", "-c", script)).waitFor() == 0
-        } catch (t: Throwable) {
-            Log.i(TAG, "self-update: no root to install with", t)
-            false
+    private fun rootInstall(file: File, user: Int?): InstallOutcome? {
+        val apk = file.absolutePath.replace("'", "'\"'\"'")
+        val userArg = user?.let { " --user $it" }.orEmpty()
+        val script = "if [ \"\$(id -u)\" != 0 ]; then exit 77; fi; printf '%s\\n' '$ROOT_CONFIRMED'; " +
+            "pm install -r$userArg -S ${file.length()} < '$apk'"
+        val process = try {
+            ProcessBuilder("su", "-c", script).redirectErrorStream(true).start()
+        } catch (e: IOException) {
+            Log.i(TAG, "No root shell for package installation", e)
+            return null
         }
-        return installed
+        if (!process.waitFor(90, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            return InstallOutcome.Failed("Root installation timed out")
+        }
+        val lines = runCatching { process.inputStream.bufferedReader().use { it.readLines() } }.getOrDefault(emptyList())
+        if (ROOT_CONFIRMED !in lines) return null
+        if (process.exitValue() == 0) return InstallOutcome.Installed
+        return InstallOutcome.Failed(lines.lastOrNull { it != ROOT_CONFIRMED } ?: "Root installation failed")
     }
 
     /**

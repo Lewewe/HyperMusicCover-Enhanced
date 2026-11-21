@@ -12,8 +12,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
@@ -28,12 +26,10 @@ import com.os4.musiccover.ui.util.PageScaffold
  * state lives here, read once for both, while the tab is shown.
  */
 @Composable
-internal fun ExtensionsPageView(isBlurEnabled: Boolean, isCurrent: Boolean, extraBottomPadding: Dp) {
+internal fun ExtensionsPageView(canvas: HyperCanvasModel, standby: HyperImmersiveModel,
+    isBlurEnabled: Boolean, isCurrent: Boolean, extraBottomPadding: Dp) {
     val context = LocalContext.current
     val resources = LocalResources.current
-    val scope = rememberCoroutineScope()
-    val canvas = remember { HyperCanvasModel(context, resources, scope) }
-    val standby = remember { HyperImmersiveModel(context, scope) }
     HyperCanvasUpdates(canvas, isCurrent)
     HyperImmersiveUpdates(standby, isCurrent)
     LaunchedEffect(isCurrent) {
@@ -61,11 +57,12 @@ internal fun ExtensionsPageView(isBlurEnabled: Boolean, isCurrent: Boolean, extr
                 item {
                     ExtensionHeroCard(HyperCanvasInfo, canvas.release, stringResource(R.string.hypercanvas_list_summary),
                         canvas.cardSetup, onOpen = { if (canvas.canOpen) selected = HyperCanvasInfo.name },
-                        needsScoped = canvas.scoped)
+                        needsScoped = canvas.scoped, animateButton = isCurrent)
                 }
                 item {
                     ExtensionHeroCard(HyperImmersiveInfo, standby.release, stringResource(R.string.hyperimmersive_list_summary),
-                        standby.cardSetup, onOpen = { if (standby.canOpen) selected = HyperImmersiveInfo.name })
+                        standby.cardSetup, onOpen = { if (standby.canOpen) selected = HyperImmersiveInfo.name },
+                        animateButton = isCurrent)
                 }
             }
         }

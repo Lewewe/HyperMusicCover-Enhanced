@@ -504,7 +504,16 @@
     <string name="hyperimmersive_setup_permissions_summary">Enable HyperImmersive in LSPosed with System UI in its scope, then come back and restart. Settings stay locked until its hook is loaded.</string>
     <string name="hyperimmersive_setup_restart_summary">Restart System UI to load HyperImmersive. The screen blinks and the lock screen comes back.</string>
     <string name="hyperimmersive_setup_restart_failed">Could not restart System UI. Check root access and try again.</string>
-    <string name="hyperimmersive_setup_verifying_summary">Waiting for System UI to load the extension.</string>
+    <string name="extension_setup_verifying">Waiting for the extension to load.</string>
+    <string name="extension_restart_scopes">Restart scopes</string>
+    <string name="extension_grant">Grant</string>
+    <string name="extension_restart_needs_root">Restart the scoped apps manually or grant root access to HMC-E.</string>
+    <string name="extension_setup_scope_failed">Scope approval was not completed. Try again or select the required scopes in LSPosed.</string>
+    <string name="hyperimmersive_setup_open_failed">Could not open LSPosed. Open it manually, then return.</string>
+    <string name="hyperimmersive_setup_request_scope">Request the System UI scope from LSPosed.</string>
+    <string name="hyperimmersive_setup_scope_pending">Approve the System UI scope in the LSPosed notification.</string>
+    <string name="hyperimmersive_setup_hook_missing">System UI has not loaded HyperImmersive. Check the System UI scope in LSPosed.</string>
+    <string name="hypercanvas_setup_request_scope">Request the Spotify and System UI scopes from LSPosed.</string>
     <string name="hyperimmersive_uninstall_summary">Remove the extension using root, then restart System UI.</string>
     <string name="hyperimmersive_removed">HyperImmersive was removed.</string>
     <string name="hyperimmersive_removed_restart_failed">HyperImmersive was removed, but System UI could not be restarted.</string>

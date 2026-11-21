@@ -2,6 +2,7 @@ package com.os4.musiccover.ui.screen.extensions
 
 import android.content.Context
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +15,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -40,8 +42,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.os4.musiccover.HyperCanvasBridge
 import com.os4.musiccover.HyperImmersiveBridge
+import com.os4.musiccover.HyperImmersiveSetup
+import com.os4.musiccover.HyperImmersiveSetup.Step
 import com.os4.musiccover.ModuleBridge
 import com.os4.musiccover.R
 import com.os4.musiccover.ui.component.DropdownItem
@@ -79,57 +86,122 @@ private fun standbyPermissionsReady(state: Bundle) = state.getBoolean("notificat
 internal class HyperImmersiveModel(private val context: Context, private val scope: CoroutineScope) {
     val release = ReleaseState(HyperImmersiveInfo)
     var state by mutableStateOf(Bundle())
-    /** Whether System UI has the hook loaded; null until it has answered. */
-    var hook by mutableStateOf<Boolean?>(null)
-    var permissionsReady by mutableStateOf<Boolean?>(null)
-    var restartedAt by mutableLongStateOf(0L)
-    /** LSPosed was opened for it: restarting System UI is what is left. */
-    var lsposedVisited by mutableStateOf(false)
-    var setupMessage by mutableStateOf("")
+        private set
+    private var verifyUntil by mutableLongStateOf(0L)
+    private var now by mutableLongStateOf(SystemClock.elapsedRealtime())
+    private var manualScope by mutableStateOf(false)
+    private var returningFromLsposed = false
+    private var setupMessage by mutableStateOf("")
     /** Tries to wake it since the tab was last opened. */
     var wakes = 0
 
+    private val hook get() = if (state.containsKey("hookActive")) state.getBoolean("hookActive") else null
+    val permissionsReady get() = if (state.containsKey("notificationAccess")) standbyPermissionsReady(state) else null
+    private val scopeState get() = state.getString("scopeState")
+    private val step get() = HyperImmersiveSetup.step(state.getBoolean("installed"), scopeState, hook,
+        permissionsReady, manualScope, now < verifyUntil)
+
     val enabled get() = state.getBoolean("enabled")
-    val canOpen get() = release.installedVersion != null && hook == true && permissionsReady == true
+    val canOpen get() = release.installedVersion != null && step == Step.READY
     val status get() = when {
         !canOpen -> ExtensionStatus.SETUP
         state.getBoolean("watching") -> ExtensionStatus.RUNNING
         else -> ExtensionStatus.OFF
     }
 
-    var granting by mutableStateOf(false)
+    private var setupBusy by mutableStateOf(false)
 
-    /**
-     * What its card shows: ready, or the one setup step left - LSPosed's scope, then System UI's
-     * restart to load the hook (LSPosed says nothing about a module from outside it, so a restart
-     * that did not bring the hook sends back to LSPosed), then the app's own permissions.
-     */
     val cardSetup: CardSetup get() {
-        val verifying = hook == false && restartedAt != 0L &&
-            System.currentTimeMillis() - restartedAt < STANDBY_RESTART_MS
+        val current = step
         val ready = when {
-            release.installedVersion == null || hook == null -> null
-            hook == false -> false
-            else -> permissionsReady
+            release.installedVersion == null || current == Step.CHECKING -> null
+            else -> current == Step.READY
         }
-        return CardSetup(ready, busy = verifying || granting, run = if (ready == false) ::runSetupStep else null,
-            message = setupMessage)
+        val hint = when (current) {
+            Step.ENABLE -> R.string.hyperimmersive_setup_permissions_summary
+            Step.REQUEST_SCOPE -> R.string.hyperimmersive_setup_request_scope
+            Step.APPROVAL -> R.string.hyperimmersive_setup_scope_pending
+            Step.RESTART -> R.string.hyperimmersive_setup_restart_summary
+            Step.VERIFY -> R.string.extension_setup_verifying
+            Step.GRANT -> R.string.hyperimmersive_grant
+            else -> null
+        }
+        return CardSetup(ready, busy = setupBusy || current == Step.APPROVAL || current == Step.VERIFY,
+            run = if (ready == false) ::runSetupStep else null,
+            label = when (current) {
+                Step.RESTART -> R.string.extension_restart_scopes
+                Step.GRANT -> R.string.extension_grant
+                else -> R.string.extension_set_up
+            },
+            message = setupMessage.ifEmpty {
+                if (current == Step.REQUEST_SCOPE && scopeState == "approval-failed") {
+                    context.getString(R.string.extension_setup_scope_failed)
+                } else ""
+            }, hint = hint)
     }
 
-    fun runSetupStep() {
-        when {
-            hook == false -> if (!lsposedVisited || restartedAt != 0L) openLsposed()
-                else restartSystemUi(context.getString(R.string.hyperimmersive_setup_restart_failed))
-            permissionsReady == false -> scope.launch {
-                granting = true
-                setupMessage = ""
-                if (!grant()) setupMessage = context.getString(R.string.hyperimmersive_grant_failed)
-                granting = false
+    private fun runSetupStep() {
+        val current = step
+        runSetupAction {
+            when (current) {
+                Step.ENABLE -> {
+                    returningFromLsposed = true
+                    if (!HyperCanvasBridge.openLsposed(context, HyperImmersiveRelease.PACKAGE)) {
+                        returningFromLsposed = false
+                        setupMessage = context.getString(R.string.hyperimmersive_setup_open_failed)
+                    }
+                }
+                Step.REQUEST_SCOPE -> {
+                    val answer = HyperImmersiveBridge.requestScope(context)
+                    if (answer.isEmpty) setupMessage = context.getString(R.string.extension_setup_scope_failed)
+                    else accept(answer)
+                }
+                Step.RESTART -> {
+                    if (extensionRestartHasRoot(context)) {
+                        manualScope = false
+                        now = SystemClock.elapsedRealtime()
+                        verifyUntil = now + STANDBY_RESTART_MS
+                        if (!withContext(Dispatchers.IO + NonCancellable) { ModuleBridge.restartSystemUi() }) {
+                            verifyUntil = 0L
+                            setupMessage = context.getString(R.string.hyperimmersive_setup_restart_failed)
+                        }
+                    }
+                }
+                Step.GRANT -> if (!grant()) setupMessage = context.getString(R.string.hyperimmersive_grant_failed)
+                else -> Unit
             }
         }
     }
 
+    fun onResume() {
+        if (!returningFromLsposed) return
+        scope.launch {
+            // The launch call can still be returning when Android dispatches ON_RESUME.
+            while (setupBusy) delay(50L)
+            if (!returningFromLsposed) return@launch
+            returningFromLsposed = false
+            runSetupAction {
+                accept(HyperImmersiveBridge.query(context))
+                if (scopeState == "enable-module" && hook != true) {
+                    HyperImmersiveBridge.refreshActivation()
+                    accept(HyperImmersiveBridge.query(context))
+                }
+                manualScope = state.getBoolean("installed") && scopeState == null
+            }
+        }
+    }
+
+    private fun runSetupAction(action: suspend () -> Unit) {
+        if (setupBusy) return
+        setupBusy = true
+        setupMessage = ""
+        scope.launch {
+            try { action() } finally { setupBusy = false }
+        }
+    }
+
     suspend fun poll() {
+        if (setupBusy) return
         var answer = HyperImmersiveBridge.query(context)
         // Installed but silent: HyperOS will not let this app start it. A few tries: the new
         // process can abort in zygote before any of its code runs (seen right after a force
@@ -140,18 +212,25 @@ internal class HyperImmersiveModel(private val context: Context, private val sco
             delay(500L)
             answer = HyperImmersiveBridge.query(context)
         }
+        if (setupBusy) return
         accept(answer)
+        now = SystemClock.elapsedRealtime()
+        if (verifyUntil != 0L && (hook == true || now >= verifyUntil)) {
+            verifyUntil = 0L
+            if (hook != true) setupMessage = context.getString(R.string.hyperimmersive_setup_hook_missing)
+        }
     }
 
     private fun accept(answer: Bundle) {
-        state = answer
+        val previous = release.installedVersion
         release.refreshLocal(context)
-        if (answer.containsKey("hookActive")) hook = answer.getBoolean("hookActive")
-        if (answer.containsKey("notificationAccess")) permissionsReady = standbyPermissionsReady(answer)
-        if (release.installedVersion == null) {
-            hook = null
-            permissionsReady = null
+        if (release.installedVersion != previous || release.installedVersion == null) {
+            manualScope = false
+            verifyUntil = 0L
+            setupMessage = ""
+            state = Bundle()
         }
+        if (release.installedVersion != null && !answer.isEmpty) state = answer
     }
 
     fun set(key: String, on: Boolean) {
@@ -164,32 +243,24 @@ internal class HyperImmersiveModel(private val context: Context, private val sco
         scope.launch { HyperImmersiveBridge.configure(context, key, value).takeIf { it.size() > 0 }?.let { state = it } }
     }
 
-    fun openLsposed() {
-        lsposedVisited = true
-        restartedAt = 0L
-        scope.launch { HyperCanvasBridge.openLsposed(context, HyperImmersiveRelease.PACKAGE) }
-    }
-
-    fun restartSystemUi(failed: String) {
-        setupMessage = ""
-        restartedAt = System.currentTimeMillis()
-        scope.launch {
-            if (!withContext(Dispatchers.IO + NonCancellable) { ModuleBridge.restartSystemUi() }) {
-                restartedAt = 0L
-                setupMessage = failed
-            }
-        }
-    }
-
     suspend fun grant(): Boolean {
         val granted = HyperImmersiveBridge.grant()
-        accept(HyperImmersiveBridge.query(context))
-        return granted
+        val answer = HyperImmersiveBridge.query(context)
+        accept(answer)
+        return granted && standbyPermissionsReady(answer)
     }
 }
 
 @Composable
 internal fun HyperImmersiveUpdates(model: HyperImmersiveModel, isCurrent: Boolean) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, model, isCurrent) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (isCurrent && event == Lifecycle.Event.ON_RESUME) model.onResume()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     LaunchedEffect(isCurrent) {
         model.wakes = 0
         if (isCurrent) while (true) {

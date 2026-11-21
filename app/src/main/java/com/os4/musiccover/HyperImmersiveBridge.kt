@@ -21,6 +21,7 @@ internal object HyperImmersiveBridge {
         }
 
     suspend fun query(context: Context) = call(context, "query")
+    suspend fun requestScope(context: Context) = call(context, "requestScopes")
     suspend fun configure(context: Context, key: String, on: Boolean) =
         call(context, "configure", Bundle().apply { putBoolean(key, on) })
     suspend fun configure(context: Context, key: String, value: Int) =
@@ -28,20 +29,34 @@ internal object HyperImmersiveBridge {
     suspend fun preview(context: Context) = call(context, "preview")
 
     /**
-     * Start its process and watcher through its receiver. HyperOS rejects this app starting a
-     * stopped one through the provider (WakePathChecker), and after an install it is stopped.
+     * Let root start its provider when HyperOS blocks an ordinary cross-app cold start.
      */
     suspend fun wake(): Boolean = withContext(Dispatchers.IO) {
         runCatching {
             val user = android.os.Process.myUid() / 100000
-            val process = ProcessBuilder("su", "-c", "am broadcast --user $user --include-stopped-packages " +
-                "-n $PACKAGE/com.os4.immersive.BootReceiver -a android.intent.action.MY_PACKAGE_REPLACED")
+            val process = ProcessBuilder("su", "-c", "content call --user $user --uri $uri --method wake")
                 .redirectErrorStream(true).start()
             if (!process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) {
                 process.destroyForcibly()
                 false
             } else process.exitValue() == 0
         }.getOrDefault(false)
+    }
+
+    /** Reopen the extension process so LSPosed can deliver its service after activation. */
+    suspend fun refreshActivation(): Boolean {
+        val stopped = withContext(Dispatchers.IO) {
+            runCatching {
+                val user = android.os.Process.myUid() / 100000
+                val process = ProcessBuilder("su", "-c", "am force-stop --user $user $PACKAGE")
+                    .redirectErrorStream(true).start()
+                if (!process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                    process.destroyForcibly()
+                    false
+                } else process.exitValue() == 0
+            }.getOrDefault(false)
+        }
+        return stopped && wake()
     }
 
     /** Root: 2 when it is gone and System UI has dropped its hook, 1 if only the first, 0 otherwise. */
@@ -70,16 +85,16 @@ internal object HyperImmersiveBridge {
         runCatching {
             val user = android.os.Process.myUid() / 100000
             val process = ProcessBuilder("su", "-c",
-                "cmd notification allow_listener $PACKAGE/com.os4.immersive.MediaListener $user; " +
-                "appops set --user $user $PACKAGE SYSTEM_ALERT_WINDOW allow; " +
-                "appops set --user $user --uid $PACKAGE USE_FULL_SCREEN_INTENT allow; " +
-                "appops set --user $user $PACKAGE USE_FULL_SCREEN_INTENT allow; " +
-                "appops set --user $user $PACKAGE 10020 allow; " +
-                "appops set --user $user $PACKAGE 10021 allow; " +
-                "appops set --user $user $PACKAGE 10008 allow; " +
+                "cmd notification allow_listener $PACKAGE/com.os4.immersive.MediaListener $user && " +
+                "appops set --user $user $PACKAGE SYSTEM_ALERT_WINDOW allow && " +
+                "appops set --user $user --uid $PACKAGE USE_FULL_SCREEN_INTENT allow && " +
+                "appops set --user $user $PACKAGE USE_FULL_SCREEN_INTENT allow && " +
+                "appops set --user $user $PACKAGE 10020 allow && " +
+                "appops set --user $user $PACKAGE 10021 allow && " +
+                "appops set --user $user $PACKAGE 10008 allow || exit 1; " +
                 "pm grant --user $user $PACKAGE android.permission.POST_NOTIFICATIONS; " +
                 "pm grant --user $user $PACKAGE android.permission.READ_CALENDAR; " +
-                "pm grant --user $user $PACKAGE android.permission.READ_MEDIA_IMAGES")
+                "pm grant --user $user $PACKAGE android.permission.READ_MEDIA_IMAGES; exit 0")
                 .redirectErrorStream(true).start()
             if (!process.waitFor(15, java.util.concurrent.TimeUnit.SECONDS)) {
                 process.destroyForcibly()

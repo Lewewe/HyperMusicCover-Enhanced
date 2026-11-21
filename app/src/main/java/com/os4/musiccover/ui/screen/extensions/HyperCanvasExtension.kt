@@ -83,6 +83,8 @@ internal class HyperCanvasModel(private val context: Context, private val resour
     }
 
     val canOpen get() = stage == HyperCanvasSetup.Stage.READY && !setupBusy
+    private val awaitingApproval get() = !canvasScopesGranted(state) &&
+        state.getString("scopeState") == "awaiting-approval"
 
     /** What its card shows: ready, or the setup step its button takes. */
     val cardSetup: CardSetup get() = stage.let { s ->
@@ -90,9 +92,24 @@ internal class HyperCanvasModel(private val context: Context, private val resour
             HyperCanvasSetup.Stage.READY -> true
             HyperCanvasSetup.Stage.CHECKING -> null
             else -> false
-        }, busy = setupBusy || s == HyperCanvasSetup.Stage.VERIFYING,
+        }, busy = setupBusy || awaitingApproval || s == HyperCanvasSetup.Stage.VERIFYING,
             run = if (s == HyperCanvasSetup.Stage.PERMISSIONS || s == HyperCanvasSetup.Stage.RESTART) ::runSetupStep else null,
-            message = setupMessage)
+            label = if (s == HyperCanvasSetup.Stage.RESTART) R.string.extension_restart_scopes else R.string.extension_set_up,
+            message = setupMessage.ifEmpty {
+                if (s == HyperCanvasSetup.Stage.PERMISSIONS && state.getString("scopeState") == "approval-failed") {
+                    resources.getString(R.string.extension_setup_scope_failed)
+                } else ""
+            },
+            hint = when (s) {
+                HyperCanvasSetup.Stage.PERMISSIONS -> when {
+                    awaitingApproval -> R.string.hypercanvas_approval
+                    !state.getBoolean("frameworkConnected") -> R.string.hypercanvas_enable_module
+                    else -> R.string.hypercanvas_setup_request_scope
+                }
+                HyperCanvasSetup.Stage.RESTART -> R.string.hypercanvas_restart
+                HyperCanvasSetup.Stage.VERIFYING -> R.string.extension_setup_verifying
+                else -> null
+            })
     }
 
     /**
@@ -131,7 +148,8 @@ internal class HyperCanvasModel(private val context: Context, private val resour
     /** Back from LSPosed, or installed without its scopes yet: ask again, giving it a moment. */
     fun onResume() {
         settlingUntil = System.currentTimeMillis() + CANVAS_SETTLE_MS
-        if (setupBusy || !(returningFromLsposed || (release.installedVersion != null && !canvasScopesGranted(state)))) return
+        if (setupBusy || awaitingApproval ||
+            !(returningFromLsposed || (release.installedVersion != null && !canvasScopesGranted(state)))) return
         returningFromLsposed = false
         scope.launch {
             setupBusy = true
@@ -157,7 +175,8 @@ internal class HyperCanvasModel(private val context: Context, private val resour
         val newIconRevision = runCatching {
             context.packageManager.getPackageInfo(HyperCanvasRelease.PACKAGE, 0).lastUpdateTime
         }.getOrDefault(0L)
-        if (newIconRevision != iconRevision && newIconRevision != 0L && !canvasScopesGranted(state) && !setupBusy) {
+        if (newIconRevision != iconRevision && newIconRevision != 0L && !canvasScopesGranted(state) &&
+            !setupBusy && !awaitingApproval) {
             setupBusy = true
             try {
                 HyperCanvasBridge.refreshActivation(context)
@@ -171,7 +190,7 @@ internal class HyperCanvasModel(private val context: Context, private val resour
 
     /** The setup step [stage] offers: ask LSPosed for the scopes, or restart them. */
     fun runSetupStep() {
-        if (setupBusy) return
+        if (setupBusy || awaitingApproval) return
         val current = stage
         setupBusy = true
         setupMessage = ""
@@ -183,9 +202,13 @@ internal class HyperCanvasModel(private val context: Context, private val resour
                     state = HyperCanvasBridge.requestScopes(context)
                     if (!state.getBoolean("frameworkConnected") && !canvasScopesGranted(state)) {
                         returningFromLsposed = true
-                        if (!HyperCanvasBridge.openLsposed(context)) returningFromLsposed = false
+                        if (!HyperCanvasBridge.openLsposed(context)) {
+                            returningFromLsposed = false
+                            setupMessage = resources.getString(R.string.hyperimmersive_setup_open_failed)
+                        }
                     }
                 } else {
+                    if (!extensionRestartHasRoot(context)) return@launch
                     restartFailed = false
                     val prepared = if (state.getInt("setupProtocol") < 1 && canvasScopesGranted(state)) {
                         Bundle(state).apply {

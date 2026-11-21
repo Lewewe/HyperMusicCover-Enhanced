@@ -2,8 +2,17 @@ package com.os4.musiccover.ui.screen.extensions
 
 import android.content.Context
 import android.content.res.Resources
+import android.widget.Toast
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -31,6 +40,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.composed
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -162,6 +172,7 @@ private suspend fun downloadExtension(context: Context, resources: Resources,
         }
         val outcome = UpdateInstaller.lastOutcome
         onStatus(when (outcome) {
+            is InstallOutcome.Installed -> resources.getString(R.string.extension_installed)
             is InstallOutcome.HandedOff -> resources.getString(R.string.hypercanvas_install_ready)
             is InstallOutcome.NotOurs -> resources.getString(R.string.update_not_ours)
             is InstallOutcome.NoInstaller -> resources.getString(R.string.update_no_installer)
@@ -170,7 +181,8 @@ private suspend fun downloadExtension(context: Context, resources: Resources,
             is InstallOutcome.Cancelled -> resources.getString(R.string.update_failed, "timed out")
             else -> ""
         })
-        return outcome is InstallOutcome.HandedOff || outcome is InstallOutcome.SavedToDownloads
+        return outcome is InstallOutcome.Installed || outcome is InstallOutcome.HandedOff ||
+            outcome is InstallOutcome.SavedToDownloads
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
@@ -238,7 +250,24 @@ private fun glowColor(icon: android.graphics.drawable.Drawable): Color = runCatc
  */
 internal class CardSetup(val ready: Boolean?, val busy: Boolean = false, val run: (() -> Unit)? = null,
     /** Why the last setup step failed, if it did. */
-    val message: String = "")
+    val message: String = "", val hint: Int? = null, val label: Int = R.string.extension_set_up)
+
+/** Called only by the Restart scopes action, before marking an extension as restarting. */
+internal suspend fun extensionRestartHasRoot(context: Context): Boolean {
+    val allowed = withContext(Dispatchers.IO) {
+        runCatching {
+            val process = ProcessBuilder("su", "-c", "id -u").redirectErrorStream(true).start()
+            if (!process.waitFor(8, java.util.concurrent.TimeUnit.SECONDS)) {
+                process.destroyForcibly()
+                false
+            } else {
+                process.exitValue() == 0 && process.inputStream.bufferedReader().use { it.readText().trim() } == "0"
+            }
+        }.getOrDefault(false)
+    }
+    if (!allowed) Toast.makeText(context, R.string.extension_restart_needs_root, Toast.LENGTH_LONG).show()
+    return allowed
+}
 
 /**
  * An extension in the list, the new look being tried on HyperCanvas first: a large icon at the top
@@ -248,7 +277,7 @@ internal class CardSetup(val ready: Boolean?, val busy: Boolean = false, val run
  */
 @Composable
 internal fun ExtensionHeroCard(info: ExtensionInfo, release: ReleaseState, summary: String, setup: CardSetup,
-    onOpen: () -> Unit, needsScoped: Boolean? = null) {
+    onOpen: () -> Unit, needsScoped: Boolean? = null, animateButton: Boolean) {
     val context = LocalContext.current
     val resources = LocalResources.current
     val scope = rememberCoroutineScope()
@@ -313,16 +342,27 @@ internal fun ExtensionHeroCard(info: ExtensionInfo, release: ReleaseState, summa
                 Column(Modifier.weight(1f)) {
                     Text(summary, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                     info.needs?.let { (pkg, appName) -> NeedsLine(pkg, appName, needsScoped) }
+                    setup.hint?.let { Text(stringResource(it), fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary, modifier = Modifier.padding(top = 4.dp)) }
                     if (setup.message.isNotEmpty()) Text(setup.message, fontSize = 12.sp, color = Color(0xFFD64545),
                         modifier = Modifier.padding(top = 4.dp))
                 }
-                when {
-                    downloading -> DownloadButton(release, releasesPage) { scope.launch { release.download(context, resources) } }
-                    setup.ready == false -> CardButton(if (setup.busy) "…" else stringResource(R.string.extension_set_up),
-                        filled = !setup.busy && setup.run != null, onClick = setup.run?.takeIf { !setup.busy })
-                    ready -> CardButton(stringResource(R.string.extension_settings), filled = false,
-                        icon = MiuixIcons.Settings, onClick = onOpen)
+                val colors = MiuixTheme.colorScheme
+                val quiet = colors.onSurfaceVariantSummary.copy(alpha = .16f)
+                val action = when {
+                    downloading -> downloadAction(release, releasesPage) { scope.launch { release.download(context, resources) } }
+                    setup.ready == false -> {
+                        val run = setup.run?.takeUnless { setup.busy }
+                        CardAction(
+                            CardButtonContent(if (setup.busy) "…" else stringResource(setup.label),
+                                color = if (run == null) colors.onSurface else Color.White),
+                            if (run == null) quiet else colors.primary, run)
+                    }
+                    ready -> CardAction(CardButtonContent(stringResource(R.string.extension_settings),
+                        MiuixIcons.Settings, colors.onSurface), quiet, onOpen)
+                    else -> null
                 }
+                CardButton(action, animateButton)
             }
         }
         if (release.status.isNotEmpty() && !release.fetching &&
@@ -352,19 +392,40 @@ private fun Modifier.pressSink(onClick: () -> Unit): Modifier = composed {
         .clickable(indication = null, interactionSource = null, role = Role.Button, onClick = onClick)
 }
 
-/** The card's rounded button: solid for the step to take, quiet grey otherwise. */
+private data class CardButtonContent(val label: String, val icon: ImageVector? = null, val color: Color)
+private class CardAction(val content: CardButtonContent, val background: Color, val run: (() -> Unit)?)
+
+/** Keep one button at the card's trailing edge while its contents change size. */
 @Composable
-private fun CardButton(label: String, filled: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
-    onClick: (() -> Unit)?) {
-    val primary = MiuixTheme.colorScheme.primary
-    val fg = if (filled) Color.White else MiuixTheme.colorScheme.onSurface
+private fun CardButton(action: CardAction?, animate: Boolean) {
+    val targetColor = action?.background ?: Color.Transparent
+    val background = if (animate) animateColorAsState(targetColor,
+        animationSpec = tween(220), label = "Extension button color").value else targetColor
+    val press = action?.run?.let { Modifier.pressSink(it) } ?: Modifier
+    Box(press.clip(RoundedCornerShape(10.dp)).background(background)) {
+        if (animate) {
+            AnimatedContent(targetState = action?.content, contentAlignment = Alignment.CenterEnd,
+                transitionSpec = {
+                    (fadeIn(tween(150, delayMillis = 45)) togetherWith fadeOut(tween(95)))
+                        .using(SizeTransform { _, _ -> tween(220) })
+                }, label = "Extension button morph") { content ->
+                if (content != null) CardButtonLabel(content)
+            }
+        } else if (action != null) {
+            CardButtonLabel(action.content)
+        }
+    }
+}
+
+@Composable
+private fun CardButtonLabel(content: CardButtonContent) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = Modifier.then(if (onClick != null) Modifier.pressSink(onClick) else Modifier)
-            .height(34.dp).clip(RoundedCornerShape(10.dp))
-            .background(if (filled) primary else MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = .16f))
-            .padding(horizontal = 14.dp)) {
-        icon?.let { Icon(it, contentDescription = null, tint = fg, modifier = Modifier.size(14.dp)) }
-        Text(label, color = fg, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+        modifier = Modifier.height(34.dp).padding(horizontal = 14.dp)) {
+        content.icon?.let {
+            Icon(it, contentDescription = null, tint = content.color, modifier = Modifier.size(14.dp))
+        }
+        Text(content.label, color = content.color, fontSize = 13.sp,
+            fontWeight = FontWeight.Medium, maxLines = 1)
     }
 }
 
@@ -395,12 +456,12 @@ private fun InstalledChip() = Chip(stringResource(R.string.extension_installed),
  * the installed version is the latest.
  */
 @Composable
-private fun DownloadButton(release: ReleaseState, releasesPage: String?, onDownload: () -> Unit) {
+private fun downloadAction(release: ReleaseState, releasesPage: String?, onDownload: () -> Unit): CardAction? {
     val context = LocalContext.current
     val installed = release.installedVersion != null
     val latest = release.latest
     val action = release.canDownload || releasesPage != null
-    if (installed && !action && !release.fetching) return
+    if (installed && !action && !release.fetching) return null
     val label = when {
         release.fetching -> UpdateInstaller.progress?.let { "${(it * 100).toInt()}%" } ?: "…"
         releasesPage != null -> "GitHub"
@@ -413,18 +474,12 @@ private fun DownloadButton(release: ReleaseState, releasesPage: String?, onDownl
     }
     val primary = MiuixTheme.colorScheme.primary
     val fg = if (action) Color.White else primary
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = Modifier.then(if (action) Modifier.pressSink {
-                if (releasesPage == null) onDownload()
-                else runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
-                    android.net.Uri.parse(releasesPage))) }
-            } else Modifier)
-            .height(34.dp).clip(RoundedCornerShape(10.dp))
-            .background(if (action) primary else primary.copy(alpha = .16f))
-            .padding(horizontal = 14.dp)) {
-        if (action) Icon(MiuixIcons.Download, contentDescription = null, tint = fg, modifier = Modifier.size(14.dp))
-        Text(label, color = fg, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+    val run: (() -> Unit)? = if (!action) null else if (releasesPage == null) onDownload else {
+        { runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+            android.net.Uri.parse(releasesPage))) } }
     }
+    return CardAction(CardButtonContent(label, MiuixIcons.Download.takeIf { action }, fg),
+        if (action) primary else primary.copy(alpha = .16f), run)
 }
 
 /**
