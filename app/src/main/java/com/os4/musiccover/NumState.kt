@@ -160,11 +160,11 @@ internal object NumState {
     fun addListener(l: (Boolean) -> Unit) { listeners.addIfAbsent(l) }
 
     /** The islands take over the ordinary notifications' folding, or give it back. */
-    fun setFolding(on: Boolean) {
-        if (!available || folding == on) return
+    fun setFolding(on: Boolean, defaultState: String = "NUMBER") {
+        if (!available || folding == on && (!on || forcedDefault == defaultState)) return
         folding = on
         trace("folding=$on")
-        forceDefault(on)
+        forceDefault(on, defaultState)
         if (!on) hideCount(false)
     }
 
@@ -187,6 +187,7 @@ internal object NumState {
             trace("hands up with the row going home: folded ($target -> $number)")
             return number
         }
+        if (LockIslands.foldsOnSwipe() && !MiniPlayerRuntime.stackPulledDown) return null
         val stack = (Xp.callMethod(strategy("stackStrategy"), "calculateTargetYPosition", info) as Number).toFloat()
         if (kotlin.math.abs(stack - target) >= 1f && !pileAt(model, info, target)) return null
         // Swiped up, it is the list being opened: with one notification the list rests where the
@@ -195,6 +196,7 @@ internal object NumState {
             trace("hands up at the pile after a swipe up: left open ($target)")
             return null
         }
+        if (LockIslands.allowsBottomStack() && state() == "LIST") return stack
         val number = number()
         trace("hands up at the pile: folded instead ($target -> $number)")
         return number
@@ -422,23 +424,23 @@ internal object NumState {
      * and not the rows. Given back, the setting's own value again. A change of the setting
      * while folding sets it back to the setting's, until the islands next turn this on.
      */
-    private var forcedDefault = false
+    private var forcedDefault: String? = null
 
     private fun defaultFlow(): Any? = runCatching {
         val repo = Xp.getObjectField(model() ?: return null, "settingsRepository")
         Xp.getObjectField(Xp.getObjectField(repo, "defaultState"), "\$\$delegate_0")
     }.getOrNull()
 
-    private fun forceDefault(on: Boolean) {
+    private fun forceDefault(on: Boolean, defaultState: String) {
         runCatching {
             val flow = defaultFlow() ?: return
             val model = model() ?: return
             if (on) {
-                Xp.callMethod(flow, "setValue", stateConst(model, "NUMBER"))
-                forcedDefault = true
-                trace("default NUMBER (in memory)")
-            } else if (forcedDefault) {
-                forcedDefault = false
+                Xp.callMethod(flow, "setValue", stateConst(model, defaultState))
+                forcedDefault = defaultState
+                trace("default $defaultState (in memory)")
+            } else if (forcedDefault != null) {
+                forcedDefault = null
                 val setting = android.provider.Settings.System.getInt(
                     (Main.sAppCtx ?: return).contentResolver, "default_keyguard_notif_state", 2)
                 val name = when (setting) { 3 -> "NUMBER"; 1 -> "LIST"; else -> "STACK" }
@@ -454,7 +456,7 @@ internal object NumState {
      * never while the stack is being moved or is the list the user opened.
      */
     fun foldIfPiled(why: String) {
-        if (!folding) return
+        if (!folding || LockIslands.foldsOnSwipe()) return
         main.removeCallbacks(foldCheck)
         foldWhy = why
         main.postDelayed(foldCheck, FOLD_SETTLE_MS)
@@ -464,11 +466,11 @@ internal object NumState {
     private const val FOLD_SETTLE_MS = 350L
 
     private val foldCheck = Runnable {
-        if (!folding || !LockIslands.foldsToCount()) return@Runnable
+        if (!folding || !LockIslands.foldsToCount() || LockIslands.foldsOnSwipe()) return@Runnable
         // A new notification's pile stays until the user pulls it down.
         if (LockIslands.arrivalShown()) return@Runnable
         // The list the spread opened, passing through the pile on its way: not folded back.
-        if (LockIslands.keepsPileOnFold()) return@Runnable
+        if (LockIslands.keepsPileOnFold() || LockIslands.allowsBottomStack()) return@Runnable
         if (LockIslands.spreadingNow()) { trace("pile check skipped: spread ($foldWhy)"); return@Runnable }
         if (busy()) { foldIfPiled(foldWhy); return@Runnable }
         if (state() == "STACK") goTo("NUMBER", anim = true, why = "piled ($foldWhy)")

@@ -298,6 +298,39 @@ internal object LockIslands {
      * Only with NumState's hooks in; without them, the old way.
      */
     private val nativeStack get() = NumState.available
+    @Volatile private var notificationDefault = "NUMBER"
+    @Volatile private var allowBottomStack = false
+    private var applyNotificationDefault = true
+
+    fun allowsBottomStack(): Boolean = allowBottomStack && stackMembers.size > 1
+    fun foldsOnSwipe(): Boolean = notificationDefault != "NUMBER"
+
+    private fun collectsOrdinary(): Boolean = !foldsOnSwipe() || nativeStack
+
+    fun setNotificationStyle(style: Int, allowStack: Boolean) {
+        val default = when (style) {
+            MiniPlayerConfig.NOTIFICATIONS_LIST -> "LIST"
+            MiniPlayerConfig.NOTIFICATIONS_STACK -> "STACK"
+            else -> "NUMBER"
+        }
+        if (notificationDefault == default && allowBottomStack == allowStack) return
+        applyNotificationDefault = notificationDefault != default || applyNotificationDefault
+        notificationDefault = default
+        allowBottomStack = allowStack
+        endArrival("notification mode changed")
+        arrived.clear()
+        if (!collectsOrdinary()) {
+            stackMembers = emptyList()
+            stackNote = null
+        }
+        if (active || !collectsOrdinary()) updateFolding()
+        publish()
+        invalidate("notification mode changed")
+    }
+
+    private fun updateFolding() {
+        NumState.setFolding(collectsOrdinary(), notificationDefault)
+    }
 
     /** For the controller: the stack island opens as the stack's list (openStack), no flight. */
     fun foldsNatively(): Boolean = nativeStack
@@ -306,7 +339,8 @@ internal object LockIslands {
     private fun stackFolded(): Boolean = NumState.inNumber ?: (NumState.state() == "NUMBER")
 
     /** The stack island stands for the folded stack right now (NumState's hands-up asks). */
-    fun foldsToCount(): Boolean = nativeStack && (active || spreading) && stackMembers.isNotEmpty()
+    fun foldsToCount(): Boolean = nativeStack && collectsOrdinary() &&
+        (active || spreading) && stackMembers.isNotEmpty()
 
     /**
      * The whole row is out as the lock screen's own cards while the stack is its list (the
@@ -441,7 +475,7 @@ internal object LockIslands {
         if (nativeStack) {
             // On for good once the islands have shown (off only with the feature: stopFolding).
             if (value) {
-                NumState.setFolding(true)
+                updateFolding()
                 NumState.foldIfPiled("row showing")
             }
             followStack("row ${if (value) "showing" else "gone"}")
@@ -640,6 +674,7 @@ internal object LockIslands {
         val entry = args.firstOrNull() ?: return false
         if (!lockedOrLocking(filterObject)) {
             postsArmed = false
+            applyNotificationDefault = true
             endArrival("unlocked")
             // Unlocked: what a tap put back is an island again on the next lock screen - all but
             // 高德's, which stays open with its map as the cover stays up.
@@ -661,7 +696,7 @@ internal object LockIslands {
         }
         lockedRun = true
         val note = read(entry, redacted(filterObject, entry)) ?: return false
-        if (!note.focus && probeNormalsInStack) return false
+        if (!note.focus && (probeNormalsInStack || !collectsOrdinary())) return false
         // Folded natively, an ordinary notification is read for the stack island and left in
         // the stack: the stack's own fold hides it.
         if (!note.focus && nativeStack) {
@@ -941,7 +976,21 @@ internal object LockIslands {
             // the list, and read as a pile on the way it was folded back (2026-09-30).
             if (fresh.isNotEmpty()) NumState.trace("arrival ${fresh.size} active=$active spread=$spreading " +
                 "n=${members.size} folded=${stackFolded()} on=${screenOn()} out=$arrivalOut")
-            if (arrivalOut) {
+            if (foldsOnSwipe()) {
+                if (active && !spreading && members.isNotEmpty() && screenOn()) {
+                    updateFolding()
+                    val target = notificationDefault
+                    if (NumState.state() != target &&
+                        (applyNotificationDefault || fresh.isNotEmpty() && stackFolded())) {
+                        main.post {
+                            if (notificationDefault == target && active && !spreading && screenOn()) {
+                                NumState.goTo(target, why = "lock screen notification default")
+                            }
+                        }
+                    }
+                    applyNotificationDefault = false
+                }
+            } else if (arrivalOut) {
                 // Dismissed, or gone: the rest come back. Another new one joins the ones out.
                 arrivalKeys.retainAll(stackMembers.toSet())
                 if (arrivalKeys.addAll(fresh)) main.post {
@@ -1184,7 +1233,7 @@ internal object LockIslands {
         // Spread out, the count stays hidden too: the row folding back comes into its place. So
         // with the stack opened its own way: the pill now grows back in from nothing, and the
         // count line showed through ("2 notifications") until it had (recording 2026-10-24).
-        if (nativeStack) NumState.hideCount(spreading || active && stackNote != null)
+        if (nativeStack) NumState.hideCount(collectsOrdinary() && (spreading || active && stackNote != null))
         val next = (focusShown + listOfNotNull(stack)).sortedWith(bigFirst)
         // Unchanged is the same reading (read() hands back the cached note): by key and time, a
         // stopwatch paused or resumed - its `when` the same - never reached the island.

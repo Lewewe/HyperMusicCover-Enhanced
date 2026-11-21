@@ -63,6 +63,33 @@ object MiniPlayerConfig {
 
     /** Only a swipe up on the pill opens the notifications; HyperOS's swipe on the stack is off. */
     const val PILL_ONLY_NOTIFICATIONS = "pillOnlyNotifications"
+    const val NOTIFICATION_STYLE = "ordinaryNotifications"
+    const val NOTIFICATIONS_CAPSULE = 0
+    const val NOTIFICATIONS_LIST = 1
+    const val NOTIFICATIONS_STACK = 2
+    const val ALLOW_BOTTOM_STACK = "allowBottomStack"
+    private const val NOTIFICATION_STYLE_WITHOUT_STACK = "notificationStyleWithoutStack"
+
+    const val CUSTOM_ROW_SIZE = "customRowSize"
+    const val PILL_SIZE = "pillSizePercent"
+    const val SHORTCUT_SIZE = "shortcutSizePercent"
+
+    fun fullSizeButtons(config: JSONObject): Boolean =
+        colorOs(config) && config.optBoolean(COLOROS_FULL_SIZE)
+
+    fun customRowSize(config: JSONObject): Boolean =
+        config.optBoolean(CUSTOM_ROW_SIZE) && !fullSizeButtons(config)
+
+    fun rowSizeScale(config: JSONObject, key: String): Float =
+        if (customRowSize(config)) rowSize(config.optDouble(key, 100.0)) / 100f else 1f
+
+    fun setBottomStack(config: JSONObject, enabled: Boolean) {
+        config.put(ALLOW_BOTTOM_STACK, enabled)
+        if (enabled) config.put(NOTIFICATION_STYLE, NOTIFICATIONS_STACK)
+    }
+
+    @JvmStatic fun rowSize(value: Double): Float =
+        if (value.isFinite()) value.toFloat().coerceIn(80f, 100f) else 100f
 
     const val COMPACT_NOTIFICATIONS = "compactNotifications"
     const val NOTIFICATION_SIZE = "notificationSizePercent"
@@ -88,6 +115,12 @@ object MiniPlayerConfig {
         COLOROS_FULL_SIZE to false,
         COMPACT_NOTIFICATIONS to false,
         PILL_ONLY_NOTIFICATIONS to false,
+        NOTIFICATION_STYLE to NOTIFICATIONS_CAPSULE,
+        ALLOW_BOTTOM_STACK to false,
+        NOTIFICATION_STYLE_WITHOUT_STACK to NOTIFICATIONS_CAPSULE,
+        CUSTOM_ROW_SIZE to false,
+        PILL_SIZE to 100f,
+        SHORTCUT_SIZE to 100f,
         NOTIFICATION_SIZE to 80f,
         NOTIFICATION_DROP to 16f,
         BACKGROUND_BLUR to false,
@@ -124,13 +157,28 @@ object MiniPlayerConfig {
     @JvmStatic fun normalizedJson(raw: String?): String {
         val input = runCatching { JSONObject(raw.orEmpty()) }.getOrDefault(JSONObject())
         val out = JSONObject()
+        val style = input.optInt(NOTIFICATION_STYLE, NOTIFICATIONS_CAPSULE)
+        val allowStack = input.optBoolean(ALLOW_BOTTOM_STACK, style == NOTIFICATIONS_STACK)
+        val withoutStack = if (style == NOTIFICATIONS_LIST || style == NOTIFICATIONS_STACK &&
+            input.optInt(NOTIFICATION_STYLE_WITHOUT_STACK) == NOTIFICATIONS_LIST
+        ) NOTIFICATIONS_LIST else NOTIFICATIONS_CAPSULE
         defaults.forEach { (key, fallback) ->
-            out.put(key, if (key == ENABLED || key == MEDIA_COLLAPSED_DEFAULT || key == ADAPTIVE_WIDTH || key == BACKGROUND_BLUR || key == STATUS_AT_DATE || key == COMPACT_NOTIFICATIONS ||
-                key == LIST_WITHOUT_PLAYER || key == NOTE_TEXT_SCROLL || key == COLOROS_FULL_SIZE ||
-                key == PILL_ONLY_NOTIFICATIONS) {
+            out.put(key, if (key == ALLOW_BOTTOM_STACK) {
+                allowStack
+            } else if (fallback is Boolean) {
                 runCatching { input.getBoolean(key) }.getOrDefault(fallback)
             } else if (key == PILL_STYLE) {
                 input.optInt(key, STYLE_COLOROS).coerceIn(STYLE_COLOROS, STYLE_HYPEROS)
+            } else if (key == NOTIFICATION_STYLE) {
+                when (style) {
+                    NOTIFICATIONS_LIST -> style
+                    NOTIFICATIONS_STACK -> if (allowStack) style else withoutStack
+                    else -> NOTIFICATIONS_CAPSULE
+                }
+            } else if (key == NOTIFICATION_STYLE_WITHOUT_STACK) {
+                withoutStack
+            } else if (key == PILL_SIZE || key == SHORTCUT_SIZE) {
+                rowSize(input.optDouble(key, 100.0))
             } else if (key == NOTIFICATION_SIZE) {
                 notificationSize(input.optDouble(key, 80.0))
             } else if (key == NOTIFICATION_DROP) {

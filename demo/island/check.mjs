@@ -64,7 +64,7 @@ async function loadSource(name) {
   const imports = [...outputText.matchAll(/from ['"]([^'"]+)['"]/g)];
   for (const [, specifier] of imports) {
     const url = specifier.startsWith('.') ?
-      await loadSource(`${specifier.slice(2)}${['./IslandCards', './IslandDemo'].includes(specifier) ? '.tsx' : '.ts'}`) :
+      await loadSource(`${specifier.slice(2)}${['./IslandCards', './IslandDemo', './LockScreenGuide'].includes(specifier) ? '.tsx' : '.ts'}`) :
       pathToFileURL(require.resolve(specifier)).href;
     outputText = outputText.replaceAll(`"${specifier}"`, JSON.stringify(url))
       .replaceAll(`'${specifier}'`, JSON.stringify(url));
@@ -76,9 +76,11 @@ async function loadSource(name) {
 const {Root} = await import(await loadSource('Root.tsx'));
 assert.deepEqual(Root().props.children.map(({props: {id, width, height, fps, durationInFrames}}) =>
   [id, width, height, fps, durationInFrames]), [
-  ['IslandColorOS', 1140, 336, 60, 420], ['IslandHyperOS', 1140, 336, 60, 324],
+  ['IslandColorOS', 600, 650, 60, 358], ['IslandHyperOS', 1140, 336, 60, 324],
+  ['IslandColorOSList', 600, 650, 60, 171], ['IslandColorOSStack', 600, 650, 60, 265],
 ]);
 const {IslandScene} = await import(await loadSource('IslandDemo.tsx'));
+const {LockScreenGuide} = await import(await loadSource('LockScreenGuide.tsx'));
 const {motion} = await import(await loadSource('demoMotion.ts'));
 assert.equal(motion(60, 60, 1), 0);
 assert.equal(motion(132, 60, 1, 1.2), 1);
@@ -90,18 +92,20 @@ function inspect(element) {
   const {children, ...props} = element.props;
   for (const [key, value] of Object.entries(props)) {
     if (typeof value === 'number') assert.ok(Number.isFinite(value), `Invalid ${key}`);
-    if (typeof value === 'number' && ['width', 'height', 'r', 'rx'].includes(key)) assert.ok(value >= 0, `Negative ${key}`);
+    if (typeof value === 'number' && ['width', 'height', 'r', 'rx'].includes(key)) {
+      assert.ok(value >= 0, `Negative ${key} on ${element.type}: ${JSON.stringify(props)}`);
+    }
     if (typeof value === 'string') assert.ok(!/NaN|Infinity/.test(value), `Invalid ${key}`);
   }
   return {type: typeof element.type === 'symbol' ? 'fragment' : element.type, props, children: inspect(children)};
 }
-for (const [colorOs, frames] of [[true, 420], [false, 324]]) {
-  const scene = frame => inspect(IslandScene({colorOs, frame, fps: 60}));
+const nodes = tree => tree == null || typeof tree !== 'object' ? [] :
+  Array.isArray(tree) ? tree.flatMap(nodes) : [tree, ...nodes(tree.children)];
+{
+  const scene = frame => inspect(IslandScene({frame, fps: 60}));
   const opening = scene(0);
   assert.equal(opening.props.width, 1140);
   assert.equal(opening.props.height, 336);
-  const nodes = tree => tree == null || typeof tree !== 'object' ? [] :
-    Array.isArray(tree) ? tree.flatMap(nodes) : [tree, ...nodes(tree.children)];
   const circles = nodes(opening).filter(node => node.type === 'circle' && node.props.fill === 'url(#glass)');
   assert.equal(circles.length, 2);
   for (const circle of circles) {
@@ -113,8 +117,8 @@ for (const [colorOs, frames] of [[true, 420], [false, 324]]) {
   assert.ok(nodes(opening).some(node => node.type === 'rect' && node.props.rx === 60 && node.props.height === 336));
   assert.ok(nodes(scene(150)).some(node => node.type === 'text' && node.children === '3+'));
   assert.equal(opening.props.viewBox, '0 0 1140 336');
-  assert.deepEqual(scene(0), scene(frames - 1), 'Loop endpoints differ');
-  if (!colorOs) {
+  assert.deepEqual(scene(0), scene(323), 'Loop endpoints differ');
+  {
     const islands = frame => nodes(scene(frame)).filter(node =>
       ['hyper-big', 'hyper-small'].includes(node.props.id));
     const resting = islands(102);
@@ -136,6 +140,48 @@ for (const [colorOs, frames] of [[true, 420], [false, 324]]) {
       assert.ok(finished[1].props.opacity > 0.99);
     }
   }
-  for (let frame = 0; frame < frames; frame++) scene(frame);
+  for (let frame = 0; frame < 324; frame++) scene(frame);
 }
-console.log('Scene checks passed: 744 frame trees, finite geometry and identical loop endpoints; no rendering.');
+for (const [guide, frames, rests] of [
+  ['capsule', 358, []],
+  ['list', 171, [[0, 200], [70, 575], [145, 200]]],
+  ['stack', 265, [[0, 200], [75, 494], [135, 575], [190, 494], [250, 200]]],
+]) {
+  const scene = frame => inspect(LockScreenGuide({guide, frame}));
+  for (let frame = 0; frame < frames; frame++) scene(frame);
+  assert.deepEqual(scene(0), scene(frames - 1), `Loop endpoints differ for ${guide}`);
+  for (const [frame, y] of rests) {
+    assert.equal(nodes(scene(frame)).find(node => node.props.id === 'notification-0').props.y, y);
+  }
+  for (const [start, end] of guide === 'list' ? [[28, 66]] : guide === 'stack' ? [[30, 63], [85, 119]] : []) {
+    const cardsAt = frame => nodes(scene(frame)).filter(node => node.props.id?.startsWith('notification-'))
+      .map(node => node.props);
+    const center = card => card.y + card.height / 2;
+    let previous = cardsAt(start);
+    for (let frame = start + 1; frame <= end; frame++) {
+      const cards = cardsAt(frame);
+      cards.forEach((card, index) => {
+        assert.ok(center(card) >= center(previous[index]) - 1, 'A folding card reversed before settling');
+        assert.ok(center(card) - center(previous[index]) < 28, 'A folding card jumped');
+        assert.ok(card.width <= previous[index].width + 1e-6, 'A folding card widened');
+      });
+      previous = cards;
+    }
+    if (guide === 'list' || start === 85) {
+      const [rear, middle, lead] = previous;
+      for (const card of [rear, middle]) {
+        assert.equal(card.opacity, 0);
+        assert.ok(center(card) <= center(lead));
+        assert.ok(card.width < lead.width);
+      }
+    }
+  }
+  if (guide === 'list') {
+    const cardAt = (frame, index) =>
+      nodes(scene(frame)).find(node => node.props.id === `notification-${index}`).props;
+    assert.equal(cardAt(44, 2).opacity, 0);
+    assert.ok(cardAt(44, 1).opacity > 0);
+    assert.ok(cardAt(54, 0).y > cardAt(70, 0).y, 'The lead card should settle at the capsule');
+  }
+}
+console.log('Scene checks passed: geometry, notification guide stops and loop endpoints.');

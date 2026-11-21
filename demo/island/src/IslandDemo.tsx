@@ -3,105 +3,27 @@
 // Its geometry, springs and timings are modelled on the
 // behaviour and parameter values of ColorOS 16 (OPPO); no ColorOS code is included.
 
-import {Easing, useCurrentFrame, useVideoConfig} from 'remotion';
-import {Box, capsulePath, clamp, earGlass, frame as pillFrame, gooPath,
-  neighbourPath, newContent, oldContent, roundAt} from './colorOsPill';
+import {useCurrentFrame, useVideoConfig} from 'remotion';
+import {Box, capsulePath, clamp} from './colorOsPill';
 import {motion} from './demoMotion';
 import {Content} from './IslandCards';
+import {LockScreenGuide, type Guide} from './LockScreenGuide';
 
 const D = 336 * 0.42;
 const CY = 336 * 0.56;
 const SIDE = 60, GAP = 66;
 const REST = new Box(SIDE + D + GAP, CY - D / 2, 1140 - 2 * (SIDE + D + GAP), D);
-const OUT = REST.h * 0.19, STROKE = REST.h * 0.05;
-const SWIPE = Easing.bezier(0.3, 0, 0.15, 1);
-
-function Finger({frame, fps, start, duration = 0.7, x, y = CY + 12, dx = 0, dy = 0, goo = false}: {
+function Finger({frame, fps, start, duration = 0.7, x, y = CY + 12, dx = 0, dy = 0}: {
   frame: number; fps: number; start: number; duration?: number; x: number; y?: number;
-  dx?: number; dy?: number; goo?: boolean;
+  dx?: number; dy?: number;
 }) {
   const t = frame / fps - start;
   if (t <= 0 || t >= duration) return null;
-  const travel = clamp((t - 0.1) / (duration - 0.22));
-  const p = goo ? SWIPE(travel) : clamp(motion(frame, fps, start + 0.1, duration - 0.22, 0.99));
+  const p = clamp(motion(frame, fps, start + 0.1, duration - 0.22, 0.99));
   const alpha = clamp(motion(frame, fps, start, 0.1, 0.99)) *
     (1 - clamp(motion(frame, fps, start + duration - 0.12, 0.12, 0.99)));
   return <circle cx={x + dx * p} cy={y + dy * p} r={22 + 2 * (1 - alpha)}
     fill="white" fillOpacity={0.26} stroke="white" strokeOpacity={0.35} strokeWidth={1.5} opacity={alpha} />;
-}
-
-function Brackets({box = REST, alpha = 1}: {box?: Box; alpha?: number}) {
-  return <path opacity={clamp(alpha)} d={neighbourPath(box, false, 1, OUT, STROKE) +
-    neighbourPath(box, true, 1, OUT, STROKE)} fill="url(#glass)" />;
-}
-
-function Capsule({box, music, id, time, alpha = 1, scale = 1, blur = 0}: {
-  box: Box; music: boolean; id: string; time: number; alpha?: number; scale?: number; blur?: number;
-}) {
-  return <g opacity={clamp(alpha)} transform={`translate(${box.cx()} ${box.cy()}) scale(${scale}) translate(${-box.cx()} ${-box.cy()})`}
-    style={{filter: `blur(${Math.max(0, blur)}px)`}}>
-    <path d={capsulePath(box)} fill="url(#glass)" />
-    <Content box={box} music={music} id={id} badge={!music} marquee={music ? 0 : (time % 3) * 90} />
-  </g>;
-}
-
-function Goo({u, right, music, time}: {u: number; right: boolean; music: boolean; time: number}) {
-  // frame() mirrors its left-going geometry; right swipes use that mirror.
-  const next = !right, f = pillFrame(REST, u, next, 0, OUT, STROKE);
-  const a = f.oldBean < 0, b = f.newBean < 0;
-  let path = a && b ? gooPath(f.new, f.old, f.reach) :
-    (a ? gooPath(f.old) : earGlass(f.old, next, REST, STROKE)) +
-    (b ? gooPath(f.new) : earGlass(f.new, !next, REST, STROKE));
-  path += neighbourPath(REST, next, f.bracket, OUT, STROKE) +
-    neighbourPath(REST, !next, f.oldBracket, OUT, STROKE);
-  const content = (box: Box, isMusic: boolean, alpha: number, id: string) => {
-    const k = clamp(box.w / REST.w, 0.2, 1);
-    return <g opacity={alpha}>
-      <defs><clipPath id={`${id}-goo`}><path d={capsulePath(box)} /></clipPath></defs>
-      <g clipPath={`url(#${id}-goo)`}>
-        <g transform={`translate(${box.x} ${box.y}) scale(${k} ${box.h / REST.h})`}>
-          <Content box={new Box(0, 0, REST.w, REST.h)} music={isMusic} id={id}
-            badge={!isMusic} marquee={isMusic ? 0 : (time % 3) * 90} />
-        </g>
-      </g>
-    </g>;
-  };
-  return <>
-    <path d={path} fill="url(#glass)" fillRule="nonzero" />
-    {a && content(f.old, music, oldContent(u)[1], 'goo-old')}
-    {b && content(f.new, !music, newContent(u, roundAt(REST, STROKE))[1], 'goo-new')}
-  </>;
-}
-
-function ColorOs({frame, fps}: {frame: number; fps: number}) {
-  const t = frame / fps, s = (start: number, duration = 0.7, damping = 0.75, response = 0.45) =>
-    motion(frame, fps, start, duration, damping, response);
-  const swipe = t >= 3 && t < 3.7 ? {start: 3, music: false, right: true} :
-    t >= 4.3 && t < 5 ? {start: 4.3, music: true, right: false} :
-    t >= 5.6 && t < 6.3 ? {start: 5.6, music: false, right: true} : null;
-  const music = t < 1 || (t >= 3.7 && t < 4.3) || t >= 6.3;
-  const update = t >= 1 && t < 2.2;
-  const widthSpring = s(1, 1.2, 0.6, 0.9);
-  // Opposing spring impulses dip the width before its overshooting recovery.
-  const dip = 120 * (s(1, 0.6, 0.6, 0.9) - s(1.16, 1.04, 0.6, 0.9));
-  const updated = new Box(REST.x + dip / 2, REST.y, REST.w - dip, REST.h);
-  return <>
-    {swipe ? <Goo u={SWIPE(clamp((t - swipe.start) / 0.7))} right={swipe.right} music={swipe.music} time={t} /> :
-      update ? <>
-        <Brackets box={updated} /><path d={capsulePath(updated)} fill="url(#glass)" />
-        <g opacity={1 - clamp(s(1, 0.45, 0.99, 0.3))} style={{filter: `blur(${36 * clamp(widthSpring)}px)`}}
-          transform={`translate(570 ${CY}) scale(${1 - 0.8 * clamp(s(1, 0.3, 0.99, 0.15))}) translate(-570 ${-CY})`}>
-          <Content box={updated} music id="update-old" />
-        </g>
-        <g opacity={clamp(s(1.16, 0.6, 0.99))} style={{filter: `blur(${36 * (1 - clamp(s(1.16, 0.7, 0.99, 0.5)))}px)`}}>
-          <Content box={updated} music={false} id="update-new" badge marquee={(t - 1) * 90} />
-        </g>
-      </> : <>
-        <Brackets /><Capsule box={REST} music={music} id="color-rest" time={t} />
-      </>}
-    {[{start: 3, right: true}, {start: 4.3, right: false}, {start: 5.6, right: true}].map(({start, right}) =>
-      <Finger key={start} frame={frame} fps={fps} start={start} x={REST.cx() + (right ? -130 : 130)} dx={right ? 260 : -260} goo />)}
-  </>;
 }
 
 function HyperOs({frame, fps}: {frame: number; fps: number}) {
@@ -143,10 +65,12 @@ function HyperOs({frame, fps}: {frame: number; fps: number}) {
   </>;
 }
 
-function Disc({cx, camera = false}: {cx: number; camera?: boolean}) {
+function Disc({cx, camera = false, cy = CY, diameter = D}: {
+  cx: number; camera?: boolean; cy?: number; diameter?: number;
+}) {
   return <g>
-    <circle cx={cx} cy={CY} r={D / 2} fill="url(#glass)" />
-    <g transform={`translate(${cx - D / 4} ${CY - D / 4}) scale(${D / 48})`}
+    <circle cx={cx} cy={cy} r={diameter / 2} fill="url(#glass)" />
+    <g transform={`translate(${cx - diameter / 4} ${cy - diameter / 4}) scale(${diameter / 48})`}
       fill="none" stroke="white" strokeOpacity={0.9} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
       {camera ? <>
         <path d="M 5 6.5 H 7.3 L 9 4 H 15 L 16.7 6.5 H 19 Q 21 6.5 21 8.5 V 18 Q 21 20 19 20 H 5 Q 3 20 3 18 V 8.5 Q 3 6.5 5 6.5 Z" />
@@ -159,9 +83,9 @@ function Disc({cx, camera = false}: {cx: number; camera?: boolean}) {
   </g>;
 }
 
-export function IslandScene({colorOs, frame, fps}: {colorOs: boolean; frame: number; fps: number}) {
+export function IslandScene({frame, fps}: {frame: number; fps: number}) {
   return <svg xmlns="http://www.w3.org/2000/svg" width={1140} height={336} viewBox="0 0 1140 336"
-    role="img" aria-label={`${colorOs ? 'ColorOS' : 'HyperOS'} lock-screen islands: notifications, gestures and music`}>
+    role="img" aria-label="HyperOS lock-screen islands: notifications, gestures and music">
     <defs>
       <linearGradient id="wallpaper" x1="0" x2="0" y1="0" y2="1">
         <stop stopColor="#2e3f5c" /><stop offset="1" stopColor="#18222f" />
@@ -184,13 +108,13 @@ export function IslandScene({colorOs, frame, fps}: {colorOs: boolean; frame: num
         <ellipse cx={860} cy={650} rx={220} ry={160} fill="#3c8992" />
       </g>
       <Disc cx={SIDE + D / 2} /><Disc cx={1140 - SIDE - D / 2} camera />
-      {colorOs ? <ColorOs frame={frame} fps={fps} /> : <HyperOs frame={frame} fps={fps} />}
+      <HyperOs frame={frame} fps={fps} />
     </g>
   </svg>;
 }
 
-export function IslandDemo({colorOs}: {colorOs: boolean}) {
+export function IslandDemo({guide}: {guide?: Guide}) {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
-  return <IslandScene colorOs={colorOs} frame={frame} fps={fps} />;
+  return guide ? <LockScreenGuide guide={guide} frame={frame} /> : <IslandScene frame={frame} fps={fps} />;
 }

@@ -30,13 +30,16 @@ function runFfmpeg(args) {
 const serveUrl = await bundle({entryPoint: path.join(project, 'src/index.ts'),
   outDir: path.join(out, 'bundle')});
 
-for (const [id, file, frames] of [
-  ['IslandColorOS', 'island_demo_coloros.webp', 420],
-  ['IslandHyperOS', 'island_demo_hyperos.webp', 324],
+for (const [id, file, frames, width, height] of [
+  ['IslandColorOS', 'island_demo_coloros.webp', 358, 600, 650],
+  ['IslandHyperOS', 'island_demo_hyperos.webp', 324, 1140, 336],
+  ['IslandColorOSList', 'island_demo_coloros_list.webp', 171, 600, 650],
+  ['IslandColorOSStack', 'island_demo_coloros_stack.webp', 265, 600, 650],
 ]) {
+  if (process.argv.length > 2 && !process.argv.slice(2).includes(id)) continue;
   const composition = await selectComposition({serveUrl, id, inputProps: {}});
   if (composition.durationInFrames !== frames || composition.fps !== 60 ||
-      composition.width !== 1140 || composition.height !== 336) {
+      composition.width !== width || composition.height !== height) {
     throw new Error(`Unexpected composition settings: ${id}`);
   }
   const outputDir = path.join(out, id);
@@ -48,9 +51,18 @@ for (const [id, file, frames] of [
     onFrameUpdate: () => {},
   });
   const output = path.join(out, file);
-  await runFfmpeg(['-y', '-framerate', '60', '-i', path.join(outputDir, 'frame-%04d.png'),
+  await runFfmpeg(['-hide_banner', '-loglevel', 'error', '-y', '-framerate', '60', '-i', path.join(outputDir, 'frame-%04d.png'),
+    '-frames:v', String(frames),
     '-c:v', 'libwebp_anim', '-lossless', '0', '-quality', '80', '-loop', '0',
     '-pix_fmt', 'yuva420p', output]);
   const {size} = await stat(output);
   console.log(`${output}: ${size.toLocaleString()} bytes (${(size / 1024).toFixed(1)} KiB)`);
+  const previews = id === 'IslandColorOSList' ? [['list', '0000'], ['capsule', '0072']] :
+    id === 'IslandColorOSStack' ? [['stack', '0075']] : [];
+  for (const [style, frame] of previews) {
+    await runFfmpeg(['-hide_banner', '-loglevel', 'error', '-y',
+      '-i', path.join(outputDir, `frame-${frame}.png`),
+      '-vf', 'crop=288:634:156:8', '-frames:v', '1', '-update', '1',
+      path.join(out, `island_preview_${style}.png`)]);
+  }
 }

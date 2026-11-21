@@ -2057,7 +2057,7 @@ private class MiniPlayerController(
     private var refreshPosted = false
     private var positionPosted = false
     private var destroyed = false
-    private var configuredHeightDp = 72f
+    private var configuredHeightDp = MiniPlayerConfig.visibleHeightDp(null)
     private var config = JSONObject(MiniPlayerConfig.defaultJson())
     private var forceHeaderRefresh = true
     private var lastPresentationLog = ""
@@ -5095,7 +5095,7 @@ private class MiniPlayerController(
      * a pull held part way showed a HyperOS island growing out of the capsule (2026-10-24).
      */
     private fun stylePillFace(view: MiniPlayerView) {
-        view.setCompactScale(compactScale() * shortcutScale())
+        view.setCompactScale(compactScale() * rowStyleScale() * pillSizeScale())
         view.setFitArtwork(colorOs())
     }
 
@@ -5104,8 +5104,18 @@ private class MiniPlayerController(
      * them smaller than the capsule, which balances the row (the user's request, 2026-10-18).
      * At full size they take that room back from the capsule's width (see pillRest).
      */
+    private fun rowStyleScale(): Float =
+        if (colorOs() && !MiniPlayerConfig.fullSizeButtons(config)) COLOROS_SHORTCUT else 1f
+
+    private fun pillSizeScale(): Float = MiniPlayerConfig.rowSizeScale(config, MiniPlayerConfig.PILL_SIZE)
+
     private fun shortcutScale(): Float =
-        if (colorOs() && !config.optBoolean(MiniPlayerConfig.COLOROS_FULL_SIZE)) COLOROS_SHORTCUT else 1f
+        rowStyleScale() * MiniPlayerConfig.rowSizeScale(config, MiniPlayerConfig.SHORTCUT_SIZE)
+
+    private fun shortcutDiameter(): Int = (dp(configuredHeightDp) * shortcutScale()).roundToInt()
+
+    private fun sizedPillWidth(available: Int): Int =
+        (available * pillSizeScale()).roundToInt().coerceAtLeast(minOf(available, dp(MiniPlayerGeometry.MIN_PILL_DP)))
 
     /** The glass of ColorOS's row: the brackets, and through a pull or a switch all of it. */
     private var gooGlass: GooGlass? = null
@@ -7384,6 +7394,7 @@ private class MiniPlayerController(
         var base = Float.NaN
         var ended = false
         var toList = false
+        var toStack = false
         /** The capsule's own lift as the spread took the pull over (ColorOS). */
         var lift = Float.NaN
         fun pulled() = startY - y
@@ -7595,19 +7606,22 @@ private class MiniPlayerController(
         // Let go before the rows were in, short of opening: nothing opened.
         val finger = s.finger
         if (finger != null && finger.ended && !finger.toList) {
-            endSpread(folded = true, why = "let go before the list")
-            return
+            s.toStack = finger.toStack && NumState.scrollTo("STACK") != null
+            if (!s.toStack) {
+                endSpread(folded = true, why = "let go before the list")
+                return
+            }
         }
         if (finger?.ended == true) s.finger = null
         val held = s.finger
         s.islandsY = NumState.scrollTo("NUMBER") ?: NumState.position() ?: 0
         // As far as the stack really scrolls: aimed past it, the spread stood short of its end.
-        s.cardsY = NumState.listScroll() ?: s.islandsY
+        s.cardsY = (if (s.toStack) NumState.scrollTo("STACK") else NumState.listScroll()) ?: s.islandsY
         startSpreadMorphs(s, toCards = true)
         s.phase = SPREAD_OPENING
         // A flick released before row layout still needs the same continuous opening clock.
         if (colorOs() && held == null && s.footerBottom != null && s.stackSeat == SEAT_BIG) {
-            val smoothOpen = s.items.isEmpty() || s.lead != null
+            val smoothOpen = !s.toStack && (s.items.isEmpty() || s.lead != null)
             s.letGo = Jelly(
                 if (smoothOpen) ColorOsNotificationMotion.openingResponse(s.notificationCount) else SPREAD_ROW_RESPONSE,
                 if (smoothOpen) ColorOsNotificationMotion.OPEN_DAMPING else SPREAD_FOLD_DAMPING)
@@ -7617,8 +7631,10 @@ private class MiniPlayerController(
         s.still = 0
         s.lastY = Int.MIN_VALUE
         // Under a finger the stack goes where it takes it (followFinger), from where it is now.
-        LockIslands.openStack("spread", scroll = held == null)
-        if (s.letGo != null && s.items.isEmpty()) NumState.goTo("LIST", anim = false, why = "spread morph clock")
+        LockIslands.openStack("spread", scroll = held == null && !s.toStack)
+        if (s.toStack || s.letGo != null && s.items.isEmpty()) {
+            NumState.goTo(if (s.toStack) "STACK" else "LIST", anim = s.letGo == null, why = "spread morph clock")
+        }
         if (held != null) held.base = held.pulled()
         applySpread(s, s.letGo?.value ?: spreadProgress(s, NumState.position() ?: s.islandsY))
         spreadTrace("spread out after ${waited}ms ready=$ready measured=$measured: " + describeSpread())
@@ -9088,6 +9104,8 @@ private class MiniPlayerController(
             s.phase == SPREAD_WAIT -> true
             else -> s.progress >= SPREAD_OPEN_AT
         }
+        f.toStack = colorOs() && LockIslands.allowsBottomStack() && !cancelled &&
+            !f.toList && velocityY <= fling && f.pulled() > 0f
         spreadTrace("spread let go p=${"%.2f".format(s.progress)} v=${velocityY.toInt()} list=${f.toList}")
         // Let go: the finger's lift goes on a spring of its own, whichever way the list goes. Kept
         // till the progress took it, a list pulled back mid-way left the capsule lifted by the
@@ -9101,7 +9119,7 @@ private class MiniPlayerController(
         // ColorOS: a light pull opens to the pile, a strong one (flung, or past SPREAD_OPEN_AT) the
         // list; pulled back to where the list began to follow, it goes home (the user, 2026-10-25).
         // The pile is the end from here, the same morph going on to its cards' places there.
-        val stackY = if (colorOs() && !cancelled && !f.toList && velocityY <= fling) NumState.scrollTo("STACK") else null
+        val stackY = if (f.toStack) NumState.scrollTo("STACK") else null
         if (stackY != null) {
             val stackP = spreadProgress(s, stackY)
             if (stackP in 0.05f..0.95f && s.progress > SPREAD_HOME_BELOW) {
@@ -9198,6 +9216,14 @@ private class MiniPlayerController(
             s.openedFromPile = true
             spreadTrace("spread pile to the list")
         }
+        if (colorOs() && !s.toStack && LockIslands.allowsBottomStack() &&
+            NumState.state() == "STACK" && !NumState.busy() && !stackDragged() &&
+            MiniPlayerRuntime.stackPulledDown) {
+            s.toStack = true
+            s.cardsY = NumState.position() ?: s.cardsY
+            settleColorOsSpread(opened = true)
+            return
+        }
         if (colorOs() && settleRearCards(s)) measureListGap()
         val y = NumState.position() ?: return
         val islandsY = NumState.scrollTo("NUMBER") ?: return
@@ -9220,7 +9246,8 @@ private class MiniPlayerController(
         // ColorOS, opened to the pile: a swipe down anywhere folds it. The stack takes no pull
         // over the empty lock screen above the pile, and the pile stayed (recording 2026-10-25).
         val pileSwiped = colorOs() && s.toStack && MiniPlayerRuntime.lockPull > pullAt
-        if (folded || pulledFar || pulled || pileSwiped) {
+        val letNativeStack = !s.toStack && LockIslands.allowsBottomStack() && !folded
+        if (folded || !letNativeStack && (pulledFar || pulled || pileSwiped)) {
             closeFromList(s, islandsY, y)
             spreadTrace("spread closing (${if (folded) "folded" else "pulled"} over=${NumState.overScrollParts()} toward=$toward): " + describeSpread())
             return
@@ -10552,7 +10579,7 @@ private class MiniPlayerController(
     private fun button(side: Int) = if (side == 0) left else right
 
     /** A disc is a circle as tall as the pill. */
-    private fun discDiameter(): Int = dp(MiniPlayerConfig.visibleHeightDp(config.toString()))
+    private fun discDiameter(): Int = (dp(configuredHeightDp) * pillSizeScale()).roundToInt()
 
     /** The disc's frame: room for its widest swelling and squeeze around the circle. */
     private fun discFrame(d: Int): Int = (d * DISC_FRAME).toInt()
@@ -10594,7 +10621,7 @@ private class MiniPlayerController(
         // First, so that the discs below see the buttons as they will be drawn.
         holdButtonsThroughDoze()
         // The torch's and the camera's circles: ColorOS's are smaller than the capsule is tall.
-        val d = (discDiameter() * shortcutScale()).roundToInt()
+        val d = shortcutDiameter()
         val frame = discFrame(d)
         followHost.reset()
         host.transformMatrixToGlobal(followHost)
@@ -11575,6 +11602,8 @@ private class MiniPlayerController(
             configStale = false
             config = JSONObject(MiniPlayerConfig.fromPreferences(prefs))
             configuredHeightDp = MiniPlayerConfig.visibleHeightDp(config.toString())
+            LockIslands.setNotificationStyle(config.optInt(MiniPlayerConfig.NOTIFICATION_STYLE),
+                config.optBoolean(MiniPlayerConfig.ALLOW_BOTTOM_STACK))
         }
         val config = this.config
         forceHeaderRefresh = true
@@ -12899,8 +12928,7 @@ private class MiniPlayerController(
         val centerX = if (l != null && r != null) (l[0] + r[0]) / 2f else host.width / 2f
         val config = this.config
         val requestedWidth = dp(config.getDouble(MiniPlayerConfig.WIDTH).toFloat())
-        // ColorOS's capsule is as tall as its torch and camera are round (shortcutScale).
-        val height = (dp(MiniPlayerConfig.visibleHeightDp(config.toString())) * shortcutScale()).roundToInt()
+        val height = (discDiameter() * rowStyleScale()).roundToInt()
         val centerY = rowCentreY(l, r, height)
         if ((l == null || r == null) && config.optBoolean(MiniPlayerConfig.ADAPTIVE_WIDTH)) {
             widenedRest(l, r, small, height, centerY)?.let { return compactRest(it) }
@@ -12908,15 +12936,15 @@ private class MiniPlayerController(
         // Clear of the discs, a circle as tall as the pill on each button. Laid out rather than
         // shown: the buttons are put away in the doze, and the pill must not widen for it.
         // ColorOS's capsule takes the room its smaller torch and camera give up.
-        val shortcutD = height.toFloat()
-        val width = MiniPlayerGeometry.clearOfDiscsPx(
+        val shortcutD = shortcutDiameter().toFloat()
+        val width = sizedPillWidth(MiniPlayerGeometry.clearOfDiscsPx(
             MiniPlayerGeometry.widthPx(min(maxOf(requestedWidth, if (colorOs()) host.width else 0),
                 (host.width * if (colorOs()) .72f else .64f).toInt()),
                 host.width, centerX, dp(12f)),
             centerX, l?.get(0), r?.get(0), shortcutD,
             // ColorOS keeps room either side for its brackets.
             dp(MiniPlayerGeometry.DISC_GAP_DP + if (colorOs()) COLOROS_BRACKET_ROOM_DP else 0f).toFloat(),
-            dp(MiniPlayerGeometry.MIN_PILL_DP))
+            dp(MiniPlayerGeometry.MIN_PILL_DP)))
         // With a small island the pill makes room for it, the two centred as one group - and
         // the group kept clear of both discs: the camera's touch area is wider than its disc,
         // and a group reaching into it lost the small island's taps to the camera.
@@ -12924,7 +12952,7 @@ private class MiniPlayerController(
         val pillWidth = if (!small) width else MiniPlayerGeometry.pillBesideIslandPx(width,
             MiniPlayerGeometry.clearOfDiscsPx(
                 MiniPlayerGeometry.widthPx(host.width, host.width, centerX, dp(12f)),
-                centerX, l?.get(0), r?.get(0), height.toFloat(), gap.toFloat(), 0),
+                centerX, l?.get(0), r?.get(0), shortcutD, gap.toFloat(), 0),
             height, gap, dp(MiniPlayerGeometry.MIN_PILL_DP))
         return compactRest(PillRest(pillWidth, height, centerX, centerY))
     }
@@ -13009,18 +13037,20 @@ private class MiniPlayerController(
     private fun widenedRest(l: FloatArray?, r: FloatArray?, small: Boolean, height: Int,
                             centerY: Float): PillRest? {
         val gap = dp(MiniPlayerGeometry.DISC_GAP_DP)
+        val shortcutRadius = shortcutDiameter() / 2f
         // The discs' outer margin, from a button still laid out, switched off or not.
         val margin = listOf(left, right).firstOrNull { it.width > 0 && it.height > 0 }
             ?.let { restCentre(it)[0] }
-            ?.let { cx -> (min(cx, host.width - cx) - height / 2f).coerceAtLeast(dp(12f).toFloat()) }
+            ?.let { cx -> (min(cx, host.width - cx) - shortcutRadius).coerceAtLeast(dp(12f).toFloat()) }
             ?: dp(12f).toFloat()
-        val start = l?.let { it[0] + height / 2f + gap } ?: margin
-        val end = r?.let { it[0] - height / 2f - gap } ?: (host.width - margin)
+        val start = l?.let { it[0] + shortcutRadius + gap } ?: margin
+        val end = r?.let { it[0] - shortcutRadius - gap } ?: (host.width - margin)
         val room = (end - start).toInt()
         val least = dp(MiniPlayerGeometry.MIN_PILL_DP)
         if (room < least) return null
-        val pillWidth = if (!small) room
-            else MiniPlayerGeometry.pillBesideIslandPx(room, room, height, gap, least)
+        val width = sizedPillWidth(room)
+        val pillWidth = if (!small) width
+            else MiniPlayerGeometry.pillBesideIslandPx(width, room, height, gap, least)
         return PillRest(pillWidth, height, (start + end) / 2f, centerY)
     }
 

@@ -75,7 +75,11 @@ private fun MiniPlayerPage(blur: Boolean, refreshKey: Int, onBack: () -> Unit) {
         if (reply.alive) configText = reply.miniConfig
     }
     fun push(key: String, value: Any) {
-        configText = MiniPlayerConfig.normalizedJson(JSONObject(configText).put(key, value).toString())
+        val updated = JSONObject(configText)
+        if (key == MiniPlayerConfig.ALLOW_BOTTOM_STACK) {
+            MiniPlayerConfig.setBottomStack(updated, value == true)
+        } else updated.put(key, value)
+        configText = MiniPlayerConfig.normalizedJson(updated.toString())
         ModuleBridge.setMiniConfig(context, configText)
     }
 
@@ -88,10 +92,6 @@ private fun MiniPlayerPage(blur: Boolean, refreshKey: Int, onBack: () -> Unit) {
             }
         }
         item {
-            // The pill's width, its height and the roundness of the thumbnail in it were three
-            // sliders and are fixed - see MiniPlayerConfig, which no longer reads them from
-            // anything the app sends. What is left is whether it is on, and whether it widens
-            // into a switched-off shortcut's place.
             Column {
                 SmallTitle(text = stringResource(R.string.mini_general_section))
                 Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
@@ -119,6 +119,22 @@ private fun MiniPlayerPage(blur: Boolean, refreshKey: Int, onBack: () -> Unit) {
                             enabled = alive && config.optBoolean(MiniPlayerConfig.ENABLED),
                             onCheckedChange = { push(MiniPlayerConfig.COLOROS_FULL_SIZE, it) })
                     }
+                    SwitchPreference(title = stringResource(R.string.mini_custom_row_size),
+                        checked = config.optBoolean(MiniPlayerConfig.CUSTOM_ROW_SIZE),
+                        enabled = alive && config.optBoolean(MiniPlayerConfig.ENABLED) &&
+                            !MiniPlayerConfig.fullSizeButtons(config),
+                        onCheckedChange = { push(MiniPlayerConfig.CUSTOM_ROW_SIZE, it) })
+                    if (MiniPlayerConfig.customRowSize(config)) {
+                        for ((key, title) in listOf(MiniPlayerConfig.PILL_SIZE to R.string.mini_pill_size,
+                            MiniPlayerConfig.SHORTCUT_SIZE to R.string.mini_shortcut_size)) {
+                            ValueSlider(title = stringResource(title),
+                                value = config.optDouble(key, 100.0).toFloat(),
+                                valueRange = 80f..100f, detent = 100f,
+                                enabled = alive && config.optBoolean(MiniPlayerConfig.ENABLED),
+                                label = { "${it.toInt()}%" },
+                                onValueChange = { push(key, it) })
+                        }
+                    }
                     SwitchPreference(title = stringResource(R.string.mini_list_without_player),
                         summary = stringResource(R.string.mini_list_without_player_summary),
                         checked = config.optBoolean(MiniPlayerConfig.LIST_WITHOUT_PLAYER),
@@ -141,11 +157,21 @@ private fun MiniPlayerPage(blur: Boolean, refreshKey: Int, onBack: () -> Unit) {
                         onCheckedChange = { push(MiniPlayerConfig.STATUS_AT_DATE, it) })
                 }
                 SmallTitle(text = stringResource(R.string.mini_notifications_section))
+                val allowStack = config.optBoolean(MiniPlayerConfig.ALLOW_BOTTOM_STACK)
+                val enabled = alive && config.optBoolean(MiniPlayerConfig.ENABLED)
+                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    SwitchPreference(title = stringResource(R.string.mini_allow_bottom_stack),
+                        checked = allowStack, enabled = enabled,
+                        onCheckedChange = { push(MiniPlayerConfig.ALLOW_BOTTOM_STACK, it) })
+                    NotificationStylePicker(config.optInt(MiniPlayerConfig.NOTIFICATION_STYLE), allowStack, enabled) {
+                        push(MiniPlayerConfig.NOTIFICATION_STYLE, it)
+                    }
+                }
                 Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
                     SwitchPreference(title = stringResource(R.string.mini_pill_only_notifications),
                         summary = stringResource(R.string.mini_pill_only_notifications_summary),
                         checked = config.optBoolean(MiniPlayerConfig.PILL_ONLY_NOTIFICATIONS),
-                        enabled = alive && config.optBoolean(MiniPlayerConfig.ENABLED),
+                        enabled = enabled,
                         onCheckedChange = { push(MiniPlayerConfig.PILL_ONLY_NOTIFICATIONS, it) })
                     SwitchPreference(title = stringResource(R.string.mini_notification_compact),
                         summary = stringResource(when {

@@ -7,8 +7,12 @@ import {Composition} from 'remotion';
 import {IslandDemo} from './IslandDemo';
 
 export const Root = () => <>
-  <Composition id="IslandColorOS" component={IslandDemo} width={1140} height={336}
-    fps={60} durationInFrames={420} defaultProps={{colorOs: true}} />
+  <Composition id="IslandColorOS" component={IslandDemo} width={600} height={650}
+    fps={60} durationInFrames={358} defaultProps={{guide: 'capsule'}} />
   <Composition id="IslandHyperOS" component={IslandDemo} width={1140} height={336}
-    fps={60} durationInFrames={324} defaultProps={{colorOs: false}} />
+    fps={60} durationInFrames={324} defaultProps={{}} />
+  <Composition id="IslandColorOSList" component={IslandDemo} width={600} height={650}
+    fps={60} durationInFrames={171} defaultProps={{guide: 'list'}} />
+  <Composition id="IslandColorOSStack" component={IslandDemo} width={600} height={650}
+    fps={60} durationInFrames={265} defaultProps={{guide: 'stack'}} />
 </>;
