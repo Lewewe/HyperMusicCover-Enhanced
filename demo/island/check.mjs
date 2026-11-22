@@ -145,7 +145,7 @@ const nodes = tree => tree == null || typeof tree !== 'object' ? [] :
 for (const [guide, frames, rests] of [
   ['capsule', 358, []],
   ['list', 171, [[0, 200], [70, 575], [145, 200]]],
-  ['stack', 265, [[0, 200], [75, 494], [135, 575], [190, 494], [250, 200]]],
+  ['stack', 265, [[0, 200], [75, 494], [135, 575], [190, 494], [255, 200]]],
 ]) {
   const scene = frame => inspect(LockScreenGuide({guide, frame}));
   for (let frame = 0; frame < frames; frame++) scene(frame);
@@ -161,7 +161,7 @@ for (const [guide, frames, rests] of [
     for (let frame = start + 1; frame <= end; frame++) {
       const cards = cardsAt(frame);
       cards.forEach((card, index) => {
-        assert.ok(center(card) >= center(previous[index]) - 1, 'A folding card reversed before settling');
+        assert.ok(center(card) >= center(previous[index]) - 1.1, 'A folding card rebounded too sharply');
         assert.ok(center(card) - center(previous[index]) < 28, 'A folding card jumped');
         assert.ok(card.width <= previous[index].width + 1e-6, 'A folding card widened');
       });
@@ -169,6 +169,7 @@ for (const [guide, frames, rests] of [
     }
     if (guide === 'list' || start === 85) {
       const [rear, middle, lead] = previous;
+      near(lead.width, 118);
       for (const card of [rear, middle]) {
         assert.equal(card.opacity, 0);
         assert.ok(center(card) <= center(lead));
@@ -181,7 +182,27 @@ for (const [guide, frames, rests] of [
       nodes(scene(frame)).find(node => node.props.id === `notification-${index}`).props;
     assert.equal(cardAt(44, 2).opacity, 0);
     assert.ok(cardAt(44, 1).opacity > 0);
-    assert.ok(cardAt(54, 0).y > cardAt(70, 0).y, 'The lead card should settle at the capsule');
+    const leadCenter = frame => {
+      const card = cardAt(frame, 0);
+      return card.y + card.height / 2;
+    };
+    near(leadCenter(54) - leadCenter(70), 8);
+    near(cardAt(0, 0).y - cardAt(125, 0).y, 8);
+    for (let frame = 66; frame <= 69; frame++) near(cardAt(frame, 0).y, cardAt(70, 0).y);
+  }
+  if (guide === 'stack') {
+    const topAt = frame => nodes(scene(frame)).find(node => node.props.id === 'notification-0').props.y;
+    near(topAt(62) - topAt(75), 6);
+    near(topAt(113) - topAt(135), 7);
+    near(topAt(190) - topAt(177), 5);
+    near(topAt(255) - topAt(243), 8);
+  }
+  if (guide === 'capsule') {
+    for (let frame = 0; frame < frames; frame++) {
+      const morph = nodes(scene(frame)).find(node => node.props.transform?.startsWith('translate(300 592) scale('));
+      const widthScale = Number(morph.props.transform.split('scale(')[1].split(' ')[0]);
+      assert.ok(widthScale >= 0.925 - 1e-6 && widthScale <= 1);
+    }
   }
 }
 console.log('Scene checks passed: geometry, notification guide stops and loop endpoints.');

@@ -88,7 +88,7 @@ private fun MiniPlayerPage(blur: Boolean, refreshKey: Int, onBack: () -> Unit) {
         item {
             // What the row does, drawn with the module's own island geometry, before the switches.
             Card(Modifier.padding(horizontal = 12.dp).padding(top = 12.dp)) {
-                IslandDemo(MiniPlayerConfig.colorOs(config))
+                IslandDemo(MiniPlayerConfig.colorOs(config), config.optBoolean(MiniPlayerConfig.ALLOW_BOTTOM_STACK))
             }
         }
         item {

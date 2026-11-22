@@ -11,7 +11,7 @@ const ease = Easing.bezier(0.29, 0, 0.17, 1);
 const progress = (frame: number, start: number, end: number) => ease(clamp((frame - start) / (end - start)));
 const glide = (t: number) => t * t * (3 - 2 * t);
 const SCREEN = new Box(160, 12, 280, 626);
-const CAPSULE = new Box(255, 575, 90, 34);
+const CAPSULE = new Box(241, 575, 118, 34);
 const STACK = new Box(187, 494, 226, 49);
 const LIST = new Box(183, 200, 234, 49);
 
@@ -35,8 +35,10 @@ function Notifications({frame, stacked}: {frame: number; stacked: boolean}) {
   const list = 1 - glideBetween(30, 62) + glideBetween(210, 243);
   const pile = glideBetween(30, 62) - glideBetween(85, 113) +
     glideBetween(150, 177) - glideBetween(210, 243);
-  const settle = (start: number, peak: number, end: number) =>
-    glideBetween(start, peak) - glideBetween(peak, end);
+  const rebound = (arrival: number) =>
+    glideBetween(arrival - 6, arrival) - glideBetween(arrival, arrival + 12);
+  const stackRebound = 6 * rebound(62) + 7 * rebound(113) -
+    5 * rebound(177) - 8 * rebound(243);
   return <>
     {[2, 1, 0].map(index => {
       const listY = LIST.cy() + 59 * index;
@@ -49,16 +51,14 @@ function Notifications({frame, stacked}: {frame: number; stacked: boolean}) {
         glideBetween(95 + 3 * index, 119 + index);
       const visible = stacked ? list + pile : sizeInList;
       const fill = `rgb(${Math.round(mix(194, 23, visible))},${Math.round(mix(226, 48, visible))},${Math.round(mix(230, 69, visible))})`;
-      const sizeSettle = stacked ? 0 : settle(110, 125, 141);
       const width = mix(capsuleWidth, LIST.w, visible) -
-        (stacked ? (LIST.w - STACK.w + 15 * index) * pile : 0) + sizeSettle * 4;
+        (stacked ? (LIST.w - STACK.w + 15 * index) * pile : 0);
       const height = mix(capsuleHeight, LIST.h, visible) - (stacked ? 2 * index * pile : 0);
       const hiddenY = CAPSULE.cy() - [0, 37, 91][index];
       const centerY = stacked
-        ? CAPSULE.cy() + (stackY - CAPSULE.cy()) * pile + (listY - CAPSULE.cy()) * list +
-          4 * settle(105, 113, 126)
+        ? CAPSULE.cy() + (stackY - CAPSULE.cy()) * pile + (listY - CAPSULE.cy()) * list + stackRebound
         : mix(mix(listY, hiddenY, drop), listY, rise) +
-          (index === 0 ? 4 * settle(46, 54, 69) : 0) - 4 * settle(114, 125, 141);
+          (index === 0 ? 8 * rebound(54) : 0) - 8 * rebound(125 + index);
       const opacity = index === 0 ? 1 : stacked
         ? glide(clamp(visible / 0.45)) * mix(0.73 - index * 0.17, 1, list)
         : 1 - glideBetween(45 - 6 * index, 57 - 7 * index) +
@@ -105,8 +105,7 @@ function Carousel({frame}: {frame: number}) {
     (arriving ? gooPath(part.new) : earGlass(part.new, !left, CAPSULE, stroke));
   const impact = left ? 108 : 200;
   const squeeze = progress(frame, impact - 14, impact) - progress(frame, impact, impact + 15);
-  const rebound = progress(frame, impact, impact + 21) - progress(frame, impact + 21, impact + 47);
-  const stretch = 1 - 0.10 * squeeze + 0.044 * rebound;
+  const stretch = 1 - 0.075 * squeeze;
   return <>
     <g transform={`translate(300 592) scale(${stretch} ${1 - (stretch - 1) * 0.22}) translate(-300 -592)`}>
       {settled ? <>
