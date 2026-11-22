@@ -1,12 +1,12 @@
-# HyperMusicCover island demos
+# HyperMusicCover capsule demos
 
-Two seamless Remotion loops show the lock-screen island styles at 1140 x 336 px
+Two seamless Remotion loops show the lock-screen capsule styles at 1140 x 336 px
 (380 x 112 dp at 3x), 60 fps. Pixels outside the 60 px rounded frame are transparent.
 Rest geometry uses disc diameter 0.42 * H, row centre 0.56 * H (188.16 px),
 20 dp side margins and 22 dp gaps. The background is a dark gradient with soft glow.
 A translucent finger appears only for press, move and release gestures.
 Music uses orange-to-pink artwork, two bars and a pause glyph; messages use a green
-avatar and two bars. The small HyperOS notification island is a plain blue disc.
+avatar and two bars. The small HyperOS notification capsule is a plain blue disc.
 
 | Composition | Duration | Frames |
 | --- | --- | --- |
@@ -31,13 +31,13 @@ HyperOS scenes:
 3. Tap the small notification to promote it (1.7-2.3 s); its long title scrolls
    with `3+` while music takes the small slot (2.3-3.1 s).
 4. Tap to swap back (3.1-3.7 s), settling until 4 s.
-5. Reverse the small island appearance and widen music (4-4.7 s), then rest
+5. Reverse the small capsule appearance and widen music (4-4.7 s), then rest
    matching the opening (4.7-5.4 s).
 
 Springs use Remotion `spring()` with Android damping/response values converted to
 mass-one parameters. `src/colorOsPill.ts` remains the geometry source; shared capsule
 content lives in `src/IslandCards.tsx`. The app plays the rendered files in
-`IslandDemo.kt` on the lock screen super island page.
+`IslandDemo.kt` on the Lock screen capsule page.
 
 ```sh
 npm run studio

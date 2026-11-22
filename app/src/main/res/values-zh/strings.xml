@@ -78,7 +78,7 @@
     <string name="credits_liquid_glass">液态玻璃的透镜、内阴影和鲜艳度</string>
     <string name="credits_markdown_css">更新日志的排版样式</string>
     <string name="credits_cialloum">方形封面卡片、小封面与大封面之间的形变动画，以及锁屏歌词的位置、字号和字重设置</string>
-    <string name="credits_hyperchanger">锁屏超级岛（由 btm_m 移植），以及解除景深限制、锁屏搭配数量上限、时钟冒号、全局主题下的柔光玻璃</string>
+    <string name="credits_hyperchanger">锁屏胶囊（由 btm_m 移植），以及解除景深限制、锁屏搭配数量上限、时钟冒号、全局主题下的柔光玻璃</string>
     <string name="credits_leaf">视频壁纸和景深视频壁纸的支持</string>
     <string name="credits_hypertweak">隐藏锁屏指纹图案和指纹动画的做法</string>
     <string name="credits_amll">锁屏歌词的动画手感</string>
@@ -191,28 +191,28 @@
     <!-- The features page is a list of cards, each opening a page of its own. -->
     <string name="features_cover_title">锁屏音乐封面</string>
     <string name="features_cover_summary">封面、时钟、媒体卡片</string>
-    <string name="features_mini_title">锁屏超级岛</string>
+    <string name="features_mini_title">锁屏胶囊</string>
     <string name="features_mini_summary">音乐、通知、背景模糊与亮度</string>
 
 
     <string name="islands_background_blur">背景模糊</string>
-    <string name="islands_background_blur_summary">为超级岛和快捷按钮添加模糊背景。关闭后，Frosted Glass 使用纯色背景，Soft Glass 使用 HyperOS 4 原生玻璃效果。</string>
+    <string name="islands_background_blur_summary">为胶囊和快捷按钮添加模糊背景。关闭后，Frosted Glass 使用纯色背景，Soft Glass 使用 HyperOS 4 原生玻璃效果。</string>
     <string name="islands_background_blur_radius">背景模糊强度</string>
     <string name="islands_background_blur_brightness">模糊背景亮度</string>
 
-    <string name="mini_page_title">锁屏超级岛</string>
-    <string name="mini_enabled">启用锁屏超级岛</string>
+    <string name="mini_page_title">锁屏胶囊</string>
+    <string name="mini_enabled">启用锁屏胶囊</string>
     <string name="mini_enabled_waiting">等待 SystemUI 模块响应</string>
     <string name="mini_list_without_player">打开通知时不显示播放器</string>
-    <string name="mini_list_without_player_summary">上滑通知岛时，通知列表中不显示媒体播放器</string>
+    <string name="mini_list_without_player_summary">上滑通知胶囊时，通知列表中不显示媒体播放器</string>
     <string name="mini_note_text_scroll">滚动通知文字</string>
-    <string name="mini_note_text_scroll_summary">通知岛中过长的标题和内容会滚动显示；关闭后以省略号截断</string>
-    <string name="mini_style">岛样式</string>
-    <string name="mini_style_summary">多个岛如何共用一行</string>
+    <string name="mini_note_text_scroll_summary">通知胶囊中过长的标题和内容会滚动显示；关闭后以省略号截断</string>
+    <string name="mini_style">胶囊样式</string>
+    <string name="mini_style_summary">多个胶囊如何共用一行</string>
     <string name="mini_coloros_full_size">全尺寸按钮</string>
     <string name="mini_coloros_full_size_summary">手电筒和相机按钮由 80% 恢复为 100%，胶囊同样变高，并缩短长度以适应</string>
     <string name="mini_style_coloros">ColorOS · 一次一个，滑动切换</string>
-    <string name="mini_style_hyperos">HyperOS · 大岛旁边带小岛</string>
+    <string name="mini_style_hyperos">HyperOS · 大胶囊旁带小胶囊</string>
     <string name="mini_widen">快捷方式关闭时加宽</string>
     <string name="mini_widen_summary">手电筒或相机快捷方式关闭后占用空位</string>
     <string name="lyrics_roma">显示罗马音</string>
@@ -356,9 +356,9 @@
     <string name="lyrics_bpm_companion">歌词伙伴颜文字</string>
     <string name="lyrics_bpm_companion_summary">歌词和大封面都未显示时，显示随节拍反应的颜文字。歌词按钮用于搜索歌词。</string>
     <string name="media_customization_title">媒体播放器自定义</string>
-    <string name="media_customization_summary">自定义通知与超级岛展开态播放器的封面、背景和动态效果</string>
+    <string name="media_customization_summary">自定义通知与胶囊展开态播放器的封面、背景和动态效果</string>
     <string name="media_scope_notification">通知与锁屏播放器</string>
-    <string name="media_scope_island">超级岛展开态播放器</string>
+    <string name="media_scope_island">胶囊展开态播放器</string>
     <string name="media_style_cover">封面样式</string>
     <string name="media_style_native">默认</string>
     <string name="media_style_circle">圆形</string>
@@ -398,7 +398,7 @@
     <string name="media_audio_wave_summary">让摄像头旁的音乐波形随实际声音变化，隐藏或熄屏时停止。</string>
     <string name="media_wave_lock_screen">锁屏播放器音频波形</string>
     <string name="media_wave_notification">通知面板播放器音频波形</string>
-    <string name="media_wave_island">超级岛展开播放器音频波形</string>
+    <string name="media_wave_island">胶囊展开播放器音频波形</string>
     <string name="media_wave_color">波形颜色</string>
     <string name="media_wave_color_default">默认（封面渐变）</string>
     <string name="media_wave_color_white">白色</string>
@@ -409,7 +409,7 @@
     <string name="media_wave_color_cancel">取消</string>
     <string name="media_output_wave_summary">将输出设备按钮替换为实时音乐波形，关闭后恢复原按钮。</string>
     <string name="media_wave_hide_device">隐藏音频设备图标</string>
-    <string name="media_wave_hide_device_summary">使用耳机或其他输出设备时，让超级岛继续显示音乐波形，关闭后立即恢复系统图标。</string>
+    <string name="media_wave_hide_device_summary">使用耳机或其他输出设备时，让胶囊继续显示音乐波形，关闭后立即恢复系统图标。</string>
     <string name="media_wave_bt_sync">蓝牙音频同步</string>
     <string name="media_wave_bt_sync_summary">根据 Android 估算的蓝牙输出延迟调整频谱显示，仅在通过蓝牙播放媒体时生效。</string>
     <string name="media_wave_bt_adjustment">蓝牙同步微调</string>
@@ -468,18 +468,18 @@
     <string name="hypercanvas_setup_restart_failed">无法重启作用域，请检查 root 权限后重试。</string>
     <string name="extension_installed_version">版本：%1$s</string>
     <string name="mini_media_collapsed">播放音乐时不自动展开封面</string>
-    <string name="mini_media_collapsed_summary">启用锁屏岛时，开始播放先显示音乐胶囊，点击或上滑后再展开，保留已选择的封面或歌词状态。</string>
+    <string name="mini_media_collapsed_summary">启用锁屏胶囊时，开始播放先显示音乐胶囊，点击或上滑后再展开，保留已选择的封面或歌词状态。</string>
     <string name="lyrics_depth_blur">非当前歌词模糊</string>
     <string name="lyrics_depth_blur_summary">调整已唱过和即将唱到的歌词模糊，100% 为原始效果，0% 关闭模糊，正在演唱的歌词保持清晰。</string>
     <string name="tab_experiments">A/B</string>
     <string name="experiments_iphone">iPhone-ify</string>
-    <string name="island_iphone_gestures">灵动岛手势实验</string>
-    <string name="island_iphone_gestures_summary">长按展开灵动岛，轻点打开对应应用。关闭后恢复 HyperOS 原有操作。</string>
-    <string name="island_iphone_top">展开的灵动岛贴近摄像头</string>
-    <string name="island_iphone_top_summary">像 iPhone 一样从摄像头处展开超级岛，覆盖状态栏。仅限竖屏手机。</string>
-    <string name="island_iphone_focus_black">其他灵动岛使用黑色背景</string>
+    <string name="island_iphone_gestures">iPhone 风格胶囊手势</string>
+    <string name="island_iphone_gestures_summary">长按展开胶囊，轻点打开对应应用。关闭后恢复 HyperOS 原有操作。</string>
+    <string name="island_iphone_top">展开的胶囊贴近摄像头</string>
+    <string name="island_iphone_top_summary">像 iPhone 一样从摄像头处展开胶囊，覆盖状态栏。仅限竖屏手机。</string>
+    <string name="island_iphone_focus_black">其他胶囊使用黑色背景</string>
     <string name="island_iphone_focus_black_summary">摄像头处除音乐以外的卡片，音乐卡片始终为黑色。关闭后使用 HyperOS 原本的背景。</string>
-    <string name="island_iphone_radius">展开灵动岛圆角</string>
+    <string name="island_iphone_radius">展开胶囊圆角</string>
     <string name="island_iphone_radius_summary">圆角与屏幕边缘对齐。摄像头下方的文字会下移，角落里的文字会内收。标记处与小米 17 Pro 屏幕圆角同心，与 iPhone 一致。</string>
     <string name="ab_tab_unlocked">已启用 A/B 标签页</string>
     <string name="ab_tab_already">A/B 标签页已启用</string>
@@ -533,9 +533,9 @@
     <string name="fingerprint_section">指纹</string>
     <string name="mini_general_section">常规</string>
     <string name="mini_notifications_section">通知</string>
-    <string name="mini_pill_size">锁屏岛大小</string>
+    <string name="mini_pill_size">锁屏胶囊大小</string>
     <string name="mini_shortcut_size">锁屏快捷方式大小</string>
-    <string name="mini_custom_row_size">自定义锁屏岛和快捷按钮大小</string>
+    <string name="mini_custom_row_size">自定义锁屏胶囊和快捷按钮大小</string>
     <string name="mini_default_notification_style">默认锁屏通知样式</string>
     <string name="mini_notifications_capsule">胶囊</string>
     <string name="mini_notifications_stack">堆叠</string>

@@ -171,7 +171,7 @@ internal class MiniPlayerView(context: Context) : FrameLayout(context) {
         toggle2.visibility = View.GONE
         toggle2.setOnClickListener { secondFaceClick?.invoke() }
         content.addView(toggle2)
-        contentDescription = SystemUiLanguage.text("锁屏超级岛", "Lock screen Super Island")
+        contentDescription = SystemUiLanguage.text("锁屏胶囊", "Lock screen capsule")
     }
 
     fun bind(
