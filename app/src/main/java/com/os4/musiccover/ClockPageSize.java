@@ -25,6 +25,9 @@ final class ClockPageSize {
     /** 0 the cover's own size, 1 the face's native size; in between while it moves. */
     private static float sNative;
     private static boolean sNativeTarget;
+    /** How far the time has moved beside the date on the current page. */
+    private static float sInline = 1f;
+    private static boolean sInlineTarget = true;
     /** The cover clock's scale for its artwork's shape (CoverCardStyle.clockScale). */
     private static float sScale = 1f;
     private static float sScaleTarget = 1f;
@@ -53,6 +56,7 @@ final class ClockPageSize {
     static void update(boolean active, boolean on, float poseUnit, float poseTop, float poseDate,
                        Predicate<Float> landscapeFits, Runnable refresh) {
         boolean compact = pageWantsNative();
+        boolean inline = !Main.sClockBesideDate || !CoverBackdrop.blurredCompactPlayer();
         Bitmap art = CoverCardLayer.currentArt();
         boolean coverVisible = Main.effectiveCoverStyle().mode == CoverCardStyle.CARD
                 && !LockLyrics.wantsCompactArtwork() && !ImmersiveHost.holdsClock()
@@ -65,6 +69,8 @@ final class ClockPageSize {
             if (sAnimator != null) sAnimator.cancel();
             sAnimator = null;
             sNativeTarget = nativeSize;
+            sInlineTarget = inline;
+            sInline = inline ? 1f : 0f;
             sScale = sScaleTarget = scale;
             sNative = nativeSize ? 1f : 0f;
             sFromUnit = Float.NaN;
@@ -72,8 +78,10 @@ final class ClockPageSize {
             sTop = sDate = Float.NaN;
             return;
         }
-        if (nativeSize == sNativeTarget && Math.abs(scale - sScaleTarget) < 0.001f) return;
+        if (nativeSize == sNativeTarget && inline == sInlineTarget
+                && Math.abs(scale - sScaleTarget) < 0.001f) return;
         sNativeTarget = nativeSize;
+        sInlineTarget = inline;
         sScaleTarget = scale;
         if (sAnimator != null) sAnimator.cancel();
         // From the drawn, notification-squeezed clock, not its hidden full-size endpoint.
@@ -85,6 +93,7 @@ final class ClockPageSize {
         }
         final float fromNative = sNative, toNative = nativeSize ? 1f : 0f;
         final float fromScale = sScale, toScale = scale;
+        final float fromInline = sInline, toInline = inline ? 1f : 0f;
         ValueAnimator animator = ValueAnimator.ofFloat(0f, 1f);
         sAnimator = animator;
         animator.setDuration(420L);
@@ -94,10 +103,15 @@ final class ClockPageSize {
             sProgress = progress;
             sNative = fromNative + (toNative - fromNative) * progress;
             sScale = fromScale + (toScale - fromScale) * progress;
+            sInline = fromInline + (toInline - fromInline) * progress;
             if (sNative == 0f) sTop = sDate = Float.NaN;
             refresh.run();
         });
         animator.start();
+    }
+
+    static float inlineProgress() {
+        return sInline;
     }
 
     /** How native the size is now, 0 to 1. */

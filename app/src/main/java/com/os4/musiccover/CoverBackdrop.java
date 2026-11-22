@@ -59,8 +59,16 @@ final class CoverBackdrop {
                     ? android.view.View.INVISIBLE : android.view.View.VISIBLE);
     }
 
+    private static boolean compactPlayer() {
+        return LockLyrics.playerPage() && !LockLyrics.wantsAttached();
+    }
+
     static boolean compactClockResting() {
-        return Main.sClockBesideDate && LockLyrics.playerPage() && !LockLyrics.wantsAttached();
+        return Main.sClockBesideDate && hidden() && compactPlayer();
+    }
+
+    static boolean blurredCompactPlayer() {
+        return !hidden() && compactPlayer();
     }
 
     /** The compact player can hand back the clock independently of its backdrop. */

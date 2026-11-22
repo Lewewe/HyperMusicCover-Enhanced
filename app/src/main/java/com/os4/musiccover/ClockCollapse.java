@@ -2651,9 +2651,13 @@ final class ClockCollapse {
                 // size the cover last read for it instead.
                 float heldUnit = ClockSizePolicy.aodHeldUnit(sFromUnit, sAodCoverZoom,
                         sFullNatural > 0f ? sFullNatural : sLastNativeUnit);
-                if (m.inlineDate) heldUnit = inlineUnit(m);
-                float heldTop = m.inlineDate && !Float.isNaN(sFromDate)
-                        ? inlineTop(m, sFromDate, heldUnit) : sFromTop;
+                float inline = m.inlineDate ? ClockPageSize.inlineProgress() : 0f;
+                float heldTop = sFromTop;
+                if (inline > 0f && !Float.isNaN(sFromDate)) {
+                    float inlineUnit = inlineUnit(m);
+                    heldUnit += (inlineUnit - heldUnit) * inline;
+                    heldTop += (inlineTop(m, sFromDate, inlineUnit) - heldTop) * inline;
+                }
                 writePose(m, heldTop, heldUnit, sFromDate, false);
                 // The wake starts from what is on screen, including a partly completed zoom.
                 sAodTop = heldTop;
@@ -2731,7 +2735,7 @@ final class ClockCollapse {
         float nativeUnit = ClockSizePolicy.nativeUnit(full, m.unit, LockLyrics.notificationCompact());
         if (nativeUnit > 0f) sLastNativeUnit = nativeUnit;
         float coverUnit = ClockPageSize.coverUnit(requested, reference, nativeUnit,
-                Main.MIN_CLOCK_K, phase == Phase.ON);
+                Main.MIN_CLOCK_K, phase == Phase.ON && !m.inlineDate);
         // Read against a fixed unit, the small clock is never larger than the face's own.
         if (coverUnit > nativeUnit) coverUnit = nativeUnit;
         // A face that is short but wide would not shrink at all by height: held to the width an
@@ -2743,11 +2747,7 @@ final class ClockCollapse {
         // The date and the clock move as one block.
         float offset = Main.sClockOffsetDp * d;
         float coverDate, coverTop;
-        if (m.inlineDate) {
-            coverUnit = inlineUnit(m);
-            coverDate = coverDateY(m.date) + offset;
-            coverTop = inlineTop(m, coverDate, coverUnit);
-        } else if (m.anchored) {
+        if (m.anchored) {
             coverDate = coverDateY(m.date) + offset;
             coverTop = coverDate + m.dateH + Main.CLOCK_GAP_DP * d;
         } else {
@@ -2761,11 +2761,19 @@ final class ClockCollapse {
             coverDate = Float.NaN;
             // OEM glyph sizing can move its layout; keep our top anchor unchanged.
             float keptTop = ClockPageSize.keptTop();
-            if (!Float.isNaN(keptTop)) {
+            if (!m.inlineDate && !Float.isNaN(keptTop)) {
                 coverTop = keptTop;
                 float keptDate = ClockPageSize.keptDate();
                 if (!Float.isNaN(keptDate)) coverDate = keptDate;
             }
+        }
+
+        float inline = m.inlineDate ? ClockPageSize.inlineProgress() : 0f;
+        if (inline > 0f) {
+            float besideUnit = inlineUnit(m);
+            coverDate = coverDateY(m.date) + offset;
+            coverTop += (inlineTop(m, coverDate, besideUnit) - coverTop) * inline;
+            coverUnit += (besideUnit - coverUnit) * inline;
         }
 
         // Notifications. The OEM squeezes its full clock out of their way - down to its minimum
@@ -2936,7 +2944,8 @@ final class ClockCollapse {
         // OEM's own x.
         float k = m.anchored ? 0f : sCenterK;
         float midX = k > 0f || m.inlineDate ? screenMidX() : Float.NaN;
-        float inline = m.inlineDate ? sCenterK : 0f;
+        float pageInline = m.inlineDate ? ClockPageSize.inlineProgress() : 0f;
+        float inline = pageInline * sCenterK;
         float gap = INLINE_CLOCK_GAP_DP * Main.density();
         float timeW = m.box.width() * scaleX;
         float inlineLeft = m.inlineDate ? midX - (timeW + gap + m.dateInk.width()) / 2f : 0f;
@@ -2959,9 +2968,7 @@ final class ClockCollapse {
             // Where the ink's left edge lands with no x of ours, and where it is wanted.
             float inkL0 = parentLeft(g) + g.getLeft() + px + (m.box.left - px) * scaleX;
             float inkL = inkL0;
-            if (m.inlineDate) {
-                inkL += (inlineLeft - inkL0) * inline;
-            } else if (m.row) {
+            if (m.row) {
                 // The row as one piece: the time and what sits beside it, scaled together about
                 // the row's own top-left and centred as a whole.
                 float rl = parentLeft(g) + g.getLeft() + m.box.left, rr = rl + m.box.width();
@@ -2981,25 +2988,34 @@ final class ClockCollapse {
             } else if (k > 0f && !Float.isNaN(midX)) {
                 inkL = inkL0 + (midX - (inkL0 + m.box.width() * scaleX / 2f)) * k;
             }
+            if (inline > 0f) inkL += (inlineLeft - inkL) * inline;
             float tx = inkL - inkL0;
             if (Math.abs(g.getTranslationX() - tx) >= 0.25f) g.setTranslationX(tx);
         }
-        if (m.inlineDate && !Float.isNaN(date)) {
+        if (!m.anchored && (inline < 1f || Float.isNaN(date))) {
+            placeCompanions(m, top, scale, k, midX);
+        }
+        if (pageInline > 0f && !Float.isNaN(date)) {
             View v = m.date;
             sCompTouched.put(v, Boolean.TRUE);
             unclip(v);
-            if (v.getScaleX() != 1f) v.setScaleX(1f);
-            if (v.getScaleY() != 1f) v.setScaleY(1f);
+            float baseScale = m.anchored || m.compN == 0 ? 1f : v.getScaleY();
+            float dateScale = baseScale + (1f - baseScale) * inline;
+            if (v.getScaleX() != dateScale) v.setScaleX(dateScale);
+            if (v.getScaleY() != dateScale) v.setScaleY(dateScale);
             float base = parentLeft(v) + v.getLeft() + m.dateInk.left;
-            float tx = (inlineLeft + timeW + gap - base) * inline;
+            float tx = m.anchored || m.compN == 0 ? 0f : v.getTranslationX();
+            tx += (inlineLeft + timeW + gap - base - tx) * inline;
             float ty = date - m.dateTop;
+            if (!m.anchored && m.compN > 0) {
+                float original = v.getTranslationY();
+                ty = original + (ty - original) * pageInline;
+            }
             if (Math.abs(v.getTranslationX() - tx) >= 0.25f) v.setTranslationX(tx);
             if (Math.abs(v.getTranslationY() - ty) >= 0.25f) v.setTranslationY(ty);
-            sCompBottom = date + m.dateInk.bottom;
-        } else if (!m.anchored) {
-            placeCompanions(m, top, scale, k, midX);
-        } else if (m.date != null && !Float.isNaN(date)) {
-            float dty = date - m.dateTop;
+            sCompBottom = m.dateTop + ty + m.dateInk.bottom * dateScale;
+        } else if (m.date != null && (m.anchored || m.inlineDate && m.compN == 0)) {
+            float dty = Float.isNaN(date) ? 0f : date - m.dateTop;
             if (sCompTouched.containsKey(m.date) && m.date.getTranslationX() != 0f) {
                 m.date.setTranslationX(0f);
             }
