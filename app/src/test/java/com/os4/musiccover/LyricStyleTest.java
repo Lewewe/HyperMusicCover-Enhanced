@@ -77,4 +77,17 @@ public class LyricStyleTest {
         assertFalse(s.sameLayout(s.with("size", 30f)));
         assertFalse(s.sameLayout(s.with("weight", 700f)));
     }
+
+    @Test public void translationSizeIsBoundedAndRebuildsWithoutChangingTheMainSize() {
+        LyricStyle s = LyricStyle.DEFAULT;
+        String key = LyricStyle.TRANSLATION_SIZE;
+        assertEquals(12.5f, s.translationSizeSp, 0f);
+        assertSame(s, s.with(key, Float.NaN));
+        assertEquals(8f, s.with(key, -1f).translationSizeSp, 0f);
+        LyricStyle larger = s.with(key, 100f);
+        assertEquals(24f, larger.translationSizeSp, 0f);
+        assertEquals(s.sizeSp, larger.sizeSp, 0f);
+        assertFalse(s.sameLayout(larger));
+        assertSame(larger, larger.with(key, 24f));
+    }
 }

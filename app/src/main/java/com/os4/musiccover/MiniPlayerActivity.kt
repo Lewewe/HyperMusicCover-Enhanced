@@ -131,7 +131,7 @@ private fun MiniPlayerPage(blur: Boolean, refreshKey: Int, onBack: () -> Unit) {
                                 value = config.optDouble(key, 100.0).toFloat(),
                                 valueRange = 80f..100f, detent = 100f,
                                 enabled = alive && config.optBoolean(MiniPlayerConfig.ENABLED),
-                                label = { "${it.toInt()}%" },
+                                unit = "%",
                                 onValueChange = { push(key, it) })
                         }
                     }
@@ -186,13 +186,13 @@ private fun MiniPlayerPage(blur: Boolean, refreshKey: Int, onBack: () -> Unit) {
                             value = config.optDouble(MiniPlayerConfig.NOTIFICATION_SIZE, 80.0).toFloat(),
                             valueRange = 70f..100f, detent = 80f,
                             enabled = alive && config.optBoolean(MiniPlayerConfig.ENABLED),
-                            label = { "${it.toInt()}%" },
+                            unit = "%",
                             onValueChange = { push(MiniPlayerConfig.NOTIFICATION_SIZE, it) })
                         ValueSlider(title = stringResource(R.string.mini_notification_drop),
                             value = config.optDouble(MiniPlayerConfig.NOTIFICATION_DROP, 16.0).toFloat(),
                             valueRange = 0f..32f, detent = 16f,
                             enabled = alive && config.optBoolean(MiniPlayerConfig.ENABLED),
-                            label = { "${it.toInt()} dp" },
+                            unit = " dp",
                             onValueChange = { push(MiniPlayerConfig.NOTIFICATION_DROP, it) })
                     }
                 }
@@ -209,14 +209,14 @@ private fun MiniPlayerPage(blur: Boolean, refreshKey: Int, onBack: () -> Unit) {
                             valueRange = 0f..80f,
                             detent = 30f,
                             enabled = alive && config.optBoolean(MiniPlayerConfig.ENABLED),
-                            label = { "${it.toInt()} dp" },
+                            unit = " dp",
                             onValueChange = { push(MiniPlayerConfig.BACKGROUND_BLUR_RADIUS, it) })
                         ValueSlider(title = stringResource(R.string.islands_background_blur_brightness),
                             value = config.optDouble(MiniPlayerConfig.BACKGROUND_BLUR_BRIGHTNESS, 80.0).toFloat(),
                             valueRange = 0f..100f,
                             detent = 80f,
                             enabled = alive && config.optBoolean(MiniPlayerConfig.ENABLED),
-                            label = { "${it.toInt()}%" },
+                            unit = "%",
                             onValueChange = { push(MiniPlayerConfig.BACKGROUND_BLUR_BRIGHTNESS, it) })
                     }
                 }

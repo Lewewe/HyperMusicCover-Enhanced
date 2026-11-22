@@ -203,6 +203,7 @@ object ModuleBridge {
         val lyricPos: Float = 0.5f,
         val lyricSideDp: Float = 30f,
         val lyricSizeSp: Float = 25f,
+        val lyricsTranslationSizeSp: Float = LyricStyle.DEFAULT.translationSizeSp,
         val lyricWeight: Int = 500,
         /**
          * A session has actually carried its own lyric since SystemUI started.
@@ -638,15 +639,9 @@ object ModuleBridge {
     fun setLyricOfflineCache(context: Context, on: Boolean) =
         send(context, "lyricofflinecache") { putExtra("on", on) }
 
-    /**
-     * One of the five values the lyric band and its type are made of. All five are fixed now and
-     * no page offers them; the op still moves any of them for the rest of the session.
-     *
-     * The module validates every value, including imported settings and adb broadcasts.
-     */
-    fun setLyricStyle(context: Context, key: String, value: Float) =
+    fun setLyricsTranslationSize(context: Context, value: Float) =
         send(context, "lyricstyle") {
-            putExtra("key", key)
+            putExtra("key", LyricStyle.TRANSLATION_SIZE)
             putExtra("v", value)
         }
 
@@ -1001,6 +996,8 @@ object ModuleBridge {
             lyricPos = b.getFloat("lyricpos", 0.5f),
             lyricSideDp = b.getFloat("lyricside", 30f),
             lyricSizeSp = b.getFloat("lyricsize", 25f),
+            lyricsTranslationSizeSp = LyricStyle.DEFAULT.with(LyricStyle.TRANSLATION_SIZE,
+                b.getFloat("lyrictranslationsize", LyricStyle.DEFAULT.translationSizeSp)).translationSizeSp,
             lyricWeight = b.getInt("lyricweight", 500),
             sessionLyric = b.getBoolean("sessionlyric", false),
             lyricSource = b.getString("lyricsrc") ?: "none",

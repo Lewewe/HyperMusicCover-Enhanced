@@ -287,12 +287,12 @@ internal fun HyperCanvasPage(model: HyperCanvasModel, isBlurEnabled: Boolean, ex
         item {
             ExtensionGroup(R.string.extension_group_effects) {
                 ValueSlider(title = stringResource(R.string.hypercanvas_dim), value = state.getInt("dim", 35).toFloat(),
-                    valueRange = 0f..80f, enabled = on, detent = 35f, label = { "${it.toInt()}%" },
+                    valueRange = 0f..80f, enabled = on, detent = 35f, unit = "%",
                     onValueChange = { model.push("dim", it.toInt()) })
                 ValueSlider(title = stringResource(R.string.hypercanvas_cover_blur), value = state.getInt("blur", 18).toFloat(),
                     valueRange = 0f..40f, enabled = on, detent = 18f, onValueChange = { model.push("blur", it.toInt()) })
                 ValueSlider(title = stringResource(R.string.hypercanvas_cover_dim), value = state.getInt("coverDim", 45).toFloat(),
-                    valueRange = 0f..80f, enabled = on, detent = 45f, label = { "${it.toInt()}%" },
+                    valueRange = 0f..80f, enabled = on, detent = 45f, unit = "%",
                     onValueChange = { model.push("coverDim", it.toInt()) })
                 if (on) Text(stringResource(R.string.hypercanvas_cache, state.getInt("count")), modifier = Modifier.padding(16.dp))
             }

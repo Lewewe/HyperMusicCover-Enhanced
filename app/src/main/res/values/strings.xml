@@ -142,6 +142,9 @@
     <string name="lyrics_provider_got_it">Got it</string>
     <string name="lyrics_provider_got_it_wait">Got it (%1$d)</string>
     <string name="lyrics_trans">Show translations</string>
+    <string name="lyrics_translation_size">Translation text size</string>
+    <string name="slider_value_bounds">Default %1$s · Min %2$s · Max %3$s</string>
+    <string name="slider_use_default">Use default</string>
     <string name="lyrics_roma">Show romanization</string>
     <string name="lyrics_on_device_transliteration">On-device transliteration</string>
     <string name="lyrics_on_device_transliteration_summary">Download dictionaries to generate romanization on this device.</string>

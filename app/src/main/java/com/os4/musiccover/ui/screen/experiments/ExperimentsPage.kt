@@ -95,7 +95,7 @@ internal fun ExperimentsPageView(isBlurEnabled: Boolean, isCurrent: Boolean,
                         IslandGesturePolicy.MAX_RADIUS_DP.toFloat(),
                     enabled = module.alive && module.islandIphoneTop,
                     detent = IslandGesturePolicy.DEFAULT_RADIUS_DP.toFloat(),
-                    label = { "${it.toInt()} dp" },
+                    unit = " dp",
                     onValueChange = {
                         val dp = it.toInt()
                         module = module.copy(islandIphoneRadius = dp)

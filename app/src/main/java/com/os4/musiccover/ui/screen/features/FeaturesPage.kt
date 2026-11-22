@@ -6,12 +6,15 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -515,7 +518,7 @@ private fun CoverGroup(
                 summary = stringResource(R.string.cover_full_blur_summary),
                 value = module.fullBlur.toFloat(), valueRange = 0f..100f,
                 enabled = enabled, detent = 50f,
-                label = { "${it.toInt()}%" }, onValueChange = {
+                unit = "%", onValueChange = {
                     onChange(module.copy(fullBlur = it.toInt()))
                     ModuleBridge.setFullBlur(context, it.toInt())
                 })
@@ -533,6 +536,7 @@ private fun CoverGroup(
                 value = module.bias,
                 valueRange = 0f..1f,
                 detent = 0.34f,
+                decimal = true,
                 enabled = enabled,
                 onValueChange = {
                     onChange(module.copy(bias = it))
@@ -589,7 +593,7 @@ private fun CoverGroup(
                 summary = stringResource(R.string.cover_wallpaper_dim_summary),
                 value = module.wallpaperDim.toFloat(), valueRange = 0f..80f,
                 enabled = enabled && !changingBackdrop, detent = 35f,
-                label = { "${it.toInt()}%" }, onValueChange = {
+                unit = "%", onValueChange = {
                     onChange(module.copy(wallpaperDim = it.toInt()))
                     ModuleBridge.setWallpaperDim(context, it.toInt())
                 })
@@ -662,7 +666,8 @@ private fun ClockGroup(
             valueRange = CLOCK_SIZE_MIN..0.55f,
             detent = DEFAULT_CLOCK_SIZE,
             enabled = enabled,
-            label = { "${(it * 100f).roundToInt()}%" },
+            unit = "%",
+            displayScale = 100f,
             onValueChange = {
                 val size = (it * 100f).roundToInt() / 100f
                 onChange(module.copy(clockSize = size))
@@ -829,6 +834,22 @@ private fun LyricDisplayControls(
                 ModuleBridge.setLyricsTrans(context, it)
             },
         )
+        if (module.lyricsTrans) {
+            ValueSlider(
+                title = stringResource(R.string.lyrics_translation_size),
+                value = module.lyricsTranslationSizeSp,
+                valueRange = 8f..24f,
+                enabled = enabled,
+                detent = 12.5f,
+                unit = " sp",
+                decimal = true,
+                steps = 159,
+                onValueChange = {
+                    onChange(module.copy(lyricsTranslationSizeSp = it))
+                    ModuleBridge.setLyricsTranslationSize(context, it)
+                },
+            )
+        }
         SwitchPreference(
             title = stringResource(R.string.lyrics_roma),
             checked = module.lyricsRoma,
@@ -1220,7 +1241,7 @@ private fun LyricEffectsControls(
                 summary = stringResource(R.string.lyrics_depth_blur_summary),
                 value = module.lyricsDepthBlur.toFloat(), valueRange = 0f..200f,
                 enabled = enabled, detent = 100f,
-                label = { "${it.toInt()}%" },
+                unit = "%",
                 onValueChange = {
                     val percent = it.toInt()
                     onChange(module.copy(lyricsDepthBlur = percent))
@@ -1469,10 +1490,28 @@ internal fun ValueSlider(
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
     enabled: Boolean,
-    detent: Float? = null,
-    label: (Float) -> String = ::format,
+    detent: Float,
+    unit: String = "",
+    displayScale: Float = 1f,
+    decimal: Boolean = false,
+    steps: Int = 0,
     onValueChange: (Float) -> Unit,
 ) {
+    fun number(raw: Float): String {
+        val shown = raw * displayScale
+        return when {
+            decimal -> format(shown)
+            displayScale != 1f -> shown.roundToInt().toString()
+            else -> shown.toInt().toString()
+        }
+    }
+    var editing by rememberSaveable { mutableStateOf(false) }
+    var input by rememberSaveable { mutableStateOf("") }
+    var initialInput by rememberSaveable { mutableStateOf("") }
+    var useDefault by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(enabled) {
+        if (!enabled) editing = false
+    }
     Column(Modifier.fillMaxWidth()) {
         BasicComponent(
             title = title,
@@ -1480,10 +1519,19 @@ internal fun ValueSlider(
             enabled = enabled,
             endActions = {
                 MiuixText(
-                    text = label(value),
+                    text = number(value) + unit,
+                    modifier = Modifier
+                        .clickable(enabled = enabled) {
+                            initialInput = number(value)
+                            input = initialInput
+                            useDefault = false
+                            editing = true
+                        }
+                        .padding(start = 8.dp, top = 6.dp, bottom = 6.dp),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Medium,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    color = if (enabled) MiuixTheme.colorScheme.primary
+                        else MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 )
             },
         )
@@ -1492,22 +1540,85 @@ internal fun ValueSlider(
                 .fillMaxWidth()
                 .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
             value = value,
-            onValueChange = onValueChange,
+            onValueChange = {
+                // Miuix snaps to each step. Remove float error before saving the snapped value.
+                onValueChange(if (steps > 0) (it * 100f).roundToInt() / 100f else it)
+            },
             valueRange = valueRange,
+            steps = steps,
             enabled = enabled,
             // Step is what makes a key point produce a tick at all; the default effect only fires
             // at the two ends of the track (SliderHapticEffect.Edge), and those ends keep firing
             // either way, because the edge haptic is played before the key point is looked at.
-            hapticEffect = if (detent != null) SliderDefaults.SliderHapticEffect.Step
-                           else SliderDefaults.DefaultHapticEffect,
-            keyPoints = detent?.let { listOf(it) },
-            showKeyPoints = detent != null,
+            hapticEffect = SliderDefaults.SliderHapticEffect.Step,
+            keyPoints = listOf(detent),
+            showKeyPoints = true,
             // The library's magnet would pull the value onto the key point from 2% of the range
             // away, which is a snap rather than a tick, and it would take the values just either
             // side of the detent out of what this slider can be set to. Off, deliberately: the
             // detent is there to be felt, not to stop the finger short.
             magnetThreshold = 0f,
         )
+    }
+
+    val valid = input.trim().replace(',', '.').toFloatOrNull()
+        ?.takeIf { it.isFinite() && (decimal || it == it.toInt().toFloat()) }
+        ?.let { it / displayScale }
+        ?.takeIf { it in valueRange }
+    WindowDialog(
+        show = editing,
+        title = title,
+        summary = stringResource(
+            R.string.slider_value_bounds,
+            number(detent) + unit,
+            number(valueRange.start) + unit,
+            number(valueRange.endInclusive) + unit,
+        ),
+        onDismissRequest = { editing = false },
+    ) {
+        val dismiss = LocalDismissState.current
+        val gap = 10.dp
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(gap)) {
+            TextField(
+                value = input,
+                onValueChange = {
+                    input = it
+                    useDefault = false
+                },
+                label = title,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            TextButton(
+                text = stringResource(R.string.slider_use_default),
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    input = number(detent)
+                    useDefault = true
+                },
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                TextButton(
+                    text = stringResource(R.string.lyrics_online_cancel),
+                    modifier = Modifier.weight(1f),
+                    onClick = { dismiss?.invoke() ?: run { editing = false } },
+                )
+                TextButton(
+                    text = stringResource(R.string.lyrics_online_save),
+                    enabled = valid != null,
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        if (useDefault) {
+                            onValueChange(detent)
+                        } else if (valid != null && input != initialInput) {
+                            onValueChange(if (decimal) (valid * 100f).roundToInt() / 100f else valid)
+                        }
+                        dismiss?.invoke() ?: run { editing = false }
+                    },
+                )
+            }
+        }
     }
 }
 

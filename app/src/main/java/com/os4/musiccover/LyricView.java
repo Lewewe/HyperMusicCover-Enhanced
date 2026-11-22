@@ -511,7 +511,8 @@ final class LyricView extends View {
         transPaint.setTypeface(Typeface.create(Typeface.DEFAULT, TRANS_WEIGHT, false));
         romaPaint.setTextSize(textPx * ONLINE_TRANS_SP / TEXT_SP);
         romaPaint.setTypeface(Typeface.create(Typeface.DEFAULT, TRANS_WEIGHT, false));
-        onlineTransPaint.setTextSize(textPx * ONLINE_TRANS_SP / TEXT_SP);
+        onlineTransPaint.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP,
+                style.translationSizeSp, getResources().getDisplayMetrics()));
         onlineTransPaint.setTypeface(Typeface.create(Typeface.DEFAULT, TRANS_WEIGHT, true));
         bgPaint.setTextSize(textPx * BG_SP / TEXT_SP);
         bgPaint.setTypeface(Typeface.create(Typeface.DEFAULT, BG_WEIGHT, false));
@@ -1713,7 +1714,8 @@ final class LyricView extends View {
         final TextPaint rp = new TextPaint(romaPaint);
         final TextPaint op = new TextPaint(onlineTransPaint);
         rp.setTextSize(buildTextPx * ONLINE_TRANS_SP / TEXT_SP);
-        op.setTextSize(buildTextPx * ONLINE_TRANS_SP / TEXT_SP);
+        op.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP,
+                style.translationSizeSp, getResources().getDisplayMetrics()));
         if (ls.isEmpty()) {
             wantVersion = wantWidth = -1;
             wantTrans = transOn;

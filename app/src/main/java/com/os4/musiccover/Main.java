@@ -2164,6 +2164,7 @@ public class Main extends XposedModule {
                     // 0 left, 1 centre, 2 right, and left when the key is absent: a file from
                     // before this setting is one where the lyrics always sat left.
                     + "\nlyricalign=" + LockLyrics.sAlign
+                    + "\nlyrictranslationsize=" + LockLyrics.sStyle.translationSizeSp
                     // The band's five values are fixed now and are not written; see LyricStyle.
                     // Not a setting - whether the last lookup got its lyric from the session.
                     // Kept across restarts so the settings page does not accuse a working
@@ -2322,6 +2323,8 @@ public class Main extends XposedModule {
                         else if ("lyricgroups".equals(k)) LockLyrics.sRapidGroups = "1".equals(v);
                         // Clamped in the setter; absent or unreadable means left, see saveState.
                         else if ("lyricalign".equals(k)) LockLyrics.setAlign(Integer.parseInt(v));
+                        else if ("lyrictranslationsize".equals(k))
+                            LockLyrics.setStyle(LyricStyle.TRANSLATION_SIZE, Float.parseFloat(v));
                         // The dp lyricoff and lyricgap from before the shares are dropped: what
                         // they meant depends on the room, which is not known here. lyricfill,
                         // lyricpos, lyricside, lyricsize and lyricweight are dropped with them:
@@ -3369,6 +3372,7 @@ public class Main extends XposedModule {
                         out.putFloat("lyricpos", LockLyrics.sStyle.pos);
                         out.putFloat("lyricside", LockLyrics.sStyle.sideDp);
                         out.putFloat("lyricsize", LockLyrics.sStyle.sizeSp);
+                        out.putFloat("lyrictranslationsize", LockLyrics.sStyle.translationSizeSp);
                         out.putInt("lyricweight", LockLyrics.sStyle.weight);
                         // Whether anything has actually written a lyric to a session, which is
                         // what tells a working provider module from a merely installed one.

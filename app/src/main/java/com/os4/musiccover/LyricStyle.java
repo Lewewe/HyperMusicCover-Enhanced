@@ -21,7 +21,8 @@ final class LyricStyle {
      * the weight, which comes down from 600 to 500 - the one that was worth changing on the way
      * past. `op lyricstyle` still moves all five for the rest of the session.
      */
-    static final LyricStyle DEFAULT = new LyricStyle(1f, 0.5f, 30f, 25f, 500);
+    static final String TRANSLATION_SIZE = "translationSize";
+    static final LyricStyle DEFAULT = new LyricStyle(1f, 0.5f, 30f, 25f, 500, 12.5f);
 
     /** The band's height as a share of the room, MIN_FILL..1; never under MIN_ROWS rows. */
     final float fill;
@@ -30,39 +31,43 @@ final class LyricStyle {
     final float sideDp;
     final float sizeSp;
     final int weight;
+    final float translationSizeSp;
 
     /** Rows of the main size the band may not shrink under. LyricView holds the same number. */
     private static final float MIN_ROWS = 2.4f;
 
-    private LyricStyle(float fill, float pos, float sideDp, float sizeSp, int weight) {
+    private LyricStyle(float fill, float pos, float sideDp, float sizeSp, int weight,
+                       float translationSizeSp) {
         this.fill = fill;
         this.pos = pos;
         this.sideDp = sideDp;
         this.sizeSp = sizeSp;
         this.weight = weight;
+        this.translationSizeSp = translationSizeSp;
     }
 
     /** Non-finite input changes nothing; finite input is kept inside the UI's supported range. */
     LyricStyle with(String key, float value) {
         if (!Float.isFinite(value)) return this;
-        float f = fill, p = pos, side = sideDp, size = sizeSp;
+        float f = fill, p = pos, side = sideDp, size = sizeSp, translation = translationSizeSp;
         int fontWeight = weight;
         if ("fill".equals(key)) f = clamp(value, MIN_FILL, 1f);
         else if ("pos".equals(key)) p = clamp(value, 0f, 1f);
         else if ("side".equals(key)) side = clamp(value, 0f, 64f);
         else if ("size".equals(key)) size = clamp(value, 18f, 36f);
+        else if (TRANSLATION_SIZE.equals(key)) translation = clamp(value, 8f, 24f);
         else if ("weight".equals(key)) {
             // MiSans VF, the lock screen's font, has a weight axis that ends at 700.
             fontWeight = Math.max(300, Math.min(700, Math.round(value / 100f) * 100));
         } else return this;
         if (f == fill && p == pos && side == sideDp
-                && size == sizeSp && fontWeight == weight) return this;
-        return new LyricStyle(f, p, side, size, fontWeight);
+                && size == sizeSp && fontWeight == weight && translation == translationSizeSp) return this;
+        return new LyricStyle(f, p, side, size, fontWeight, translation);
     }
 
     boolean sameLayout(LyricStyle other) {
         return other != null && sideDp == other.sideDp && sizeSp == other.sizeSp
-                && weight == other.weight;
+                && weight == other.weight && translationSizeSp == other.translationSizeSp;
     }
 
     /** Safe screen-space clipping band, written into a reusable two-float buffer. */

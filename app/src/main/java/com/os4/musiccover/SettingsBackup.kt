@@ -77,6 +77,7 @@ object SettingsBackup {
         }
     }
     private const val KEY_LYRICS_ALIGN = "lyricsAlignment"
+    private const val KEY_LYRICS_TRANSLATION_SIZE = "lyricsTranslationSizeSp"
     private const val KEY_FP_AVOID = "fingerprintAvoid"
     private const val KEY_MINI = "lockscreenMiniPlayer"
 
@@ -130,6 +131,7 @@ object SettingsBackup {
             json.put(KEY_LYRICS_SEARCH, module.lyricsSearchMode)
             writeLyricProviders(json, module)
             json.put(KEY_LYRICS_ALIGN, module.lyricsAlign)
+            json.put(KEY_LYRICS_TRANSLATION_SIZE, module.lyricsTranslationSizeSp.toDouble())
             json.put(KEY_FP_AVOID, module.fpAvoid)
             json.put("mediaCardCustomization", JSONObject(module.mediaCardConfig))
             json.put(KEY_MINI, JSONObject(module.miniConfig))
@@ -242,6 +244,9 @@ object SettingsBackup {
             }
             if (obj.has(KEY_LYRICS_ALIGN)) {
                 ModuleBridge.setLyricsAlign(context, obj.getInt(KEY_LYRICS_ALIGN))
+            }
+            if (obj.has(KEY_LYRICS_TRANSLATION_SIZE)) {
+                ModuleBridge.setLyricsTranslationSize(context, obj.getDouble(KEY_LYRICS_TRANSLATION_SIZE).toFloat())
             }
             if (obj.has(KEY_ISLAND_IPHONE_GESTURES)) {
                 ModuleBridge.setIslandIphoneGestures(context, obj.getBoolean(KEY_ISLAND_IPHONE_GESTURES))

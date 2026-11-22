@@ -83,7 +83,7 @@ internal fun MediaCardPageView(isBlurEnabled: Boolean, refreshKey: Int, onBack: 
                             ValueSlider(title = stringResource(R.string.media_wave_bt_adjustment),
                                 summary = stringResource(R.string.media_wave_bt_adjustment_summary),
                                 value = values.getValue("island.btOffset").toFloat(), valueRange = -250f..250f,
-                                enabled = module.alive, detent = 0f, label = { "${it.toInt()} ms" },
+                                enabled = module.alive, detent = 0f, unit = " ms",
                                 onValueChange = { push("island.btOffset", it.toInt()) })
                         }
                         MediaSwitch("island", "hideWaveDevice", R.string.media_wave_hide_device, values, module.alive, push, R.string.media_wave_hide_device_summary)
@@ -144,7 +144,7 @@ internal fun MediaCardPageView(isBlurEnabled: Boolean, refreshKey: Int, onBack: 
                         if (style == 2) {
                             ValueSlider(title = stringResource(R.string.media_background_amount),
                                 value = values.getValue("$scope.blur").toFloat(), valueRange = 1f..20f,
-                                enabled = module.alive, detent = 8f, label = { it.toInt().toString() },
+                                enabled = module.alive, detent = 8f,
                                 onValueChange = { push("$scope.blur", it.toInt()) })
                         }
                         if (style == 4) MediaSwitch(scope, "invert", R.string.media_background_invert, values, module.alive, push)
