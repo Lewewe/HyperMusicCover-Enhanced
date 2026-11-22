@@ -20,6 +20,8 @@
     <string name="cover_glow_style_gradient">Gradient</string>
     <string name="cover_glow_style_mesh">Mesh gradient</string>
     <string name="clock_size">Clock size with big cover art</string>
+    <string name="clock_beside_date">Clock beside the date</string>
+    <string name="clock_beside_date_summary">Show a small clock to the left of the date while big cover art or full-screen lyrics are open. Available on clock styles with a separate date.</string>
     <string name="clock_force_colon">Always show the clock colon</string>
     <string name="clock_force_colon_summary">No effect on some styles</string>
     <string name="restart_menu">Restart</string>

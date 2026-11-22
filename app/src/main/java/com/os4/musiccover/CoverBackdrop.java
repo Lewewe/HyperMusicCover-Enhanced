@@ -59,10 +59,14 @@ final class CoverBackdrop {
                     ? android.view.View.INVISIBLE : android.view.View.VISIBLE);
     }
 
-    /** A lyricless compact player leaves the native wallpaper and clock unobstructed. */
-    private static void syncClock() {
+    static boolean compactClockResting() {
+        return Main.sClockBesideDate && LockLyrics.playerPage() && !LockLyrics.wantsAttached();
+    }
+
+    /** The compact player can hand back the clock independently of its backdrop. */
+    static void syncClock() {
         if (!Main.coverModeOn()) return;
-        boolean nativeScene = nativeWallpaperScene();
+        boolean nativeScene = nativeWallpaperScene() || compactClockResting();
         boolean held = LockHold.heldBy(LockHold.Owner.COVER);
         if (nativeScene && held) {
             LockHold.give(LockHold.Owner.COVER, Main.screenOnCached());

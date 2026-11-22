@@ -674,6 +674,16 @@ private fun ClockGroup(
                 ModuleBridge.setClockSize(context, size)
             },
         )
+        SwitchPreference(
+            title = stringResource(R.string.clock_beside_date),
+            summary = stringResource(R.string.clock_beside_date_summary),
+            checked = module.clockBesideDate,
+            enabled = enabled,
+            onCheckedChange = {
+                onChange(module.copy(clockBesideDate = it))
+                ModuleBridge.setClockBesideDate(context, it)
+            },
+        )
         // Three rows were here and are gone: how far the date and the clock are moved together,
         // how solid the liquid-glass styles go, and the spring the whole transition runs on. All
         // three are fixed now - the first at the value cover mode has always been tuned to, the

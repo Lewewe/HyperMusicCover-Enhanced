@@ -126,6 +126,7 @@ object ModuleBridge {
          */
         val aodSmall: Boolean = true,
         /** Draw the big clock's colon on the styles that drop it. */
+        val clockBesideDate: Boolean = false,
         val forceColon: Boolean = false,
         /** The depth effect's limits lifted (Extras). On by default. See HyperTweaks.depthOpen. */
         val depthOpen: Boolean = true,
@@ -519,6 +520,9 @@ object ModuleBridge {
     /** See the note above [setClockHeight]: no row offers this any more, the op still works. */
     fun setAodSmall(context: Context, on: Boolean) =
         send(context, "aodclock") { putExtra("small", on) }
+
+    fun setClockBesideDate(context: Context, on: Boolean) =
+        send(context, "clockbesidedate") { putExtra("on", on) }
 
     fun setForceColon(context: Context, on: Boolean) =
         send(context, "colon") { putExtra("on", on) }
@@ -936,6 +940,7 @@ object ModuleBridge {
             glowDrift = b.getBoolean("glowdrift", true),
             meshBackdrop = b.getBoolean("meshbackdrop", false),
             aodSmall = b.getBoolean("aodsmall", true),
+            clockBesideDate = b.getBoolean("clockbesidedate", false),
             forceColon = b.getBoolean("colon", false),
             depthOpen = b.getBoolean("depthopen", true),
             mediaBarGlow = b.getBoolean("seekglow", true),

@@ -435,6 +435,7 @@ public class Main extends XposedModule {
      */
     static final float DEFAULT_CLOCK_SIZE = 0.09f;
     static volatile float sClockSize = DEFAULT_CLOCK_SIZE;
+    static volatile boolean sClockBesideDate;
     static volatile boolean sHidePlayerBackground;
     static volatile boolean sCoverOnTap;
 
@@ -2119,6 +2120,7 @@ public class Main extends XposedModule {
                     // aodsmall and lyrics are not written: both are fixed on, and loadState does
                     // not read them. lyrichidden still is - the two-finger tap is the one way the
                     // lock screen can be asked for the cover instead, and it has to survive.
+                    + "\nclockbesidedate=" + (sClockBesideDate ? 1 : 0)
                     + "\ncolon=" + (HyperTweaks.sForceColon ? 1 : 0)
                     + "\nseekglow=" + (HyperTweaks.sBarGlow ? 1 : 0)
                     + "\nlyrickeep=" + (LockLyrics.sKeepOn ? 1 : 0)
@@ -2258,6 +2260,7 @@ public class Main extends XposedModule {
                         // clockref and clockreference are not read: the size is a share of
                         // the screen now, see ClockCollapse.sizeUnit.
                         else if ("clocksize".equals(k)) setClockSize(Float.parseFloat(v));
+                        else if ("clockbesidedate".equals(k)) sClockBesideDate = "1".equals(v);
                         // clockoff, glass and spring are not read: the clock's offset, the glass
                         // clock's end and the transition's spring are all fixed. Each is still
                         // reachable from its own op, for the session.
@@ -3170,6 +3173,11 @@ public class Main extends XposedModule {
                         setClockSize(i.getFloatExtra("v", 1f));
                         saveState();
                         ClockCollapse.refresh();
+                    } else if ("clockbesidedate".equals(op)) {
+                        sClockBesideDate = i.getBooleanExtra("on", false);
+                        saveState();
+                        CoverBackdrop.syncClock();
+                        ClockCollapse.refresh();
                     } else if ("clockoffset".equals(op)) {
                         setClockOffsetDp(i.getFloatExtra("v", 0f));
                         saveState();
@@ -3287,6 +3295,7 @@ public class Main extends XposedModule {
                         out.putFloat("clock", sClockHeightDp);
                         out.putFloat("clocksize", effectiveClockSize());
                         out.putFloat("clockoff", sClockOffsetDp);
+                        out.putBoolean("clockbesidedate", sClockBesideDate);
                         out.putFloat("glass", sGlassEnd);
                         out.putFloat("spring", sClockResponse);
                         out.putBoolean("card", sCardShowing);
@@ -7214,7 +7223,8 @@ public class Main extends XposedModule {
         // Start the card where the OEM has it when animating, so the thumbnail fades out across
         // the clock's own frames instead of blinking away before the clock has begun to move.
         // Without an animation there is nothing to fade, and the settled look goes on directly.
-        sCardP = animate ? 0f : 1f;
+        boolean compactClock = CoverBackdrop.compactClockResting();
+        sCardP = animate && !compactClock ? 0f : 1f;
         if (effectiveCoverStyle().mode == CoverCardStyle.CARD) {
             CoverCardLayer.attach(CoverPush.coverLayer());
             CoverCardLayer.style(effectiveCoverStyle());
@@ -7235,7 +7245,7 @@ public class Main extends XposedModule {
         // The response is the slider's, read when the transition starts and nowhere else, which
         // is what makes a change land on the next transition and never mid-flight. The cut-out
         // goes with it; both are LockHold's, shared with the immersive pages.
-        if (!coverOnTapResting())
+        if (!coverOnTapResting() && !compactClock)
             LockHold.take(LockHold.Owner.COVER, animate, "cover");
         CanvasHostBridge.sceneChanged();
         // An immersive page closing in the same tap fades out onto this cover, not ahead of it.
