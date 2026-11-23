@@ -1,17 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Lewewe (HyperMusicCover-Enhanced, https://github.com/Lewewe/HyperMusicCover-Enhanced)
-// Animation rendered from demo/island (Remotion). Run npm run render there, then copy
-// the WebPs to res/raw and the picker PNGs to res/drawable-nodpi.
+// Native drawing and timing live in CapsuleDemoCanvas.kt.
 package com.os4.musiccover
 
-import android.graphics.ImageDecoder
-import android.graphics.drawable.AnimatedImageDrawable
-import android.widget.ImageView
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,18 +28,14 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -54,42 +45,41 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-private val guideImages = intArrayOf(R.raw.island_demo_coloros_list, R.raw.island_demo_coloros_stack,
-    R.raw.island_demo_coloros)
-private val guideTitles = intArrayOf(R.string.mini_demo_list, R.string.mini_demo_stack, R.string.mini_demo_capsule)
+private val guideTitles = intArrayOf(R.string.mini_demo_list, R.string.mini_demo_stack, R.string.mini_demo_capsule, R.string.mini_demo_hyperos, R.string.mini_demo_hyperos_list)
 private val guideSummaries = intArrayOf(R.string.mini_demo_list_summary, R.string.mini_demo_stack_summary,
-    R.string.mini_demo_capsule_summary)
+    R.string.mini_demo_capsule_summary, R.string.mini_demo_hyperos_summary, R.string.mini_demo_hyperos_list_summary)
 
 @Composable
 internal fun IslandDemo(colorOs: Boolean, allowStack: Boolean) {
-    if (!colorOs) {
-        AnimatedGuide(R.raw.island_demo_hyperos, Modifier.fillMaxWidth().height(112.dp), playing = true)
-        return
-    }
-    val pages = if (allowStack) listOf(0, 1, 2) else listOf(0, 2)
-    val pager = key(allowStack) { rememberPagerState { pages.size } }
+    val pages = if (!colorOs) listOf(4, 3) else if (allowStack) listOf(0, 1, 2) else listOf(0, 2)
+    val pager = key(colorOs, allowStack) { rememberPagerState { pages.size } }
     val scope = rememberCoroutineScope()
     val colors = MiuixTheme.colorScheme
     // ColorOS's guide measures every page and uses the tallest page's height.
-    HorizontalPager(state = pager, beyondViewportPageCount = pages.lastIndex,
-        key = { guideImages[pages[it]] }) { page ->
-        val guide = pages[page]
-        Column(Modifier.fillMaxWidth().padding(top = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally) {
-            AnimatedGuide(guideImages[guide], Modifier.width(180.dp).height(194.dp),
-                playing = pager.settledPage == page)
-            Text(stringResource(guideTitles[guide]), fontWeight = FontWeight.Medium,
-                fontSize = 16.sp, lineHeight = 18.5.sp, textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 32.dp).padding(top = 24.dp))
-            Text(stringResource(guideSummaries[guide]), color = colors.onSurfaceVariantSummary,
-                fontSize = 12.sp, lineHeight = 14.sp, textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 32.dp).padding(top = 8.dp))
+    key(colorOs, allowStack) {
+        HorizontalPager(state = pager, beyondViewportPageCount = pages.lastIndex,
+            key = { pages[it] }) { page ->
+            val guide = pages[page]
+            Column(Modifier.fillMaxWidth().padding(top = 32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                CapsuleDemoCanvas(guide, Modifier.width(180.dp).height(194.dp),
+                    playing = pager.settledPage == page)
+                Text(stringResource(guideTitles[guide]), fontWeight = FontWeight.Medium,
+                    fontSize = 16.sp, lineHeight = 18.5.sp, textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 32.dp).padding(top = 24.dp))
+                Text(stringResource(guideSummaries[guide]), color = colors.onSurfaceVariantSummary,
+                    fontSize = 12.sp, lineHeight = 14.sp, textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 32.dp).padding(top = 8.dp))
+            }
         }
+    }
+    if (pages.size == 1) {
+        Box(Modifier.height(26.dp))
+        return
     }
     Row(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 10.dp).selectableGroup(),
         horizontalArrangement = Arrangement.Center) {
@@ -106,26 +96,6 @@ internal fun IslandDemo(colorOs: Boolean, allowStack: Boolean) {
             }
         }
     }
-}
-
-@Composable
-private fun AnimatedGuide(resource: Int, modifier: Modifier, playing: Boolean) {
-    val resources = LocalContext.current.resources
-    val drawable = remember(resource) {
-        ImageDecoder.decodeDrawable(ImageDecoder.createSource(resources, resource)) as AnimatedImageDrawable
-    }
-    DisposableEffect(drawable, playing) {
-        drawable.repeatCount = AnimatedImageDrawable.REPEAT_INFINITE
-        if (playing) drawable.start()
-        onDispose { drawable.stop() }
-    }
-    AndroidView(
-        modifier = modifier,
-        factory = { context ->
-            ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
-        },
-        update = { it.setImageDrawable(drawable) }
-    )
 }
 
 @Composable
@@ -162,13 +132,14 @@ internal fun NotificationStylePicker(selectedStyle: Int, allowStack: Boolean, en
                 .clip(RoundedCornerShape(12.dp))
                 .selectable(selected, enabled && (!stack || allowStack), Role.RadioButton) { onSelect(style) }
                 .padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                val preview = when (style) {
-                    MiniPlayerConfig.NOTIFICATIONS_STACK -> R.drawable.island_preview_stack
-                    MiniPlayerConfig.NOTIFICATIONS_LIST -> R.drawable.island_preview_list
-                    else -> R.drawable.island_preview_capsule
+                val guide = when (style) {
+                    MiniPlayerConfig.NOTIFICATIONS_STACK -> 1
+                    MiniPlayerConfig.NOTIFICATIONS_LIST -> 0
+                    else -> 2
                 }
-                Image(painterResource(preview), contentDescription = null,
-                    modifier = Modifier.widthIn(max = 102.dp).fillMaxWidth(0.85f).aspectRatio(288f / 634f))
+                CapsuleDemoCanvas(guide,
+                    Modifier.widthIn(max = 102.dp).fillMaxWidth(0.85f).aspectRatio(288f / 634f),
+                    playing = false, preview = true)
                 Text(stringResource(title), modifier = Modifier.padding(top = 14.dp, bottom = 10.dp),
                     textAlign = TextAlign.Center, color = if (selected) activeColor else colors.onSurfaceVariantSummary)
                 Canvas(Modifier.size(19.dp)) {

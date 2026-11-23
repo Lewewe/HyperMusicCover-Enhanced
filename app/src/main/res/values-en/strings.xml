@@ -564,5 +564,9 @@
     <string name="extension_status_ready">Ready</string>
     <string name="extension_set_up">Set up</string>
     <string name="extension_settings">Settings</string>
+    <string name="mini_demo_hyperos">Switch between capsules</string>
+    <string name="mini_demo_hyperos_summary">Tap the smaller capsule to switch between music and notifications.</string>
+    <string name="mini_demo_hyperos_list">Capsule and list</string>
+    <string name="mini_demo_hyperos_list_summary">Swipe up on the notification capsule to reveal the list. Swipe down to collapse.</string>
 </resources>
 

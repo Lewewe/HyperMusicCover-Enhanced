@@ -571,5 +571,9 @@
     <string name="extension_status_ready">已就绪</string>
     <string name="extension_set_up">完成设置</string>
     <string name="extension_settings">设置</string>
+    <string name="mini_demo_hyperos">切换胶囊</string>
+    <string name="mini_demo_hyperos_summary">轻点较小的胶囊，即可在音乐和通知之间切换。</string>
+    <string name="mini_demo_hyperos_list">胶囊和列表</string>
+    <string name="mini_demo_hyperos_list_summary">上滑通知胶囊以展开列表，下滑收起。</string>
 </resources>
 
