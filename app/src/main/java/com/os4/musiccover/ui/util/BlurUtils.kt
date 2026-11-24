@@ -85,6 +85,8 @@ fun BlurredBar(
     backdrop: LayerBackdrop?,
     blurEnabled: Boolean,
     scrollBehavior: ScrollBehavior? = null,
+    /** Overrides the bar's opacity (0..1), read per frame: a page with a top glow keeps it unveiled at rest. */
+    fadeIn: (() -> Float)? = null,
     content: @Composable () -> Unit,
 ) {
     val blurActive = blurEnabled && backdrop != null
@@ -95,7 +97,7 @@ fun BlurredBar(
                 modifier = Modifier
                     .matchParentSize()
                     .graphicsLayer {
-                        alpha = if (scrollFadePx > 0f) {
+                        alpha = if (fadeIn != null) fadeIn() else if (scrollFadePx > 0f) {
                             scrollBehavior?.state
                                 ?.let { (-it.contentOffset / scrollFadePx).coerceIn(0f, 1f) }
                                 ?: 1f

@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -93,7 +94,13 @@ fun PageScaffold(
     Scaffold(
         popupHost = { },
         topBar = {
-            BlurredBar(backdrop, blurActive, scrollBehavior) {
+            // Over a top glow the bar's dark blend read as a black band at rest: it comes in as the
+            // list scrolls under it instead.
+            val barFadePx = with(LocalDensity.current) { 96.dp.toPx() }
+            BlurredBar(backdrop, blurActive, scrollBehavior, fadeIn = topGlow?.let { {
+                if (listState.firstVisibleItemIndex > 0) 1f
+                else (listState.firstVisibleItemScrollOffset / barFadePx).coerceIn(0f, 1f)
+            } }) {
                 if (topGlow != null) SmallTopAppBar(
                     title = "",
                     color = barColor,
