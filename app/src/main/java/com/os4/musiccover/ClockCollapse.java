@@ -573,11 +573,20 @@ final class ClockCollapse {
         // from it handed the lock screen back - the player alone on the AOD, the cover on wake.
         // Or read off a keyguard clock no frame has posed since the cover look came on (cover
         // mode begun while unlocked): it measures as the OEM's native big clock.
-        if (flying && (Main.aodArtworkExpanded() || Float.isNaN(sFromTop) || !sPoseDrawn)
+        // Not on the blurred compact player: it keeps the native clock, while the rest pose is the
+        // cover's small (maybe beside-the-date) clock - held, it sat centred on the date.
+        boolean compactPage = CoverBackdrop.blurredCompactPlayer();
+        if (flying && (Main.aodArtworkExpanded() || !compactPage
+                        && (Float.isNaN(sFromTop) || !sPoseDrawn))
                 && !Float.isNaN(sCoverRestTop)) {
             sFromTop = sCoverRestTop;
             sFromUnit = sCoverRestUnit;
             sFromDate = sCoverRestDate;
+        } else if (flying && compactPage && (Float.isNaN(sFromTop) || !sPoseDrawn)
+                && !Float.isNaN(sCompactRestTop)) {
+            sFromTop = sCompactRestTop;
+            sFromUnit = sCompactRestUnit;
+            sFromDate = sCompactRestDate;
         }
         Float held = Main.sHoldY;
         // Kept for a held doze to put back on, one frame later - see sAodHoldY. ONLY when there
@@ -927,6 +936,8 @@ final class ClockCollapse {
     private static final String[] sPoseLog = new String[8];
     private static int sPoseN;
     private static float sCoverRestTop = Float.NaN, sCoverRestUnit, sCoverRestDate;
+    /** The same for the blurred compact player, whose clock stays native at the top. */
+    private static float sCompactRestTop = Float.NaN, sCompactRestUnit, sCompactRestDate;
     private static float sPoseTop = Float.NaN, sPoseUnit = Float.NaN, sPoseDate = Float.NaN;
 
     /**
@@ -957,12 +968,17 @@ final class ClockCollapse {
 
     private static void notePose(Live m, float top, float unit, float date, float full,
                                  float room) {
-        if (sPhase == Phase.ON && Main.coverModeOn() && !Main.aodArtworkExpanded()
-                && !LockLyrics.wantsCompactArtwork()
+        boolean remember = sPhase == Phase.ON && Main.coverModeOn() && !Main.aodArtworkExpanded()
                 && !LockIslands.INSTANCE.notificationArtworkExpanded()
                 && AodArtworkPolicy.canRememberPose(Main.keyguardLocked() && Main.onKeyguardNow(),
                         MiniPlayerScene.INSTANCE.getKeyguardGoingAway(), Main.screenOnCached(),
-                        top, unit, date, Main.sScreenH)) {
+                        top, unit, date, Main.sScreenH);
+        // shortcut: not saved across a SystemUI restart like the cover's; save it if that bites.
+        if (remember && CoverBackdrop.blurredCompactPlayer()) {
+            sCompactRestTop = top;
+            sCompactRestUnit = unit;
+            sCompactRestDate = date;
+        } else if (remember && !LockLyrics.wantsCompactArtwork()) {
             boolean moved = !samePose(top, sCoverRestTop) || !samePose(unit, sCoverRestUnit)
                     || !samePose(date, sCoverRestDate);
             sCoverRestTop = top;
