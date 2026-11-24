@@ -11806,6 +11806,13 @@ public class Main extends XposedModule {
      *
      * @return true when a glyph was rewritten and so needs the redraw
      */
+    /** The glyph view ids, looked up once: getIdentifier per doze frame was ~17% of the main thread. */
+    private static int[] sAodGlyphIds;
+
+    private static int sysId(View v, String name) {
+        return v.getContext().getResources().getIdentifier(name, "id", "com.android.systemui");
+    }
+
     static boolean holdAodColour() {
         if (!sCoverMode || sScreenOn || !aodColourOurs()) return false;
         // A doze that kept the cover's clock is showing the LOCK SCREEN's clock, so it holds the
@@ -11815,10 +11822,10 @@ public class Main extends XposedModule {
         boolean cover = ClockCollapse.aodHeld() && sAodCoverGlassSet;
         boolean wrote = false;
         for (View root : clockRoots()) {
-            for (String id : new String[]{"hour_view", "minute_view", "colon_view"}) {
+            if (sAodGlyphIds == null) sAodGlyphIds = new int[]{sysId(root, "hour_view"),
+                    sysId(root, "minute_view"), sysId(root, "colon_view")};
+            for (int rid : sAodGlyphIds) {
                 try {
-                    int rid = root.getContext().getResources()
-                            .getIdentifier(id, "id", "com.android.systemui");
                     View t = rid == 0 ? null : root.findViewById(rid);
                     if (t == null || t.getVisibility() != View.VISIBLE) continue;
                     float[] g = (float[]) Xp.getObjectField(t, "glassData");
