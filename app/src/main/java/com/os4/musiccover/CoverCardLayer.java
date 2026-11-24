@@ -1036,7 +1036,10 @@ final class CoverCardLayer extends View implements Choreographer.FrameCallback {
         if (!ClockCollapse.aodHeld() && (phase == ClockCollapse.Phase.AOD
                 || (phase == ClockCollapse.Phase.EXIT && !ClockCollapse.exiting()))) {
             afterBigClock = true;
-        } else if (phase == ClockCollapse.Phase.ON || phase == ClockCollapse.Phase.OFF) {
+        } else if (phase == ClockCollapse.Phase.ON || phase == ClockCollapse.Phase.OFF
+                // A doze that became held (SystemUI restarted in the AOD: watched first, then
+                // held) shows the square; the latch must not hide it until the next wake.
+                || phase == ClockCollapse.Phase.AOD) {
             afterBigClock = false;
         }
         boolean bigWake = afterBigClock && phase == ClockCollapse.Phase.ENTER;
