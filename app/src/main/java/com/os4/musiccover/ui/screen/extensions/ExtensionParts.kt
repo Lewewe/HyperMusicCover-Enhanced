@@ -371,6 +371,39 @@ internal fun ExtensionHeroCard(info: ExtensionInfo, release: ReleaseState, summa
     }
 }
 
+/** An extension not out yet: the hero card's look, with a grey "Coming soon" in place of the action. */
+@Composable
+internal fun ComingSoonCard(name: String, icon: Int, summary: String) {
+    val resources = LocalResources.current
+    val drawable = remember(icon) { resources.getDrawable(icon, null) }
+    val glow = remember(drawable) { glowColor(drawable) }
+    val colors = MiuixTheme.colorScheme
+    Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+        Column(Modifier.fillMaxWidth()
+            .drawBehind {
+                drawRect(androidx.compose.ui.graphics.Brush.radialGradient(
+                    listOf(glow.copy(alpha = .28f), Color.Transparent),
+                    center = androidx.compose.ui.geometry.Offset(42.dp.toPx(), 42.dp.toPx()),
+                    radius = 150.dp.toPx()))
+            }
+            .padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(icon),
+                    contentDescription = null, modifier = Modifier.size(52.dp))
+                Text(name, fontSize = 17.sp, fontWeight = FontWeight.Medium, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            }
+            Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(summary, fontSize = 13.sp, color = colors.onSurfaceVariantSummary, modifier = Modifier.weight(1f))
+                CardButton(CardAction(CardButtonContent(stringResource(R.string.extension_coming_soon),
+                    color = colors.onSurfaceVariantSummary), colors.onSurfaceVariantSummary.copy(alpha = .16f), null),
+                    animate = false)
+            }
+        }
+    }
+}
+
 /** Taps [onClick], sinking a little under the finger as HyperOS's buttons do instead of rippling. */
 private fun Modifier.pressSink(onClick: () -> Unit): Modifier = composed {
     val sink = remember { androidx.compose.animation.core.Animatable(1f) }

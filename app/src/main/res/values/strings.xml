@@ -482,6 +482,8 @@
         <item quantity="other">%d more taps to enable the A/B tab</item>
     </plurals>
     <string name="hyperimmersive_list_summary">StandBy: a full-screen clock, music and widgets while the phone charges on its side</string>
+    <string name="hyperocean_list_summary">An OriginOS-style panel for the lower half of the lock screen</string>
+    <string name="extension_coming_soon">Coming soon</string>
     <string name="hyperimmersive_title">StandBy</string>
     <string name="hyperimmersive_summary">Turn the phone on its side while it charges to show StandBy</string>
     <string name="hyperimmersive_blur">Blurred artwork background</string>

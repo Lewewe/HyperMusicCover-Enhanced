@@ -489,6 +489,8 @@
         <item quantity="other">再点击 %d 次即可启用 A/B 标签页</item>
     </plurals>
     <string name="hyperimmersive_list_summary">待机显示：手机横放充电时显示全屏时钟、音乐与小组件</string>
+    <string name="hyperocean_list_summary">OriginOS 风格的锁屏下半部分面板</string>
+    <string name="extension_coming_soon">即将推出</string>
     <string name="hyperimmersive_title">待机显示</string>
     <string name="hyperimmersive_summary">充电时将手机横放即可显示待机界面</string>
     <string name="hyperimmersive_blur">模糊封面背景</string>

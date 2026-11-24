@@ -20,6 +20,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import com.os4.musiccover.R
 import com.os4.musiccover.ui.util.PageScaffold
+import top.yukonga.miuix.kmp.basic.SmallTitle
 
 /**
  * The Extensions tab: every extension's card, and the page of the one opened. Each extension's
@@ -63,6 +64,11 @@ internal fun ExtensionsPageView(canvas: HyperCanvasModel, standby: HyperImmersiv
                     ExtensionHeroCard(HyperImmersiveInfo, standby.release, stringResource(R.string.hyperimmersive_list_summary),
                         standby.cardSetup, onOpen = { if (standby.canOpen) selected = HyperImmersiveInfo.name },
                         animateButton = isCurrent)
+                }
+                item { SmallTitle(text = stringResource(R.string.extension_coming_soon)) }
+                item {
+                    ComingSoonCard("HyperOcean", R.drawable.ic_extension_hyperocean,
+                        stringResource(R.string.hyperocean_list_summary))
                 }
             }
         }
