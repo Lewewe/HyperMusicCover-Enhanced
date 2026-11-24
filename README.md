@@ -18,6 +18,7 @@ An LSPosed module forked from [HyperMusicCover](https://github.com/zyl6932/Hyper
 | | |
 | --- | --- |
 | 🎨 **Big cover art** | Full-screen artwork with smooth track changes, or your own wallpaper behind it |
+| 🕐 **Clock beside the date** | A small clock to the left of the date while the big cover or lyrics are open, kept on the always-on display |
 | 🌈 **Moving backdrop** | Artwork colours drift behind the big cover, as a gradient or a mesh gradient |
 | 🎤 **Lyrics** | Synced and word-timed lyrics, translation, font packs and effects |
 | (・ω・) **Kaomoji companion** | A face that bops to the beat when neither lyrics nor the big cover are up |
@@ -26,6 +27,7 @@ An LSPosed module forked from [HyperMusicCover](https://github.com/zyl6932/Hyper
 | 🎛️ **Player styling** | Artwork shape, backgrounds, materials, colors and scrolling titles |
 | 🎬 **Spotify Canvas** | Video backgrounds through the optional [HyperCanvas](https://github.com/Lewewe/HyperCanvas) extension |
 | 🌙 **StandBy** *(alpha)* | Full-screen clock, music and widgets on the charger through the optional [HyperImmersive](https://github.com/Lewewe/HyperImmersive) extension |
+| 🌊 **Ocean panel** *(coming soon)* | An OriginOS-style panel for the lower half of the lock screen through the upcoming HyperOcean extension |
 | 🔔 **Notifications & AOD** | Works with the notification stack, HyperOS and ColorOS-style capsules and always-on display |
 | ⬆️ **One-tap updates** | A card on Home downloads and installs a new release, then restarts the scope when root is granted |
 
