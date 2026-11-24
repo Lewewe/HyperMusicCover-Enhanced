@@ -4,6 +4,8 @@
     <string name="about_source_code_summary">https://github.com/Lewewe/HyperMusicCover-Enhanced</string>
     <string name="about_telegram">Telegram Group</string>
     <string name="about_telegram_summary">https://t.me/HyperMusicCoverEnhanced</string>
+    <string name="about_telegram_channel">Telegram Channel</string>
+    <string name="about_telegram_channel_summary">https://t.me/HyperMusicCoverEnhancedChannel</string>
     <string name="about_feedback">Feedback</string>
     <string name="about_feedback_summary">https://github.com/Lewewe/HyperMusicCover-Enhanced/issues</string>
     <string name="cover_bias">Vertical position</string>

@@ -4,6 +4,8 @@
     <string name="about_source_code_summary">https://github.com/Lewewe/HyperMusicCover-Enhanced</string>
     <string name="about_telegram">Telegram群组</string>
     <string name="about_telegram_summary">https://t.me/HyperMusicCoverEnhanced</string>
+    <string name="about_telegram_channel">Telegram频道</string>
+    <string name="about_telegram_channel_summary">https://t.me/HyperMusicCoverEnhancedChannel</string>
     <string name="about_feedback">反馈与建议</string>
     <string name="about_feedback_summary">https://github.com/Lewewe/HyperMusicCover-Enhanced/issues</string>
     <string name="cover_bias">封面纵向位置</string>

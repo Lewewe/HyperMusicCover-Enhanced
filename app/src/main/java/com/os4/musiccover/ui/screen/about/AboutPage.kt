@@ -381,6 +381,15 @@ private fun AboutContent(
                             },
                         )
                         ArrowPreference(
+                            title = stringResource(R.string.about_telegram_channel),
+                            summary = stringResource(R.string.about_telegram_channel_summary),
+                            onClick = {
+                                if (!ctx.openTelegramGroup("https://t.me/HyperMusicCoverEnhancedChannel")) {
+                                    uriHandler.openUri("https://t.me/HyperMusicCoverEnhancedChannel")
+                                }
+                            },
+                        )
+                        ArrowPreference(
                             title = stringResource(R.string.about_feedback),
                             summary = stringResource(R.string.about_feedback_summary),
                             onClick = { uriHandler.openUri("https://github.com/Lewewe/HyperMusicCover-Enhanced/issues") },
