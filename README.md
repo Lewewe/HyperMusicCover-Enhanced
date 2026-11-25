@@ -7,6 +7,7 @@
   <p>
     <a href="https://github.com/Lewewe/HyperMusicCover-Enhanced/releases"><img alt="Download" src="https://img.shields.io/github/v/release/Lewewe/HyperMusicCover-Enhanced?style=flat-square&amp;label=Download&amp;color=f38caf" /></a>
     <a href="https://t.me/HyperMusicCoverEnhanced"><img alt="Official Telegram group" src="https://img.shields.io/badge/Telegram-Official_group-26A5E4?style=flat-square&amp;logo=telegram" /></a>
+    <a href="https://t.me/HyperMusicCoverEnhancedChannel"><img alt="Official Telegram channel" src="https://img.shields.io/badge/Telegram-Official_channel-26A5E4?style=flat-square&amp;logo=telegram" /></a>
     <a href="LICENSE"><img alt="License AGPL-3.0" src="https://img.shields.io/badge/License-AGPL--3.0-ffaaa3?style=flat-square" /></a>
   </p>
 </div>
@@ -47,7 +48,7 @@ For StandBy: **Extensions → HyperImmersive → Download**, then follow the ste
 
 ## Feedback
 
-Tested mainly on Xiaomi 17 Pro. Ask in the [Telegram group](https://t.me/HyperMusicCoverEnhanced) or [open an issue](https://github.com/Lewewe/HyperMusicCover-Enhanced/issues) with your device, HyperOS version, module version and music app.
+Tested mainly on Xiaomi 17 Pro. Updates are posted in the [Telegram channel](https://t.me/HyperMusicCoverEnhancedChannel). Ask in the [Telegram group](https://t.me/HyperMusicCoverEnhanced) or [open an issue](https://github.com/Lewewe/HyperMusicCover-Enhanced/issues) with your device, HyperOS version, module version and music app.
 
 ## Build
 

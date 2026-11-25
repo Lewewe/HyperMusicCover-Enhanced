@@ -7,6 +7,7 @@
   <p>
     <a href="https://github.com/Lewewe/HyperMusicCover-Enhanced/releases"><img alt="下载" src="https://img.shields.io/github/v/release/Lewewe/HyperMusicCover-Enhanced?style=flat-square&amp;label=Download&amp;color=f38caf" /></a>
     <a href="https://t.me/HyperMusicCoverEnhanced"><img alt="官方 Telegram 群组" src="https://img.shields.io/badge/Telegram-Official_group-26A5E4?style=flat-square&amp;logo=telegram" /></a>
+    <a href="https://t.me/HyperMusicCoverEnhancedChannel"><img alt="官方 Telegram 频道" src="https://img.shields.io/badge/Telegram-Official_channel-26A5E4?style=flat-square&amp;logo=telegram" /></a>
     <a href="LICENSE"><img alt="AGPL-3.0 许可证" src="https://img.shields.io/badge/License-AGPL--3.0-ffaaa3?style=flat-square" /></a>
   </p>
 </div>
@@ -47,7 +48,7 @@
 
 ## 反馈
 
-主要在 Xiaomi 17 Pro 上测试。欢迎在 [Telegram 群组](https://t.me/HyperMusicCoverEnhanced) 交流，或[提交 Issue](https://github.com/Lewewe/HyperMusicCover-Enhanced/issues)，并附上设备、HyperOS 版本、模块版本和音乐应用。
+主要在 Xiaomi 17 Pro 上测试。更新会发布在 [Telegram 频道](https://t.me/HyperMusicCoverEnhancedChannel)。欢迎在 [Telegram 群组](https://t.me/HyperMusicCoverEnhanced) 交流，或[提交 Issue](https://github.com/Lewewe/HyperMusicCover-Enhanced/issues)，并附上设备、HyperOS 版本、模块版本和音乐应用。
 
 ## 构建
 
