@@ -26,13 +26,21 @@
 | 📊 **音频可视化** *(Beta)* | 胶囊和播放器上随音乐跳动的频谱，静音时同样有效 |
 | 📱 **iPhone-ify** *(A/B)* | 长按音乐或其他实时活动的胶囊，在摄像头处打开 iPhone 风格卡片，覆盖其他胶囊 |
 | 🎛️ **播放器外观** | 封面形状、背景、材质、配色和歌名滚动 |
-| 🎬 **Spotify Canvas** | 通过可选扩展 [HyperCanvas](https://github.com/Lewewe/HyperCanvas) 显示视频背景 |
-| 🌙 **StandBy** *(Alpha)* | 通过可选扩展 [HyperImmersive](https://github.com/Lewewe/HyperImmersive)，在充电时显示全屏时钟、音乐和小组件 |
-| 🌊 **Ocean 面板** *(即将推出)* | 通过即将推出的 HyperOcean 扩展，在锁屏下半部分显示 OriginOS 风格面板 |
 | 🔔 **通知与 AOD** | 适配通知堆叠、HyperOS 与 ColorOS 风格胶囊和息屏显示 |
 | ⬆️ **一键更新** | 主页卡片可下载并安装新版本，已授予 Root 时会自动重启作用域 |
 
 完整更新内容见[发布页](https://github.com/Lewewe/HyperMusicCover-Enhanced/releases)。本页跟随 `main` 分支，部分功能将在下一版本提供。
+
+## 扩展
+
+为 HyperMusicCover-Enhanced 增加功能的可选应用。
+
+| | |
+| --- | --- |
+| 🎬 **[HyperCanvas](https://github.com/Lewewe/HyperCanvas)** | Spotify Canvas 视频背景 |
+| 🌙 **[HyperImmersive](https://github.com/Lewewe/HyperImmersive)** *(Alpha)* | StandBy：充电时显示全屏时钟、音乐和小组件 |
+| 📟 **[HyperRear](https://github.com/Lewewe/HyperRear)** *(开发中)* | 为小米 17 Pro 系列背屏带来适用于所有音乐应用的音乐卡片 |
+| 🌊 **HyperOcean** *(即将推出)* | 在锁屏下半部分显示 OriginOS 风格面板 |
 
 ## 安装
 

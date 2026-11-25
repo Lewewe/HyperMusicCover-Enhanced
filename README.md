@@ -26,13 +26,21 @@ An LSPosed module forked from [HyperMusicCover](https://github.com/zyl6932/Hyper
 | 📊 **Audio visualizer** *(beta)* | Capsule and player bars that follow the music, even at zero volume |
 | 📱 **iPhone-ify** *(A/B)* | Hold a capsule for music or another live activity to open an iPhone-style card at the camera, over the other capsules |
 | 🎛️ **Player styling** | Artwork shape, backgrounds, materials, colors and scrolling titles |
-| 🎬 **Spotify Canvas** | Video backgrounds through the optional [HyperCanvas](https://github.com/Lewewe/HyperCanvas) extension |
-| 🌙 **StandBy** *(alpha)* | Full-screen clock, music and widgets on the charger through the optional [HyperImmersive](https://github.com/Lewewe/HyperImmersive) extension |
-| 🌊 **Ocean panel** *(coming soon)* | An OriginOS-style panel for the lower half of the lock screen through the upcoming HyperOcean extension |
 | 🔔 **Notifications & AOD** | Works with the notification stack, HyperOS and ColorOS-style capsules and always-on display |
 | ⬆️ **One-tap updates** | A card on Home downloads and installs a new release, then restarts the scope when root is granted |
 
 Full change list: [release notes](https://github.com/Lewewe/HyperMusicCover-Enhanced/releases). This page follows `main`, so some features arrive with the next release.
+
+## Extensions
+
+Optional apps that add to HyperMusicCover-Enhanced.
+
+| | |
+| --- | --- |
+| 🎬 **[HyperCanvas](https://github.com/Lewewe/HyperCanvas)** | Spotify Canvas video backgrounds |
+| 🌙 **[HyperImmersive](https://github.com/Lewewe/HyperImmersive)** *(alpha)* | StandBy: full-screen clock, music and widgets on the charger |
+| 📟 **[HyperRear](https://github.com/Lewewe/HyperRear)** *(in development)* | A music card for the Xiaomi 17 Pro series' rear screen, for every music app |
+| 🌊 **HyperOcean** *(coming soon)* | An OriginOS-style panel for the lower half of the lock screen |
 
 ## Install
 
