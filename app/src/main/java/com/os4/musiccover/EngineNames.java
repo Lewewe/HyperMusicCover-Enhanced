@@ -117,7 +117,11 @@ final class EngineNames {
 
         // Not separable by signature: several booleans, several (Z)V methods. Keyed off the
         // architecture, and the type is checked before the name is kept.
-        pendingFlag = booleanFieldNamed(c, multiDisplay ? "w" : "b", r);
+        // 8.2.9-flip moved the flag up to MultiDisplayEngineService as `j` (its own rotation redraw
+        // is `j = true; X(false)`), and `w` there is mSurfaceReady. Its renderer getter is Z()
+        // where 8.0.8's is X(), which is what tells the two multi-display builds apart.
+        String flag = !multiDisplay ? "b" : "Z".equals(rendererGetter) ? "j" : "w";
+        pendingFlag = booleanFieldNamed(c, flag, r);
 
         r.append("\n  boolean fields (candidates if the flag above is wrong): ")
                 .append(booleanFields(c));

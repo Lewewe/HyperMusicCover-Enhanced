@@ -2428,6 +2428,9 @@ public class WallpaperProbe {
             // and an int, so a build that widened the frame request the same way is worth one
             // more try. 0 is the no-animation value everywhere these appear.
             {"T", Boolean.FALSE, Integer.valueOf(0)},
+            // 8.2.9-flip, off its bytecode: ImageEngineImpl.b0(Z) posts X(Z), the "#preRender"
+            // method, and X hands the boolean to postRender as the teardown-defer flag.
+            {"b0", Boolean.FALSE},
     };
 
     /**
@@ -2619,7 +2622,7 @@ public class WallpaperProbe {
      * Z's boolean is a different question entirely (whether preRender re-reads the texture), and
      * the T(Z,I) entry is a shape nobody has met yet, so neither of those is ever given ours.
      */
-    private static final boolean[] FRAME_REQ_DEFERS_TEARDOWN = {true, true, false, false};
+    private static final boolean[] FRAME_REQ_DEFERS_TEARDOWN = {true, true, false, false, true};
 
     /** Tries the known frame requests, the one that answered last time first. */
     private static boolean frameRequest(Object eng, boolean keepAlive) {
