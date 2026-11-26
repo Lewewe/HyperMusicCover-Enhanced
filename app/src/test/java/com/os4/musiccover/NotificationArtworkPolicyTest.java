@@ -172,4 +172,15 @@ public class NotificationArtworkPolicyTest {
         assertFalse(NotificationArtworkPolicy.compact(true, true, 5, false, false));
         assertFalse(NotificationArtworkPolicy.compact(false, true, 1, true, true));
     }
+
+    @Test public void aNudgeOnThePileIsNotHalfwayToTheList() {
+        // Pile at 400, list at 700: a few pixels up is not the list, past 550 is.
+        assertFalse(NotificationArtworkPolicy.pastHalfway(410, 400, 700));
+        assertTrue(NotificationArtworkPolicy.pastHalfway(560, 400, 700));
+        // The list above the pile reads the same way, mirrored.
+        assertFalse(NotificationArtworkPolicy.pastHalfway(390, 400, 100));
+        assertTrue(NotificationArtworkPolicy.pastHalfway(240, 400, 100));
+        // Unread geometry keeps the old early start.
+        assertTrue(NotificationArtworkPolicy.pastHalfway(null, 400, 700));
+    }
 }

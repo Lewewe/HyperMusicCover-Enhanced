@@ -1190,7 +1190,9 @@ internal object LockIslands {
                 // A new notification out on its own is the pile, not the list (one row reads as
                 // LIST): the cover makes room as for the pile instead of turning thumbnail.
                 val list = notificationArtworkNavigation.listOpen(open,
-                    if (arrivalOut && state == "LIST") "STACK" else state, busy, towardList && !arrivalOut)
+                    if (arrivalOut && state == "LIST") "STACK" else state, busy,
+                    towardList && !arrivalOut && (state == "LIST" || NotificationArtworkPolicy.pastHalfway(
+                        position, NumState.scrollTo("STACK"), NumState.listScroll())))
                 val moving = notificationArtworkTouching || busy || now < artworkMotionUntil
                 val settled = !moving && ClockCollapse.phase() != ClockCollapse.Phase.ENTER
                 Main.notificationListArtwork(list, stackMembers.size, settled)

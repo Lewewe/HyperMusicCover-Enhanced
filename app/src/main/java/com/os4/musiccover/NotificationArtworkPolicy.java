@@ -62,6 +62,19 @@ final class NotificationArtworkPolicy {
         return expanded && fullList;
     }
 
+    /**
+     * Whether a drag from the pile has gone at least halfway to the list. A nudge on an open
+     * pile moved it a few pixels toward the list and that alone collapsed the big cover into the
+     * player until the finger lifted (filmed on the MIX Flip, 2026-11-27). Unread geometry keeps
+     * the old answer.
+     */
+    static boolean pastHalfway(Integer position, Integer stack, Integer list) {
+        if (position == null || stack == null || list == null) return true;
+        long span = (long) list - stack;
+        if (span == 0L) return true;
+        return ((long) position - stack) * Long.signum(span) * 2L >= Math.abs(span);
+    }
+
     static boolean compact(boolean held, boolean listOpen, int count,
                            boolean coverActive, boolean bigArtwork) {
         return coverActive && listOpen && count > 1 && (held || bigArtwork);
