@@ -1277,7 +1277,7 @@ public class WallpaperProbe {
                 sFadeSentAt = SystemClock.uptimeMillis();
                 // Kept alive between frames: T(false) finishes rendering after every frame,
                 // which throws the EGL context away for the next one to rebuild.
-                reloadEngine(sKeyguardEngine, true);
+                for (Object eng : allEngines()) reloadEngine(eng, true);
                 h.postDelayed(this, FADE_STEP_MS);
             }
         });
@@ -1415,7 +1415,7 @@ public class WallpaperProbe {
         GpuFade f = new GpuFade(from, to, 1f, 0f, to, durMs, done);
         sUploadOverride = to;
         sGpuFade = f;
-        reloadEngine(sKeyguardEngine, true);
+        for (Object eng : allEngines()) reloadEngine(eng, true);
         return f;
     }
 
@@ -1524,7 +1524,7 @@ public class WallpaperProbe {
                         if (sGpuFade != f) return;
                         sUploadOverride = f.dest;
                         f.swapRequested = true;
-                        reloadEngine(sKeyguardEngine, true);
+                        for (Object eng : allEngines()) reloadEngine(eng, true);
                     }
                 });
             }
@@ -2448,13 +2448,26 @@ public class WallpaperProbe {
      * wallpaper, so the lock screen read as the cover stuck behind the subject. See Handoff 27.
      */
     private static void reloadTexture() {
-        Object eng = sKeyguardEngine;
-        if (eng == null) {
+        Object[] engines = allEngines();
+        if (engines.length == 0) {
             Xp.log(TAG + "reload: no keyguard engine (is the lockscreen wallpaper "
                     + "still the same image as the desktop one?)");
             return;
         }
-        reloadEngine(eng);
+        for (Object eng : engines) reloadEngine(eng);
+    }
+
+    /**
+     * Every keyguard engine, for reloads and frame requests.
+     *
+     * The MIX Flip builds a lock engine per screen (which=2 and 8) and the one built last is not
+     * the one on screen while the phone is open: it drops each frame with mSurfaceReady=false.
+     * Both report visible through the platform Engine, so instead of picking, each gets the
+     * request and the hidden one drops it itself; the outer screen then has the cover too.
+     */
+    static Object[] allEngines() {
+        Object[] all = sKeyguardEngines.toArray();
+        return all.length > 0 || sKeyguardEngine == null ? all : new Object[]{sKeyguardEngine};
     }
 
     /**
@@ -2608,8 +2621,9 @@ public class WallpaperProbe {
 
     /** A redraw of what is uploaded, with no reload - the GPU fade's per-frame request. */
     static void requestFrame(boolean keepAlive) {
-        Object eng = sKeyguardEngine;
-        if (eng != null && !frameRequest(eng, keepAlive)) reportNoFrameRequest(eng);
+        for (Object eng : allEngines()) {
+            if (!frameRequest(eng, keepAlive)) reportNoFrameRequest(eng);
+        }
     }
 
     /**
