@@ -7122,6 +7122,26 @@ public class Main extends XposedModule {
      * getWidth(): this runs at attach time, before the container has been laid out.
      */
     private static void captureScreenSize(View v) {
+        readScreenSize(v);
+        // A foldable swaps the default display under SystemUI without re-attaching the clock
+        // container, so a size taken while folded (1208x1392 on the MIX Flip) stayed after
+        // unfolding: a small big cover and the AOD wash in a folded-sized corner. The container
+        // is laid out again on that swap, so the size is re-read there.
+        if (sSizeWatched.get() != v) {
+            sSizeWatched = new java.lang.ref.WeakReference<>(v);
+            v.addOnLayoutChangeListener((view, l, t, r, b, ol, ot, or, ob) -> {
+                int w = sScreenW, h = sScreenH;
+                readScreenSize(view);
+                if (w == sScreenW && h == sScreenH) return;
+                Xp.log(TAG + "screen " + w + "x" + h + " -> " + sScreenW + "x" + sScreenH);
+                if (sCoverMode) CoverPush.pushArtAsync(true, false);
+            });
+        }
+    }
+
+    private static java.lang.ref.WeakReference<View> sSizeWatched = new java.lang.ref.WeakReference<>(null);
+
+    private static void readScreenSize(View v) {
         try {
             android.util.DisplayMetrics dm = v.getResources().getDisplayMetrics();
             if (dm.widthPixels > 0 && dm.heightPixels > 0) {
