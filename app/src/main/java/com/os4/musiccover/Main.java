@@ -7205,6 +7205,7 @@ public class Main extends XposedModule {
      */
     private static void enterCoverMode(boolean animate) {
         sCoverMode = true;
+        TinyTemplate.sync();
         if (sCoverOnTap) {
             LockLyrics.setPlayerChosen(true);
             CanvasHostBridge.suspendForBackdrop();
@@ -7271,6 +7272,7 @@ public class Main extends XposedModule {
     private static void exitCoverMode(boolean animate) {
         CoverCardLayer.leaving();
         sCoverMode = false;
+        TinyTemplate.sync();
         LockLyrics.setPlayerChosen(false);
         // Hand the clock to Canvas before releasing the cover, avoiding an OEM exit and re-entry.
         CanvasHostBridge.sceneChanged();

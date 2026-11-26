@@ -40,6 +40,7 @@ final class CoverBackdrop {
 
     static void sync(boolean force) {
         syncClock();
+        TinyTemplate.sync();
         updateDim();
         boolean wallpaper = nativeWallpaperScene();
         if (force || wallpaper != nativeWallpaper) {

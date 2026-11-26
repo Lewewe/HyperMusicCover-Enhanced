@@ -139,6 +139,7 @@ final class HyperTweaks {
         clockColon(cl, "systemui", () -> sForceColon);
         mediaBarGlow(cl, () -> sBarGlow);
         coverUnlockFade(cl, Main::coverModeOn);
+        TinyTemplate.install(cl);
     }
 
     /**
