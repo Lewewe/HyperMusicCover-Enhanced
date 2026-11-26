@@ -622,8 +622,13 @@ final class ClockCollapse {
                 if (!Main.clockHeld()) return;
                 // Cover mode without our clock - unlocked, say. Nothing to walk back; watch the
                 // AOD so the wake has a start.
+                // The plain big cover too: asleep straight from an app it used to be let go, and
+                // the doze showed the OEM's big clock over the blur (CoolApk report; filmed on the
+                // MIX Flip, 2026-11-27). sCoverRestTop is that cover's own pose; the lyrics and
+                // compact pages have none here, so they still fall back.
                 sAodHeld = keepInAod()
-                        && (Main.aodArtworkExpanded() || CanvasHostBridge.keepsClockInAod())
+                        && (Main.aodArtworkExpanded() || CanvasHostBridge.keepsClockInAod()
+                            || Main.coverModeOn() && !LockLyrics.userWantsCompactArtwork())
                         && !Float.isNaN(sCoverRestTop);
                 if (sAodHeld) {
                     sFromTop = sCoverRestTop;
