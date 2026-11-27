@@ -533,6 +533,8 @@
     <string name="hyperrear_summary">Show HyperRear\'s player in place of the rear screen\'s music card. The rear screen blinks when this changes</string>
     <string name="hyperrear_volume">Volume ring</string>
     <string name="hyperrear_volume_summary">A ring around the rear camera shows the volume as it changes</string>
+    <string name="hyperrear_progress_ring">Progress ring with lyrics</string>
+    <string name="hyperrear_progress_ring_summary">With the lyrics open, the progress bar becomes a ring round the lower camera and the lyrics get its room</string>
     <string name="hyperrear_setup_permissions_summary">Enable HyperRear in LSPosed with the rear screen (Subscreen Center) in its scope, then come back and restart.</string>
     <string name="hyperrear_setup_request_scope">Request the rear screen scope from LSPosed.</string>
     <string name="hyperrear_setup_scope_pending">Approve the rear screen scope in the LSPosed notification.</string>

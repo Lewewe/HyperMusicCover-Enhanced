@@ -224,6 +224,10 @@ internal fun HyperRearPage(model: HyperRearModel, isBlurEnabled: Boolean, extraB
                     summary = stringResource(R.string.hyperrear_volume_summary),
                     checked = state.getBoolean("volumeRing"), enabled = enabled,
                     onCheckedChange = { model.set("volumeRing", it) })
+                SwitchPreference(title = stringResource(R.string.hyperrear_progress_ring),
+                    summary = stringResource(R.string.hyperrear_progress_ring_summary),
+                    checked = state.getBoolean("progressRing"), enabled = enabled,
+                    onCheckedChange = { model.set("progressRing", it) })
             }
         }
         item {
