@@ -34,10 +34,17 @@ import android.os.Parcel
  * is on (1 or 0), after the lines so an extension that stops reading there still parses. An
  * empty set means none.
  *
- * Only the extension signed like this module is served.
+ * Only an extension signed like this module is served: HyperImmersive, which asks from its own
+ * process, or HyperRear, whose card runs inside the rear screen's launcher and asks from there.
+ *
+ * shortcut: one sink at a time, the latest asker's; StandBy and the rear card both open would take
+ * it in turns. Keep a sink per extension if that ever matters.
  */
 object ExtensionSpectrum {
     const val PKG = "com.yzc26623.HyperImmersive"
+    const val REAR_PKG = "com.yzc26623.HyperRear"
+    /** The process HyperRear's requests come from. */
+    const val REAR_HOST = "com.xiaomi.subscreencenter"
     private const val TX_LEVELS = IBinder.FIRST_CALL_TRANSACTION
     private const val TX_BACKDROP = IBinder.FIRST_CALL_TRANSACTION + 1
     private const val TX_LYRICS = IBinder.FIRST_CALL_TRANSACTION + 2
@@ -55,20 +62,21 @@ object ExtensionSpectrum {
     private val levels = FloatArray(5)
     @Volatile private var sink: IBinder? = null
     private var lease: AudioSpectrumCapture.Lease? = null
-    private var verified: Boolean? = null
+    private val verified = HashMap<String, Boolean>()
     private var frames = 0L
     private val expire = Runnable { stop("no repeat") }
 
     @JvmStatic
-    fun handle(context: Context, intent: Intent) {
-        if (verified == null) {
-            verified = runCatching {
-                context.packageManager.checkSignatures(BuildConfig.APPLICATION_ID, PKG) ==
+    fun handle(context: Context, intent: Intent, sender: String?) {
+        val ext = if (sender == REAR_HOST) REAR_PKG else PKG
+        val ok = verified.getOrPut(ext) {
+            runCatching {
+                context.packageManager.checkSignatures(BuildConfig.APPLICATION_ID, ext) ==
                     PackageManager.SIGNATURE_MATCH
             }.getOrDefault(false)
         }
-        if (verified != true) {
-            Xp.log(TAG + "refused: $PKG is not signed like this module")
+        if (!ok) {
+            Xp.log(TAG + "refused: $ext is not signed like this module")
             return
         }
         when (intent.getStringExtra("do")) {

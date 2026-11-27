@@ -2394,6 +2394,9 @@ public class Main extends XposedModule {
                 if (!ProbeGuard.admit(this, i)) return;
                 String op = i.getStringExtra("op");
                 if (op == null) op = "info";
+                // The rear screen's launcher hosts HyperRear's card: it may only ask for the feed.
+                String sender = getSentFromPackage();
+                if (ExtensionSpectrum.REAR_HOST.equals(sender) && !"extspectrum".equals(op)) return;
                 Xp.d(TAG + "recv op=" + op + ("lyrictrcfg".equals(op)
                         || "spicylyricscfg".equals(op)
                         ? " extras=[credentials redacted]" : " extras=" + i.getExtras()));
@@ -3257,7 +3260,7 @@ public class Main extends XposedModule {
                         else MediaCardRuntime.set(i.getStringExtra("key"), i.getIntExtra("v", 0));
                         saveState();
                     } else if ("extspectrum".equals(op)) {
-                        ExtensionSpectrum.handle(c, i);
+                        ExtensionSpectrum.handle(c, i, sender);
                     } else if ("canvasframe".equals(op)) {
                         setResultExtras(CanvasHostBridge.frame(c, i));
                     } else if ("islandwavestate".equals(op)) {
@@ -3534,7 +3537,7 @@ public class Main extends XposedModule {
         // The app, the wallpaper process (its hello and first-frame signals) and 高德 (its map).
         ProbeGuard.register(ctx, new IntentFilter(ACTION), TAG, Probe::new,
                 BuildConfig.APPLICATION_ID, "com.miui.miwallpaper", AmapNavScene.PKG,
-                ExtensionSpectrum.PKG);
+                ExtensionSpectrum.PKG, ExtensionSpectrum.REAR_HOST);
         registerSecretCode(ctx);
         Xp.log(TAG + "receiver registered for " + ACTION);
         // A SystemUI that starts mid-navigation missed 高德's init; there is a receiver now.
