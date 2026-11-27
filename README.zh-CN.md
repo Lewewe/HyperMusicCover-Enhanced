@@ -27,6 +27,7 @@
 | 📱 **iPhone-ify** *(A/B)* | 长按音乐或其他实时活动的胶囊，在摄像头处打开 iPhone 风格卡片，覆盖其他胶囊 |
 | 🎛️ **播放器外观** | 封面形状、背景、材质、配色和歌名滚动 |
 | 🔔 **通知与 AOD** | 适配通知堆叠、HyperOS 与 ColorOS 风格胶囊和息屏显示 |
+| 📲 **折叠屏** | 在小米 MIX Flip 上显示大封面及其背景，外屏也支持 |
 | ⬆️ **一键更新** | 主页卡片可下载并安装新版本，已授予 Root 时会自动重启作用域 |
 
 完整更新内容见[发布页](https://github.com/Lewewe/HyperMusicCover-Enhanced/releases)。本页跟随 `main` 分支，部分功能将在下一版本提供。
@@ -37,10 +38,10 @@
 
 | | |
 | --- | --- |
-| 🎬 **[HyperCanvas](https://github.com/Lewewe/HyperCanvas)** | Spotify Canvas 视频背景 |
-| 🌙 **[HyperImmersive](https://github.com/Lewewe/HyperImmersive)** *(Alpha)* | StandBy：充电时显示全屏时钟、音乐和小组件 |
-| 📟 **[HyperRear](https://github.com/Lewewe/HyperRear)** *(开发中)* | 为小米 17 Pro 系列背屏带来适用于所有音乐应用的音乐卡片 |
-| 🌊 **HyperOcean** *(即将推出)* | 在锁屏下半部分显示 OriginOS 风格面板 |
+| <img src="docs/images/extensions/hypercanvas.png" alt="" width="24" height="24" align="center" /> **[HyperCanvas](https://github.com/Lewewe/HyperCanvas)** | Spotify 锁屏动态背景 |
+| <img src="docs/images/extensions/hyperimmersive.png" alt="" width="24" height="24" align="center" /> **[HyperImmersive](https://github.com/Lewewe/HyperImmersive)** *(Alpha)* | 待机显示：手机横放充电时显示全屏时钟、音乐与小组件 |
+| <img src="docs/images/extensions/hyperrear.png" alt="" width="24" height="24" align="center" /> **[HyperRear](https://github.com/Lewewe/HyperRear)** *(Alpha)* | 小米 17 Pro 系列背屏：为所有音乐应用提供同一个播放器，带 HMC-E 的歌词与频谱 |
+| <img src="docs/images/extensions/hyperocean.png" alt="" width="24" height="24" align="center" /> **HyperOcean** *(即将推出)* | 在锁屏下半部分显示 OriginOS 风格面板 |
 
 ## 安装
 
@@ -54,9 +55,11 @@
 
 使用 StandBy：进入 **Extensions → HyperImmersive → Download**，按应用内提示完成设置。
 
+使用背屏：进入 **Extensions → HyperRear → Download**，按应用内提示完成设置。
+
 ## 反馈
 
-主要在 Xiaomi 17 Pro 上测试。更新会发布在 [Telegram 频道](https://t.me/HyperMusicCoverEnhancedChannel)。欢迎在 [Telegram 群组](https://t.me/HyperMusicCoverEnhanced) 交流，或[提交 Issue](https://github.com/Lewewe/HyperMusicCover-Enhanced/issues)，并附上设备、HyperOS 版本、模块版本和音乐应用。
+主要在 Xiaomi 17 Pro 和 Xiaomi MIX Flip 上测试。更新会发布在 [Telegram 频道](https://t.me/HyperMusicCoverEnhancedChannel)。欢迎在 [Telegram 群组](https://t.me/HyperMusicCoverEnhanced) 交流，或[提交 Issue](https://github.com/Lewewe/HyperMusicCover-Enhanced/issues)，并附上设备、HyperOS 版本、模块版本和音乐应用。
 
 ## 构建
 
@@ -66,7 +69,7 @@ cd HyperMusicCover-Enhanced
 ./gradlew :app:assembleRelease :hyper-canvas:assembleRelease
 ```
 
-需要 Android SDK 37。HyperMusicCover-Enhanced、HyperCanvas 以及从独立仓库构建的 [HyperImmersive](https://github.com/Lewewe/HyperImmersive) 必须使用相同签名（`keystore.properties`）。
+需要 Android SDK 37。HyperMusicCover-Enhanced、HyperCanvas 以及从各自仓库构建的 [HyperImmersive](https://github.com/Lewewe/HyperImmersive) 和 [HyperRear](https://github.com/Lewewe/HyperRear) 必须使用相同签名（`keystore.properties`）。
 
 ## 致谢
 

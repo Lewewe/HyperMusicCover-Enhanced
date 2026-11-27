@@ -27,6 +27,7 @@ An LSPosed module forked from [HyperMusicCover](https://github.com/zyl6932/Hyper
 | 📱 **iPhone-ify** *(A/B)* | Hold a capsule for music or another live activity to open an iPhone-style card at the camera, over the other capsules |
 | 🎛️ **Player styling** | Artwork shape, backgrounds, materials, colors and scrolling titles |
 | 🔔 **Notifications & AOD** | Works with the notification stack, HyperOS and ColorOS-style capsules and always-on display |
+| 📲 **Foldables** | The big cover and its backdrop on the Xiaomi MIX Flip, outer screen included |
 | ⬆️ **One-tap updates** | A card on Home downloads and installs a new release, then restarts the scope when root is granted |
 
 Full change list: [release notes](https://github.com/Lewewe/HyperMusicCover-Enhanced/releases). This page follows `main`, so some features arrive with the next release.
@@ -37,10 +38,10 @@ Optional apps that add to HyperMusicCover-Enhanced.
 
 | | |
 | --- | --- |
-| 🎬 **[HyperCanvas](https://github.com/Lewewe/HyperCanvas)** | Spotify Canvas video backgrounds |
-| 🌙 **[HyperImmersive](https://github.com/Lewewe/HyperImmersive)** *(alpha)* | StandBy: full-screen clock, music and widgets on the charger |
-| 📟 **[HyperRear](https://github.com/Lewewe/HyperRear)** *(in development)* | A music card for the Xiaomi 17 Pro series' rear screen, for every music app |
-| 🌊 **HyperOcean** *(coming soon)* | An OriginOS-style panel for the lower half of the lock screen |
+| <img src="docs/images/extensions/hypercanvas.png" alt="" width="24" height="24" align="center" /> **[HyperCanvas](https://github.com/Lewewe/HyperCanvas)** | Spotify Canvas on your lock screen |
+| <img src="docs/images/extensions/hyperimmersive.png" alt="" width="24" height="24" align="center" /> **[HyperImmersive](https://github.com/Lewewe/HyperImmersive)** *(alpha)* | StandBy: a full-screen clock, music and widgets while the phone charges on its side |
+| <img src="docs/images/extensions/hyperrear.png" alt="" width="24" height="24" align="center" /> **[HyperRear](https://github.com/Lewewe/HyperRear)** *(alpha)* | Xiaomi 17 Pro series rear screen: one music player for every app, with HMC-E's lyrics and visualizer |
+| <img src="docs/images/extensions/hyperocean.png" alt="" width="24" height="24" align="center" /> **HyperOcean** *(coming soon)* | An OriginOS-style panel for the lower half of the lock screen |
 
 ## Install
 
@@ -54,9 +55,11 @@ For Spotify Canvas: **Extensions → HyperCanvas → Download**, then follow the
 
 For StandBy: **Extensions → HyperImmersive → Download**, then follow the steps shown in the app.
 
+For the rear screen: **Extensions → HyperRear → Download**, then follow the steps shown in the app.
+
 ## Feedback
 
-Tested mainly on Xiaomi 17 Pro. Updates are posted in the [Telegram channel](https://t.me/HyperMusicCoverEnhancedChannel). Ask in the [Telegram group](https://t.me/HyperMusicCoverEnhanced) or [open an issue](https://github.com/Lewewe/HyperMusicCover-Enhanced/issues) with your device, HyperOS version, module version and music app.
+Tested mainly on Xiaomi 17 Pro and Xiaomi MIX Flip. Updates are posted in the [Telegram channel](https://t.me/HyperMusicCoverEnhancedChannel). Ask in the [Telegram group](https://t.me/HyperMusicCoverEnhanced) or [open an issue](https://github.com/Lewewe/HyperMusicCover-Enhanced/issues) with your device, HyperOS version, module version and music app.
 
 ## Build
 
@@ -66,7 +69,7 @@ cd HyperMusicCover-Enhanced
 ./gradlew :app:assembleRelease :hyper-canvas:assembleRelease
 ```
 
-Needs Android SDK 37. HyperMusicCover-Enhanced, HyperCanvas and [HyperImmersive](https://github.com/Lewewe/HyperImmersive), which builds from its own repository, must be signed with the same key (`keystore.properties`).
+Needs Android SDK 37. HyperMusicCover-Enhanced, HyperCanvas, [HyperImmersive](https://github.com/Lewewe/HyperImmersive) and [HyperRear](https://github.com/Lewewe/HyperRear), which build from their own repositories, must be signed with the same key (`keystore.properties`).
 
 ## Credits
 
