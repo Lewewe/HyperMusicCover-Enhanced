@@ -12,12 +12,14 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="com.yzc26623.HyperCanvas.permission.MANAGE_EXTENSION" />
     <uses-permission android:name="com.yzc26623.HyperImmersive.permission.MANAGE_EXTENSION" />
+    <uses-permission android:name="com.yzc26623.HyperRear.permission.MANAGE_EXTENSION" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <queries>
         <package android:name="org.lsposed.manager" />
         <package android:name="com.yzc26623.HyperCanvas" />
         <package android:name="com.yzc26623.HyperImmersive" />
+        <package android:name="com.yzc26623.HyperRear" />
         <!-- HyperCanvas's card says whether the app it needs is there. -->
         <package android:name="com.spotify.music" />
         <!-- Whether a lyric provider module is installed, for the notice on the lyrics page.

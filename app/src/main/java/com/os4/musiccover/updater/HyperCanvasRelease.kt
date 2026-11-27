@@ -58,3 +58,5 @@ internal open class ExtensionRelease(val PACKAGE: String, private val name: Stri
 internal object HyperCanvasRelease : ExtensionRelease("com.yzc26623.HyperCanvas", "HyperCanvas")
 
 internal object HyperImmersiveRelease : ExtensionRelease("com.yzc26623.HyperImmersive", "HyperImmersive")
+
+internal object HyperRearRelease : ExtensionRelease("com.yzc26623.HyperRear", "HyperRear")

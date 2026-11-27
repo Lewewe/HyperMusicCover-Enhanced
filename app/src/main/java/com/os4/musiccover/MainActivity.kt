@@ -70,6 +70,7 @@ import top.yukonga.miuix.kmp.icon.extended.GridView
 import com.os4.musiccover.ui.screen.extensions.ExtensionsPageView
 import com.os4.musiccover.ui.screen.extensions.HyperCanvasModel
 import com.os4.musiccover.ui.screen.extensions.HyperImmersiveModel
+import com.os4.musiccover.ui.screen.extensions.HyperRearModel
 import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Settings
@@ -251,9 +252,11 @@ private fun MainScreen(
     val extensionResources = androidx.compose.ui.platform.LocalResources.current
     val canvas = remember(context, extensionResources, scope) { HyperCanvasModel(context, extensionResources, scope) }
     val standby = remember(context, scope) { HyperImmersiveModel(context, scope) }
-    LaunchedEffect(canvas, standby) {
+    val rear = remember(context, scope) { HyperRearModel(context, scope) }
+    LaunchedEffect(canvas, standby, rear) {
         canvas.release.refreshLocal(context)
         standby.release.refreshLocal(context)
+        rear.release.refreshLocal(context)
     }
     val items = listOf(
         stringResource(R.string.tab_home),
@@ -386,6 +389,7 @@ private fun MainScreen(
                     2 -> ExtensionsPageView(
                         canvas = canvas,
                         standby = standby,
+                        rear = rear,
                         isBlurEnabled = isBlurEnabled,
                         isCurrent = pagerState.settledPage == 2 && !pagerState.isScrollInProgress,
                         extraBottomPadding = navBarHeight,

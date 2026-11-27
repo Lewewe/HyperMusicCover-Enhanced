@@ -18,7 +18,7 @@ object LogExport {
         echo "== device"
         getprop ro.product.model; getprop ro.mi.os.version.incremental; getprop ro.build.version.incremental
         echo "== packages"
-        for p in com.yzc26623.HyperMusicCoverEnhanced com.yzc26623.HyperImmersive com.yzc26623.HyperCanvas; do
+        for p in com.yzc26623.HyperMusicCoverEnhanced com.yzc26623.HyperImmersive com.yzc26623.HyperCanvas com.yzc26623.HyperRear; do
           echo "${'$'}p ${'$'}(dumpsys package ${'$'}p 2>/dev/null | grep -m1 versionName)"
         done
         echo "== module log"

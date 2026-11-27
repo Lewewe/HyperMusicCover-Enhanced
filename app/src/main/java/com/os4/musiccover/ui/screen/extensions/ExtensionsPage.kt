@@ -27,18 +27,21 @@ import top.yukonga.miuix.kmp.basic.SmallTitle
  * state lives here, read once for both, while the tab is shown.
  */
 @Composable
-internal fun ExtensionsPageView(canvas: HyperCanvasModel, standby: HyperImmersiveModel,
+internal fun ExtensionsPageView(canvas: HyperCanvasModel, standby: HyperImmersiveModel, rear: HyperRearModel,
     isBlurEnabled: Boolean, isCurrent: Boolean, extraBottomPadding: Dp) {
     val context = LocalContext.current
     val resources = LocalResources.current
     HyperCanvasUpdates(canvas, isCurrent)
     HyperImmersiveUpdates(standby, isCurrent)
+    HyperRearUpdates(rear, isCurrent)
     LaunchedEffect(isCurrent) {
         if (isCurrent) {
             canvas.release.refreshLocal(context)
             standby.release.refreshLocal(context)
+            rear.release.refreshLocal(context)
             canvas.release.check(resources)
             standby.release.check(resources)
+            rear.release.check(resources)
         }
     }
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
@@ -53,6 +56,7 @@ internal fun ExtensionsPageView(canvas: HyperCanvasModel, standby: HyperImmersiv
         when (page) {
             HyperCanvasInfo.name -> HyperCanvasPage(canvas, isBlurEnabled, extraBottomPadding, back)
             HyperImmersiveInfo.name -> HyperImmersivePage(standby, isBlurEnabled, extraBottomPadding, back)
+            HyperRearInfo.name -> HyperRearPage(rear, isBlurEnabled, extraBottomPadding, back)
             else -> PageScaffold(title = stringResource(R.string.tab_extensions), isBlurEnabled = isBlurEnabled,
                 extraBottomPadding = extraBottomPadding, onBack = null) {
                 item {
@@ -63,6 +67,11 @@ internal fun ExtensionsPageView(canvas: HyperCanvasModel, standby: HyperImmersiv
                 item {
                     ExtensionHeroCard(HyperImmersiveInfo, standby.release, stringResource(R.string.hyperimmersive_list_summary),
                         standby.cardSetup, onOpen = { if (standby.canOpen) selected = HyperImmersiveInfo.name },
+                        animateButton = isCurrent)
+                }
+                item {
+                    ExtensionHeroCard(HyperRearInfo, rear.release, stringResource(R.string.hyperrear_list_summary),
+                        rear.cardSetup, onOpen = { if (rear.canOpen) selected = HyperRearInfo.name },
                         animateButton = isCurrent)
                 }
                 item { SmallTitle(text = stringResource(R.string.extension_coming_soon)) }
