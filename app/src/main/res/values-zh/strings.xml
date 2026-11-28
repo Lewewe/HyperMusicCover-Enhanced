@@ -116,7 +116,7 @@
     <string name="home_unknown">未知</string>
     <string name="home_loading">加载中…</string>
     <string name="donate_title">捐赠支持</string>
-    <string name="donate_home_summary">模块免费，支持 Enhanced 版本持续维护</string>
+    <string name="donate_home_summary">模块是免费的，觉得好用的话可以支持一下后续开发</string>
     <string name="donate_thanks_title">感谢你的支持</string>
     <string name="donate_thanks_summary">HyperMusicCover-Enhanced 免费且开源。你的支持将用于维护这个版本、修复问题和改进锁屏体验。</string>
     <string name="donate_scan_hint">扫描二维码，或将图片保存到相册，在爱发电支持 HyperMusicCover-Enhanced。</string>
@@ -135,8 +135,8 @@
     <!-- The lyric source row. Its title names where the words on the lock screen came from, or
          says there is none; only when neither provider module is on the phone does it warn. -->
     <string name="lyrics_provider_title_missing">未安装歌词模块</string>
-    <string name="lyrics_provider_missing">显示歌词可能不准或缺失；如未正确安装 LyricInfo 或Lyricon带来的问题请勿向开发者反馈</string>
-    <string name="lyrics_provider_ready">作用域外的应用仍存在匹配失败可能</string>
+    <string name="lyrics_provider_missing">歌词可能不准或缺失。如果 LyricInfo 或 Lyricon 没装好，请先装好再反馈歌词问题。</string>
+    <string name="lyrics_provider_ready">作用域以外的应用可能还是匹配不到歌词。</string>
     <string name="lyrics_source">取词方式：%1$s</string>
     <string name="lyrics_source_none">无歌词来源</string>
     <string name="lyrics_source_session">播放器提供</string>
@@ -185,7 +185,7 @@
     <string name="update_saved_to_downloads">没有应用能直接打开安装包，已保存到「下载/%1$s」，请在文件管理器里安装</string>
     <string name="update_no_installer">没有找到可以安装 APK 的应用，请在文件管理器里手动安装</string>
     <string name="update_confirm">更新</string>
-    <string name="update_not_ours">更新包的签名不是本项目的，已丢弃</string>
+    <string name="update_not_ours">下载的安装包不是本项目签名的，已删除</string>
     <string name="update_latest">已经是最新版本</string>
     <string name="update_current_version">当前版本 %1$s</string>
     <string name="update_percent">%1$d%%</string>
@@ -246,9 +246,9 @@
     <string name="lyrics_dictionary_error">下载失败</string>
     <string name="lyrics_dictionary_delete">删除词典</string>
     <string name="lyrics_groups">舒缓歌词</string>
-    <string name="lyrics_groups_summary">将快速切换的歌词分组显示，每组最多四行，让每一句都更从容易读。</string>
+    <string name="lyrics_groups_summary">切换很快的歌词会合在一起显示，一次最多四行，每句都能在屏幕上多停一会儿。</string>
     <string name="lyrics_close_without_lyrics">歌词不可用时关闭封面</string>
-    <string name="lyrics_close_without_lyrics_summary">启用后，播放没有歌词的歌曲时，点按封面会退出封面模式。</string>
+    <string name="lyrics_close_without_lyrics_summary">播放没有歌词的歌时，点按封面会直接收起大封面。</string>
     <string name="mini_status_at_date">状态显示在日期后面</string>
     <string name="mini_status_at_date_summary">勿扰、充电显示在日期后，避免被胶囊遮挡</string>
     <string name="settings_debug">调试</string>
@@ -304,7 +304,7 @@
     <string name="lyrics_online_mode">在线翻译</string>
     <string name="lyrics_online_mode_dual">原文与译文</string>
     <string name="lyrics_online_mode_off">关闭</string>
-    <string name="lyrics_online_mode_summary">解析歌词后异步翻译，用在线目标语言替换来源译文，并保留原有逐字时间轴。</string>
+    <string name="lyrics_online_mode_summary">在后台翻译歌词，替换歌词源自带的译文，逐字时间轴保持不变</string>
     <string name="lyrics_online_provider_custom">自定义 · LibreTranslate</string>
     <string name="lyrics_online_provider_deepl_free">DeepL API · Free</string>
     <string name="lyrics_online_provider_deepl_pro">DeepL API · Pro</string>
@@ -315,7 +315,7 @@
     <string name="lyrics_online_target_hint">目标语言（默认 en）</string>
     <string name="extras_section">歌词设置</string>
     <string name="lyrics_offline_cache">保留歌词以供离线播放</string>
-    <string name="lyrics_offline_cache_summary">将歌词和在线翻译保存在此设备上。网络信号较差或不稳定时很有用。找到更好的歌词时会更新缓存。关闭此选项将清除缓存。</string>
+    <string name="lyrics_offline_cache_summary">把歌词和在线翻译存在本机，网络慢或不稳定时很有用。找到更好的歌词时会替换缓存。关闭后会清除缓存。</string>
     <string name="extras_summary">歌词显示、翻译、动效与来源设置</string>
     <string name="features_tweaks_title">更多功能</string>
     <string name="features_tweaks_summary">音乐锁屏以外的系统调整</string>
@@ -353,9 +353,9 @@
     <string name="donate_open_afdian">打开爱发电</string>
     <string name="clock_size_summary">大封面展开时，时钟缩小后的大小，最高为原始大小的 55%。</string>
     <string name="lyrics_bpm_players">节拍媒体播放器</string>
-    <string name="lyrics_bpm_players_summary">选择哪些媒体播放器可以驱动节拍伴侣。全部取消选择则允许所有播放器。</string>
+    <string name="lyrics_bpm_players_summary">选择哪些播放器可以带动节拍伴侣。全都不勾就是所有播放器都可以。</string>
     <string name="lyrics_bpm_players_all">所有媒体播放器</string>
-    <string name="lyrics_bpm_players_empty">暂未找到兼容的媒体播放器。启动播放器后重新打开此菜单。</string>
+    <string name="lyrics_bpm_players_empty">还没找到支持的播放器。先打开一个播放器，再回来打开这个菜单。</string>
     <string name="lyrics_bpm_players_done">完成</string>
     <string name="lyrics_bpm_companion">歌词伙伴颜文字</string>
     <string name="lyrics_bpm_companion_summary">歌词和大封面都未显示时，显示随节拍反应的颜文字。歌词按钮用于搜索歌词。</string>
@@ -395,7 +395,7 @@
     <string name="media_background_animate">背景切换动画</string>
     <string name="media_background_amount">背景模糊强度</string>
     <string name="media_background_invert">亮色封面自动反色</string>
-    <string name="media_style_note">设置即时生效，大封面、歌词与通知手势保持现有行为。</string>
+    <string name="media_style_note">设置立即生效，大封面、歌词和通知手势都和以前一样。</string>
     <string name="credits_juren_media">媒体播放器自定义参考 HyperLyrics-Enhanced，包含背景渲染、柔光流动与封面取色。</string>
     <string name="media_super_island_wave">音频波形</string>
     <string name="media_audio_wave">实时音频波形</string>
@@ -432,11 +432,11 @@
     <string name="hypercanvas_cache">已缓存的 Canvas 视频：%1$d</string>
     <string name="hypercanvas_note">实验性功能。Spotify 加载 Canvas 时才会收集数据，可能需要先打开正在播放页面。没有可用 Canvas 的歌曲仍使用原有封面背景，最多缓存当前歌曲及前后歌曲的三个视频，仅使用 Spotify 已提供的 Canvas。关闭 HyperCanvas 后清空缓存，屏幕关闭后停止播放视频。</string>
     <string name="hypercanvas_show_in_pill">在药丸模式中显示 Canvas</string>
-    <string name="hypercanvas_show_in_pill_summary">播放器收起为药丸后继续显示 Canvas，关闭后会隐藏并暂停视频。</string>
+    <string name="hypercanvas_show_in_pill_summary">播放器收起成胶囊后继续显示 Canvas。关闭后视频会隐藏并暂停。</string>
     <string name="cover_hide_player_background">使用锁屏壁纸背景</string>
     <string name="cover_hide_player_background_summary">使用锁屏壁纸代替封面模糊背景，搭配悬浮封面和歌词，并可调节壁纸暗度。暂停 HyperCanvas 并禁用其开关，若已安装，更改此选项会重启 Spotify 和系统界面。</string>
     <string name="cover_on_tap">点按显示封面</string>
-    <string name="cover_on_tap_summary">播放音乐时只显示播放器和原壁纸，点按封面缩略图才展开封面</string>
+    <string name="cover_on_tap_summary">播放音乐时只在壁纸上显示播放器，点按封面才会打开大封面</string>
     <string name="hypercanvas_background_blocked">已暂停：请先关闭“使用锁屏壁纸背景”。</string>
     <string name="media_visualization_tab">音频可视化</string>
     <string name="media_appearance_tab">外观</string>
@@ -482,7 +482,7 @@
     <string name="island_iphone_top">展开的胶囊贴近摄像头</string>
     <string name="island_iphone_top_summary">像 iPhone 一样从摄像头处展开胶囊，覆盖状态栏。仅限竖屏手机。</string>
     <string name="island_iphone_focus_black">其他胶囊使用黑色背景</string>
-    <string name="island_iphone_focus_black_summary">摄像头处除音乐以外的卡片，音乐卡片始终为黑色。关闭后使用 HyperOS 原本的背景。</string>
+    <string name="island_iphone_focus_black_summary">摄像头处的卡片使用黑色背景，音乐卡片始终是黑色。关闭后使用 HyperOS 原本的背景</string>
     <string name="island_iphone_radius">展开胶囊圆角</string>
     <string name="island_iphone_radius_summary">圆角与屏幕边缘对齐。摄像头下方的文字会下移，角落里的文字会内收。标记处与小米 17 Pro 屏幕圆角同心，与 iPhone 一致。</string>
     <string name="ab_tab_unlocked">已启用 A/B 标签页</string>
