@@ -217,7 +217,7 @@
     <string name="restart_scope">Restart all scoped apps</string>
 
     <!-- The features page is a list of cards, each opening a page of its own. -->
-    <string name="features_cover_title">Lock screen music cover</string>
+    <string name="features_cover_title">Lock screen cover art</string>
     <string name="features_cover_summary">Cover, clock, media card</string>
     <string name="features_mini_title">Lock screen capsule</string>
     <string name="features_mini_summary">Music, notifications, blur and brightness</string>
@@ -591,5 +591,15 @@
     <string name="mini_demo_hyperos_summary">Tap the smaller capsule to switch between music and notifications.</string>
     <string name="mini_demo_hyperos_list">Capsule and list</string>
     <string name="mini_demo_hyperos_list_summary">Swipe up on the notification capsule to reveal the list. Swipe down to collapse.</string>
+    <string name="flip_title">MIX Flip exclusive</string>
+    <string name="flip_summary">Lock screen on the outer screen</string>
+    <string name="flip_outer_section">Outer screen</string>
+    <string name="flip_clock">Clock beside the date</string>
+    <string name="flip_clock_summary">Shrink the outer screen clock into the date row, the iOS way, to give the lock screen more room</string>
+    <string name="flip_status">Status beside the date</string>
+    <string name="flip_status_summary">Show charging and other lock screen status after the date instead of under the clock</string>
+    <string name="flip_face_left">Face unlock icon on the left</string>
+    <string name="flip_face_left_summary">Line the face unlock icon up with the date instead of centring it</string>
+    <string name="flip_unsupported">Only on Xiaomi MIX Flip and MIX Flip 2</string>
 </resources>
 

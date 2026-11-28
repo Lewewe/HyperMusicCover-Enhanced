@@ -127,6 +127,9 @@ object ModuleBridge {
         val aodSmall: Boolean = true,
         /** Draw the big clock's colon on the styles that drop it. */
         val clockBesideDate: Boolean = false,
+        val flipClock: Boolean = true,
+        val flipStatus: Boolean = true,
+        val flipFaceLeft: Boolean = true,
         val forceColon: Boolean = false,
         /** The depth effect's limits lifted (Extras). On by default. See HyperTweaks.depthOpen. */
         val depthOpen: Boolean = true,
@@ -520,6 +523,10 @@ object ModuleBridge {
     /** See the note above [setClockHeight]: no row offers this any more, the op still works. */
     fun setAodSmall(context: Context, on: Boolean) =
         send(context, "aodclock") { putExtra("small", on) }
+
+    /** [what] is "clock", "status" or "faceleft": the MIX Flip outer screen's switches. */
+    fun setFlip(context: Context, what: String, on: Boolean) =
+        send(context, "flip") { putExtra("what", what); putExtra("on", on) }
 
     fun setClockBesideDate(context: Context, on: Boolean) =
         send(context, "clockbesidedate") { putExtra("on", on) }
@@ -941,6 +948,9 @@ object ModuleBridge {
             meshBackdrop = b.getBoolean("meshbackdrop", false),
             aodSmall = b.getBoolean("aodsmall", true),
             clockBesideDate = b.getBoolean("clockbesidedate", false),
+            flipClock = b.getBoolean("flipclock", true),
+            flipStatus = b.getBoolean("flipstatus", true),
+            flipFaceLeft = b.getBoolean("flipfaceleft", true),
             forceColon = b.getBoolean("colon", false),
             depthOpen = b.getBoolean("depthopen", true),
             mediaBarGlow = b.getBoolean("seekglow", true),

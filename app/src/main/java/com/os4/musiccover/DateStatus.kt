@@ -366,6 +366,7 @@ internal object DateStatus {
     }
 
     private fun update() {
+        outerListener?.run()
         val alive = hostAlive()
         if (alive != lastAlive) {
             lastAlive = alive
@@ -622,6 +623,44 @@ internal object DateStatus {
     }
 
     private fun settling(): Boolean = shown.any { it.shift.value != 0f }
+
+    // ---------------------------------------------------------------- the MIX Flip's outer screen
+
+    /** Told whenever do-not-disturb or charging changes; the outer screen's row redraws. */
+    @JvmStatic var outerListener: Runnable? = null
+
+    /** The same do-not-disturb and charging, for the outer screen, whatever the inner switch says. */
+    @JvmStatic fun outerSegments(c: Context): List<Pair<Int, String>> {
+        start(c)
+        val out = ArrayList<Pair<Int, String>>()
+        if (zen) out.add(ICON_MOON to "")
+        if (plugged && level >= 0) out.add(ICON_BOLT to "$level%")
+        return out
+    }
+
+    /** Draws [segs] from x = 0 in a box [h] tall, the way the date's own status is drawn. */
+    @JvmStatic fun drawOuter(canvas: Canvas?, paint: TextPaint, segs: List<Pair<Int, String>>, h: Float): Float {
+        val em = paint.textSize
+        val baseline = h / 2f - (paint.ascent() + paint.descent()) / 2f
+        val iconGap = em * 0.12f
+        var x = 0f
+        segs.forEachIndexed { i, (kind, text) ->
+            if (i > 0) {
+                canvas?.drawText(SEP, x, baseline, paint)
+                x += paint.measureText(SEP)
+            }
+            when (kind) {
+                ICON_MOON -> { canvas?.let { icon(it, moon(em * 0.8f), x, (h - em * 0.8f) / 2f, paint) }; x += em * 0.8f }
+                ICON_BOLT -> { canvas?.let { icon(it, bolt(em * 0.5f, em * 0.8f), x, (h - em * 0.8f) / 2f, paint) }; x += em * 0.5f }
+            }
+            if (text.isNotEmpty()) {
+                if (kind != ICON_NONE) x += iconGap
+                canvas?.drawText(text, x, baseline, paint)
+                x += paint.measureText(text)
+            }
+        }
+        return x
+    }
 
     private fun invalidateHosts() {
         for (v in hosts.keys) v.invalidate()

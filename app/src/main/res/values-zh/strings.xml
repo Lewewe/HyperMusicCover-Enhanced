@@ -193,7 +193,7 @@
     <string name="restart_scope">重启全部作用域</string>
 
     <!-- The features page is a list of cards, each opening a page of its own. -->
-    <string name="features_cover_title">锁屏音乐封面</string>
+    <string name="features_cover_title">锁屏封面</string>
     <string name="features_cover_summary">封面、时钟、媒体卡片</string>
     <string name="features_mini_title">锁屏胶囊</string>
     <string name="features_mini_summary">音乐、通知、背景模糊与亮度</string>
@@ -598,5 +598,15 @@
     <string name="mini_demo_hyperos_summary">轻点较小的胶囊，即可在音乐和通知之间切换。</string>
     <string name="mini_demo_hyperos_list">胶囊和列表</string>
     <string name="mini_demo_hyperos_list_summary">上滑通知胶囊以展开列表，下滑收起。</string>
+    <string name="flip_title">MIX Flip 专属</string>
+    <string name="flip_summary">外屏锁屏</string>
+    <string name="flip_outer_section">外屏</string>
+    <string name="flip_clock">时钟显示在日期旁</string>
+    <string name="flip_clock_summary">把外屏时钟缩小到日期一行（iOS 风格），给锁屏留出更多空间</string>
+    <string name="flip_status">状态显示在日期后</string>
+    <string name="flip_status_summary">把充电等锁屏状态显示在日期后面，而不是时钟下方</string>
+    <string name="flip_face_left">人脸解锁图标靠左</string>
+    <string name="flip_face_left_summary">人脸解锁图标与日期左对齐，而不是居中</string>
+    <string name="flip_unsupported">仅支持小米 MIX Flip 和 MIX Flip 2</string>
 </resources>
 

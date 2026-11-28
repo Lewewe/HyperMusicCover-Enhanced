@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -125,6 +126,7 @@ private fun FeatureList(
                 ) {
                     ArrowPreference(
                         title = stringResource(R.string.features_mini_title),
+                        startAction = { FeatureIcon(R.drawable.ic_features_capsule) },
                         summary = stringResource(R.string.features_mini_summary),
                         onClick = { onOpen(MiniPlayerActivity::class.java) },
                     )
@@ -134,6 +136,7 @@ private fun FeatureList(
                 ) {
                     ArrowPreference(
                         title = stringResource(R.string.features_cover_title),
+                        startAction = { FeatureIcon(R.drawable.ic_features_cover) },
                         summary = stringResource(R.string.features_cover_summary),
                         onClick = { onOpen(CoverActivity::class.java) },
                     )
@@ -141,6 +144,7 @@ private fun FeatureList(
                 Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
                     ArrowPreference(
                         title = stringResource(R.string.media_customization_title),
+                        startAction = { FeatureIcon(R.drawable.ic_features_media) },
                         summary = stringResource(R.string.media_customization_summary),
                         onClick = { onOpen(MediaCardActivity::class.java) },
                     )
@@ -150,8 +154,20 @@ private fun FeatureList(
                 ) {
                     ArrowPreference(
                         title = stringResource(R.string.extras_section),
+                        startAction = { FeatureIcon(R.drawable.ic_features_lyrics) },
                         summary = stringResource(R.string.extras_summary),
                         onClick = { onOpen(ExtrasActivity::class.java) },
+                    )
+                }
+                // MIX Flip (ruyi) and MIX Flip 2 (bixi); anywhere else the page is greyed out.
+                val flip = android.os.Build.DEVICE == "ruyi" || android.os.Build.DEVICE == "bixi"
+                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    ArrowPreference(
+                        title = stringResource(R.string.flip_title),
+                        startAction = { FeatureIcon(R.drawable.ic_features_flip, enabled = flip) },
+                        summary = stringResource(if (flip) R.string.flip_summary else R.string.flip_unsupported),
+                        enabled = flip,
+                        onClick = { onOpen(com.os4.musiccover.FlipActivity::class.java) },
                     )
                 }
                 Card(
@@ -159,6 +175,7 @@ private fun FeatureList(
                 ) {
                     ArrowPreference(
                         title = stringResource(R.string.features_tweaks_title),
+                        startAction = { FeatureIcon(R.drawable.ic_features_extras) },
                         summary = stringResource(R.string.features_tweaks_summary),
                         onClick = { onOpen(TweaksActivity::class.java) },
                     )
@@ -166,6 +183,18 @@ private fun FeatureList(
             }
         }
     }
+}
+
+/** The row's icon, the way HyperOS Settings draws its own: a 28dp squircle before the title. */
+@Composable
+private fun FeatureIcon(id: Int, enabled: Boolean = true) {
+    androidx.compose.foundation.Image(
+        painter = androidx.compose.ui.res.painterResource(id),
+        contentDescription = null,
+        modifier = Modifier.padding(end = 12.dp).size(28.dp),
+        // Faded with the row it heads when that row is greyed out.
+        alpha = if (enabled) 1f else 0.4f,
+    )
 }
 
 /**

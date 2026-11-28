@@ -436,6 +436,8 @@ public class Main extends XposedModule {
     static final float DEFAULT_CLOCK_SIZE = 0.09f;
     static volatile float sClockSize = DEFAULT_CLOCK_SIZE;
     static volatile boolean sClockBesideDate;
+    /** The MIX Flip's outer screen: its clock beside the date, the status after it, the face icon at the left. */
+    static volatile boolean sFlipClock = true, sFlipStatus = true, sFlipFaceLeft = true;
     static volatile boolean sHidePlayerBackground;
     static volatile boolean sCoverOnTap;
 
@@ -2121,6 +2123,9 @@ public class Main extends XposedModule {
                     // not read them. lyrichidden still is - the two-finger tap is the one way the
                     // lock screen can be asked for the cover instead, and it has to survive.
                     + "\nclockbesidedate=" + (sClockBesideDate ? 1 : 0)
+                    + "\nflipclock=" + (sFlipClock ? 1 : 0)
+                    + "\nflipstatus=" + (sFlipStatus ? 1 : 0)
+                    + "\nflipfaceleft=" + (sFlipFaceLeft ? 1 : 0)
                     + "\ncolon=" + (HyperTweaks.sForceColon ? 1 : 0)
                     + "\nseekglow=" + (HyperTweaks.sBarGlow ? 1 : 0)
                     + "\nlyrickeep=" + (LockLyrics.sKeepOn ? 1 : 0)
@@ -2261,6 +2266,9 @@ public class Main extends XposedModule {
                         // the screen now, see ClockCollapse.sizeUnit.
                         else if ("clocksize".equals(k)) setClockSize(Float.parseFloat(v));
                         else if ("clockbesidedate".equals(k)) sClockBesideDate = "1".equals(v);
+                        else if ("flipclock".equals(k)) sFlipClock = "1".equals(v);
+                        else if ("flipstatus".equals(k)) sFlipStatus = "1".equals(v);
+                        else if ("flipfaceleft".equals(k)) sFlipFaceLeft = "1".equals(v);
                         // clockoff, glass and spring are not read: the clock's offset, the glass
                         // clock's end and the transition's spring are all fixed. Each is still
                         // reachable from its own op, for the session.
@@ -3176,6 +3184,14 @@ public class Main extends XposedModule {
                         setClockSize(i.getFloatExtra("v", 1f));
                         saveState();
                         ClockCollapse.refresh();
+                    } else if ("flip".equals(op)) {
+                        boolean on = i.getBooleanExtra("on", true);
+                        String what = i.getStringExtra("what");
+                        if ("clock".equals(what)) sFlipClock = on;
+                        else if ("status".equals(what)) sFlipStatus = on;
+                        else if ("faceleft".equals(what)) sFlipFaceLeft = on;
+                        saveState();
+                        TinyTemplate.sync();
                     } else if ("clockbesidedate".equals(op)) {
                         sClockBesideDate = i.getBooleanExtra("on", false);
                         saveState();
@@ -3299,6 +3315,9 @@ public class Main extends XposedModule {
                         out.putFloat("clocksize", effectiveClockSize());
                         out.putFloat("clockoff", sClockOffsetDp);
                         out.putBoolean("clockbesidedate", sClockBesideDate);
+                        out.putBoolean("flipclock", sFlipClock);
+                        out.putBoolean("flipstatus", sFlipStatus);
+                        out.putBoolean("flipfaceleft", sFlipFaceLeft);
                         out.putFloat("glass", sGlassEnd);
                         out.putFloat("spring", sClockResponse);
                         out.putBoolean("card", sCardShowing);
