@@ -12,29 +12,29 @@
   </p>
 </div>
 
-An LSPosed module forked from [HyperMusicCover](https://github.com/zyl6932/HyperMusicCover).
+An LSPosed module that turns the lock screen into a now-playing screen. It began as a fork of [HyperMusicCover](https://github.com/zyl6932/HyperMusicCover).
 
 ## Features
 
 | | |
 | --- | --- |
-| 🎨 **Big cover art** | Full-screen artwork with smooth track changes, or your own wallpaper behind it |
-| 🕐 **Clock beside the date** | A small clock to the left of the date while the big cover or lyrics are open, kept on the always-on display |
-| 🌈 **Moving backdrop** | Artwork colours drift behind the big cover, as a gradient or a mesh gradient |
+| 🎨 **Big cover art** | The artwork fills the screen and crossfades when the track changes. Your own wallpaper can sit behind it instead |
+| 🕐 **Clock beside the date** | The clock shrinks to sit left of the date while the big cover or lyrics are open, and stays that way on the always-on display |
+| 🌈 **Moving backdrop** | Colours from the artwork drift slowly behind the big cover, as a gradient or a mesh gradient |
 | 🎤 **Lyrics** | Synced and word-timed lyrics, translation, font packs and effects |
-| (・ω・) **Kaomoji companion** | A face that bops to the beat when neither lyrics nor the big cover are up |
-| 📊 **Audio visualizer** *(beta)* | Capsule and player bars that follow the music, even at zero volume |
-| 📱 **iPhone-ify** *(A/B)* | Hold a capsule for music or another live activity to open an iPhone-style card at the camera, over the other capsules |
+| (・ω・) **Kaomoji companion** | When neither lyrics nor the big cover are up, a little face bops to the beat |
+| 📊 **Audio visualizer** *(beta)* | Bars on the capsule and the player move with the music, even with the volume at zero |
+| 📱 **iPhone-ify** *(A/B)* | Long-press the music capsule, or any live activity, and an iPhone-style card opens at the camera on top of the other capsules |
 | 🎛️ **Player styling** | Artwork shape, backgrounds, materials, colors and scrolling titles |
-| 🔔 **Notifications & AOD** | Works with the notification stack, HyperOS and ColorOS-style capsules and always-on display |
-| 📲 **Foldables** | The big cover and its backdrop on the Xiaomi MIX Flip, outer screen included |
-| ⬆️ **One-tap updates** | A card on Home downloads and installs a new release, then restarts the scope when root is granted |
+| 🔔 **Notifications & AOD** | Plays well with the notification stack, HyperOS and ColorOS-style capsules, and the always-on display |
+| 📲 **Foldables** | On the Xiaomi MIX Flip the big cover and its backdrop work on both screens |
+| ⬆️ **One-tap updates** | When a new release is out, a card on Home installs it. With root, it also restarts the scope for you |
 
-Full change list: [release notes](https://github.com/Lewewe/HyperMusicCover-Enhanced/releases). This page follows `main`, so some features arrive with the next release.
+Every change is in the [release notes](https://github.com/Lewewe/HyperMusicCover-Enhanced/releases). This page tracks `main`, so a feature listed here may only land in the next release.
 
 ## Extensions
 
-Optional apps that add to HyperMusicCover-Enhanced.
+Extensions are separate apps for things the module can't do on its own. You install them from inside the app.
 
 | | |
 | --- | --- |
@@ -51,15 +51,11 @@ Optional apps that add to HyperMusicCover-Enhanced.
 2. Enable the module in LSPosed with its recommended scopes, then reboot.
 3. Open the app to set it up.
 
-For Spotify Canvas: **Extensions → HyperCanvas → Download**, then follow the steps shown in the app.
-
-For StandBy: **Extensions → HyperImmersive → Download**, then follow the steps shown in the app.
-
-For the rear screen: **Extensions → HyperRear → Download**, then follow the steps shown in the app.
+To add an extension, open the **Extensions** tab, pick HyperCanvas, HyperImmersive or HyperRear, tap **Download**, and follow the steps it shows.
 
 ## Feedback
 
-Tested mainly on Xiaomi 17 Pro and Xiaomi MIX Flip. Updates are posted in the [Telegram channel](https://t.me/HyperMusicCoverEnhancedChannel). Ask in the [Telegram group](https://t.me/HyperMusicCoverEnhanced) or [open an issue](https://github.com/Lewewe/HyperMusicCover-Enhanced/issues) with your device, HyperOS version, module version and music app.
+Most testing happens on a Xiaomi 17 Pro and a Xiaomi MIX Flip, so other phones may turn up things we haven't seen. News goes out on the [Telegram channel](https://t.me/HyperMusicCoverEnhancedChannel). For questions, there's the [Telegram group](https://t.me/HyperMusicCoverEnhanced). To report a bug, [open an issue](https://github.com/Lewewe/HyperMusicCover-Enhanced/issues) and include your device, HyperOS version, module version and music app.
 
 ## Build
 
@@ -69,7 +65,7 @@ cd HyperMusicCover-Enhanced
 ./gradlew :app:assembleRelease :hyper-canvas:assembleRelease
 ```
 
-Needs Android SDK 37. HyperMusicCover-Enhanced, HyperCanvas, [HyperImmersive](https://github.com/Lewewe/HyperImmersive) and [HyperRear](https://github.com/Lewewe/HyperRear), which build from their own repositories, must be signed with the same key (`keystore.properties`).
+You'll need Android SDK 37. [HyperImmersive](https://github.com/Lewewe/HyperImmersive) and [HyperRear](https://github.com/Lewewe/HyperRear) build from their own repositories. Sign all four apps with the same key (`keystore.properties`): the module only serves extensions signed like itself.
 
 ## Credits
 

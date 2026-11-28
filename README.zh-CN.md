@@ -12,29 +12,29 @@
   </p>
 </div>
 
-基于 [HyperMusicCover](https://github.com/zyl6932/HyperMusicCover) 的 LSPosed 模块分支。
+一个把锁屏变成音乐播放界面的 LSPosed 模块，最初分支自 [HyperMusicCover](https://github.com/zyl6932/HyperMusicCover)。
 
 ## 功能
 
 | | |
 | --- | --- |
-| 🎨 **大封面** | 全屏封面，切歌过渡流畅，也可使用自己的壁纸作背景 |
-| 🕐 **时钟显示在日期左侧** | 展开大封面或歌词时，时钟缩小并放在日期左侧，息屏显示同样保持 |
-| 🌈 **流动背景** | 封面颜色在大封面后缓慢流动，可选渐变或网格渐变 |
+| 🎨 **大封面** | 封面铺满全屏，切歌时平滑过渡。也可以换成自己的壁纸垫在后面 |
+| 🕐 **时钟显示在日期左侧** | 展开大封面或歌词时，时钟缩小到日期左边，息屏时也保持这样 |
+| 🌈 **流动背景** | 封面里的颜色在大封面后面慢慢流动，可选渐变或网格渐变 |
 | 🎤 **歌词** | 同步歌词、逐词歌词、翻译、字体包和歌词效果 |
-| (・ω・) **歌词伙伴颜文字** | 歌词和大封面都未显示时，随节拍摆动的颜文字 |
-| 📊 **音频可视化** *(Beta)* | 胶囊和播放器上随音乐跳动的频谱，静音时同样有效 |
-| 📱 **iPhone-ify** *(A/B)* | 长按音乐或其他实时活动的胶囊，在摄像头处打开 iPhone 风格卡片，覆盖其他胶囊 |
+| (・ω・) **歌词伙伴颜文字** | 没有歌词也没开大封面时，会有个颜文字跟着节拍晃 |
+| 📊 **音频可视化** *(Beta)* | 胶囊和播放器上的频谱跟着音乐跳，音量调到零也照样动 |
+| 📱 **iPhone-ify** *(A/B)* | 长按音乐或其他实时活动的胶囊，摄像头位置会弹出 iPhone 风格的卡片，盖在其他胶囊上面 |
 | 🎛️ **播放器外观** | 封面形状、背景、材质、配色和歌名滚动 |
-| 🔔 **通知与 AOD** | 适配通知堆叠、HyperOS 与 ColorOS 风格胶囊和息屏显示 |
-| 📲 **折叠屏** | 在小米 MIX Flip 上显示大封面及其背景，外屏也支持 |
-| ⬆️ **一键更新** | 主页卡片可下载并安装新版本，已授予 Root 时会自动重启作用域 |
+| 🔔 **通知与 AOD** | 和通知堆叠、HyperOS 与 ColorOS 风格胶囊、息屏显示都能配合 |
+| 📲 **折叠屏** | 小米 MIX Flip 的内外两块屏幕都能显示大封面和背景 |
+| ⬆️ **一键更新** | 有新版本时，主页卡片直接帮你装好；有 Root 的话还会顺手重启作用域 |
 
-完整更新内容见[发布页](https://github.com/Lewewe/HyperMusicCover-Enhanced/releases)。本页跟随 `main` 分支，部分功能将在下一版本提供。
+每次的改动都写在[发布页](https://github.com/Lewewe/HyperMusicCover-Enhanced/releases)。本页跟着 `main` 分支走，这里列出的功能可能要到下一个版本才有。
 
 ## 扩展
 
-为 HyperMusicCover-Enhanced 增加功能的可选应用。
+扩展是独立的应用，负责模块本身做不了的事，直接在应用里安装。
 
 | | |
 | --- | --- |
@@ -51,15 +51,11 @@
 2. 在 LSPosed 中启用模块并勾选推荐作用域，然后重启。
 3. 打开应用进行设置。
 
-使用 Spotify Canvas：进入 **Extensions → HyperCanvas → Download**，按应用内提示完成设置。
-
-使用 StandBy：进入 **Extensions → HyperImmersive → Download**，按应用内提示完成设置。
-
-使用背屏：进入 **Extensions → HyperRear → Download**，按应用内提示完成设置。
+安装扩展：打开 **Extensions** 页，选 HyperCanvas、HyperImmersive 或 HyperRear，点 **Download**，再按提示操作。
 
 ## 反馈
 
-主要在 Xiaomi 17 Pro 和 Xiaomi MIX Flip 上测试。更新会发布在 [Telegram 频道](https://t.me/HyperMusicCoverEnhancedChannel)。欢迎在 [Telegram 群组](https://t.me/HyperMusicCoverEnhanced) 交流，或[提交 Issue](https://github.com/Lewewe/HyperMusicCover-Enhanced/issues)，并附上设备、HyperOS 版本、模块版本和音乐应用。
+平时主要在小米 17 Pro 和小米 MIX Flip 上测试，别的机型可能会遇到我们没见过的问题。更新消息发在 [Telegram 频道](https://t.me/HyperMusicCoverEnhancedChannel)，有问题可以去 [Telegram 群组](https://t.me/HyperMusicCoverEnhanced) 问。报 bug 请[提交 Issue](https://github.com/Lewewe/HyperMusicCover-Enhanced/issues)，写上设备、HyperOS 版本、模块版本和音乐应用。
 
 ## 构建
 
@@ -69,7 +65,7 @@ cd HyperMusicCover-Enhanced
 ./gradlew :app:assembleRelease :hyper-canvas:assembleRelease
 ```
 
-需要 Android SDK 37。HyperMusicCover-Enhanced、HyperCanvas 以及从各自仓库构建的 [HyperImmersive](https://github.com/Lewewe/HyperImmersive) 和 [HyperRear](https://github.com/Lewewe/HyperRear) 必须使用相同签名（`keystore.properties`）。
+需要 Android SDK 37。[HyperImmersive](https://github.com/Lewewe/HyperImmersive) 和 [HyperRear](https://github.com/Lewewe/HyperRear) 在各自的仓库里构建。四个应用要用同一个签名（`keystore.properties`），因为模块只给签名和自己一样的扩展提供数据。
 
 ## 致谢
 
