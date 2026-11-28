@@ -28,6 +28,10 @@ final class TinyTemplate {
             "com.android.keyguard.tinyPanel.TinyKeyguardPanelViewControllerImpl";
     private static final String[] LAYERS = {"mWallpaperLayer", "mWallpaperCoverLayer", "mDepthViewLayer"};
     private static final List<WeakReference<View>> sViews = new ArrayList<>();
+    private static final String CLS_FACE = "com.miui.keyguard.biometrics.faceunlock.MiuiKeyguardFaceUnlockView";
+    /** The outer screen's face views this class has lined up with the date. */
+    private static final java.util.Set<View> sLeftFaces =
+            java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
 
     static void install(ClassLoader cl) {
         try {
@@ -56,6 +60,64 @@ final class TinyTemplate {
         } catch (Throwable t) {
             // Every phone without an outer screen lands here.
             Xp.log(Main.TAG + "tiny keyguard not hooked: " + t);
+        }
+        hookFaceHint(cl);
+    }
+
+    /**
+     * Face not recognised: the OEM shows "Swipe up to unlock" beside the icon and slides icon,
+     * ring and text left by half their width, so the pair sits centred. With the icon already
+     * moved to the date's left edge that slide took it, and half the text, off the screen. On a
+     * face view lined up here the icon stays put and the text comes in from it, rightwards.
+     */
+    private static void hookFaceHint(ClassLoader cl) {
+        try {
+            Class<?> cls = Xp.findClass(CLS_FACE, cl);
+            int n = 0;
+            // A nest accessor (-$$Nest$mstartFaceUnlockTimeOutAnimation) whose name D8 owns.
+            for (java.lang.reflect.Method m : cls.getDeclaredMethods()) {
+                if (!m.getName().endsWith("startFaceUnlockTimeOutAnimation")) continue;
+                Xp.hook(m, chain -> {
+                    Object r = chain.proceed();
+                    Object face = java.lang.reflect.Modifier.isStatic(m.getModifiers())
+                            ? chain.getArgs().get(0) : chain.getThisObject();
+                    try {
+                        if (face instanceof View && sLeftFaces.contains(face)) keepIconStill(face);
+                    } catch (Throwable t) {
+                        Xp.log(Main.TAG + "tiny face hint left as it was: " + t);
+                    }
+                    return r;
+                });
+                n++;
+            }
+            if (n == 0) throw new NoSuchMethodException("startFaceUnlockTimeOutAnimation");
+        } catch (Throwable t) {
+            Xp.log(Main.TAG + "tiny face hint not hooked: " + t);
+        }
+    }
+
+    private static void keepIconStill(Object face) throws ReflectiveOperationException {
+        Class<?> c = face.getClass();
+        while (c != null && !CLS_FACE.equals(c.getName())) c = c.getSuperclass();
+        if (c == null) return;
+        java.lang.reflect.Field fa = c.getDeclaredField("mFaceUnlockTimeOutAni");
+        java.lang.reflect.Field ft = c.getDeclaredField("mHintTV");
+        fa.setAccessible(true);
+        ft.setAccessible(true);
+        Object set = fa.get(face);
+        View hint = (View) ft.get(face);
+        if (!(set instanceof android.animation.AnimatorSet)) return;
+        for (android.animation.Animator a : ((android.animation.AnimatorSet) set).getChildAnimations()) {
+            if (!(a instanceof android.animation.ObjectAnimator)) continue;
+            android.animation.ObjectAnimator o = (android.animation.ObjectAnimator) a;
+            if (o.getTarget() == hint) {
+                // From under the icon's right edge, fading in, instead of from the middle.
+                o.setFloatValues(-hint.getHeight() * 0.5f, 0f);
+                hint.setAlpha(0f);
+                hint.animate().alpha(1f).setDuration(o.getDuration()).start();
+            } else {
+                o.setFloatValues(0f, 0f);
+            }
         }
     }
 
@@ -190,6 +252,16 @@ final class TinyTemplate {
                 tx = dateLeft - faceLeft;
             }
             face.setTranslationX(tx);
+            if (Main.sFlipFaceLeft) {
+                sLeftFaces.add(face);
+                // Its hint now runs right of the icon, past the strip the face view was given.
+                for (android.view.ViewParent v = face.getParent(); v instanceof android.view.ViewGroup
+                        && v != layer.getRootView(); v = v.getParent()) {
+                    ((android.view.ViewGroup) v).setClipChildren(false);
+                }
+            } else {
+                sLeftFaces.remove(face);
+            }
         }
     }
 
